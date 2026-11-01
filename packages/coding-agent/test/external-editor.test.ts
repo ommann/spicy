@@ -43,9 +43,7 @@ describe("editInExternalEditor", () => {
 		expect(basename(capture.filePath)).toBe("prompt.md");
 		expect(capture.entries).toEqual(["prompt.md"]);
 		expect(capture.content).toBe("original");
-		if (process.platform !== "win32") {
-			expect(capture.directoryMode & 0o077).toBe(0);
-		}
+		expect(capture.directoryMode & 0o077).toBe(0);
 		expect(existsSync(directory)).toBe(false);
 	});
 

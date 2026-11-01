@@ -2,8 +2,7 @@
  * Test for BMP to PNG conversion in clipboard image handling.
  * Separate from clipboard-image.test.ts due to different mocking requirements.
  *
- * This tests the fix for WSL2/WSLg where clipboard often provides image/bmp
- * instead of image/png.
+ * Linux clipboard tools may provide image/bmp instead of image/png.
  */
 import { describe, expect, test, vi } from "vitest";
 import { readClipboardImage } from "../src/utils/clipboard-image.ts";
@@ -56,8 +55,8 @@ vi.mock("@earendil-works/pi-tui", () => ({
 }));
 
 describe("readClipboardImage BMP conversion", () => {
-	test.each(["linux", "win32"] as const)("%s: converts command/native BMP to PNG", async (platform) => {
-		const image = await readClipboardImage({ env: { WAYLAND_DISPLAY: "wayland-0" }, platform });
+	test("converts clipboard BMP to PNG", async () => {
+		const image = await readClipboardImage({ env: { WAYLAND_DISPLAY: "wayland-0" } });
 
 		expect(image).not.toBeNull();
 		expect(image!.mimeType).toBe("image/png");

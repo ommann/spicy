@@ -543,8 +543,7 @@ Content`,
 				const agentSkillsDir = join(agentDir, "skills");
 				const agentsSkillsDir = join(tempDir, ".agents", "skills");
 				mkdirSync(agentsSkillsDir, { recursive: true });
-				// Use junction on Windows to avoid EPERM when symlink privileges are unavailable.
-				const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
+				const directoryLinkType = "dir";
 				symlinkSync(agentsSkillsDir, agentSkillsDir, directoryLinkType);
 
 				const skillPath = join(agentsSkillsDir, "foo", "SKILL.md");
@@ -1411,9 +1410,7 @@ Content`,
 			expect(pathEndsWith(installPath, "node_modules/left-pad")).toBe(true);
 			expect(relative(tempRoot, installPath).startsWith("..")).toBe(false);
 			expect(installPath.startsWith(join(tmpdir(), "pi-extensions"))).toBe(false);
-			if (process.platform !== "win32") {
-				expect(statSync(tempRoot).mode & 0o777).toBe(0o700);
-			}
+			expect(statSync(tempRoot).mode & 0o777).toBe(0o700);
 		});
 	});
 
@@ -1817,11 +1814,7 @@ Content`,
 				join(linkedPluginSource, "skills", "linked-skill", "SKILL.md"),
 				"---\nname: linked-skill\ndescription: Linked\n---\n",
 			);
-			symlinkSync(
-				linkedPluginSource,
-				join(pkgDir, "plugins", "linked"),
-				process.platform === "win32" ? "junction" : "dir",
-			);
+			symlinkSync(linkedPluginSource, join(pkgDir, "plugins", "linked"), "dir");
 			writeFileSync(
 				join(pkgDir, "package.json"),
 				JSON.stringify({

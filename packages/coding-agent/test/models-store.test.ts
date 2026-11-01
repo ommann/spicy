@@ -53,7 +53,7 @@ describe("FileModelsStore", () => {
 		expect((await reloaded.read("two"))?.models.map((entry) => entry.id)).toEqual(["m2"]);
 	});
 
-	it.skipIf(process.platform === "win32")("preserves the mode of an existing models file", async () => {
+	it("preserves the mode of an existing models file", async () => {
 		const managedModelsPath = join(sharedTempDir, "managed-mode.json");
 		writeFileSync(managedModelsPath, "{}");
 		chmodSync(managedModelsPath, 0o660);

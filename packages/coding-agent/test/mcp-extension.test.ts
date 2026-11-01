@@ -539,17 +539,15 @@ describe("MCP connections", () => {
 		await connection.close();
 	});
 
-	it.skipIf(process.platform === "win32")(
-		"expands ~ in the command, arguments, and cwd of stdio servers",
-		async () => {
-			const home = mkdtempSync(join(tmpdir(), "pi-mcp-home-"));
-			const previousHome = process.env.HOME;
-			process.env.HOME = home;
-			mkdirSync(join(home, "work"));
-			// Answers every tool call with its working directory.
-			writeFileSync(
-				join(home, "server.mjs"),
-				`import { createInterface } from "node:readline";
+	it("expands ~ in the command, arguments, and cwd of stdio servers", async () => {
+		const home = mkdtempSync(join(tmpdir(), "pi-mcp-home-"));
+		const previousHome = process.env.HOME;
+		process.env.HOME = home;
+		mkdirSync(join(home, "work"));
+		// Answers every tool call with its working directory.
+		writeFileSync(
+			join(home, "server.mjs"),
+			`import { createInterface } from "node:readline";
 for await (const line of createInterface({ input: process.stdin })) {
 	const message = JSON.parse(line);
 	if (!("id" in message)) continue;
@@ -560,28 +558,27 @@ for await (const line of createInterface({ input: process.stdin })) {
 			: { content: [{ type: "text", text: process.cwd() }] };
 	process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }) + "\\n");
 }`,
-			);
-			const connection = new McpServerConnection({
-				entry: {
-					name: "home",
-					config: { command: process.execPath, args: ["~/server.mjs"], cwd: "~/work" },
-					source: "test",
-				},
-				cwd: tmpdir(),
-				createTransport: createDefaultTransport,
-				credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
-				onTools: () => {},
-			});
-			try {
-				const result = await connection.callTool("cwd", {}, {});
-				expect(realpathSync((result.content[0] as { text: string }).text)).toBe(realpathSync(join(home, "work")));
-			} finally {
-				await connection.close();
-				process.env.HOME = previousHome;
-				rmSync(home, { recursive: true, force: true });
-			}
-		},
-	);
+		);
+		const connection = new McpServerConnection({
+			entry: {
+				name: "home",
+				config: { command: process.execPath, args: ["~/server.mjs"], cwd: "~/work" },
+				source: "test",
+			},
+			cwd: tmpdir(),
+			createTransport: createDefaultTransport,
+			credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
+			onTools: () => {},
+		});
+		try {
+			const result = await connection.callTool("cwd", {}, {});
+			expect(realpathSync((result.content[0] as { text: string }).text)).toBe(realpathSync(join(home, "work")));
+		} finally {
+			await connection.close();
+			process.env.HOME = previousHome;
+			rmSync(home, { recursive: true, force: true });
+		}
+	});
 
 	it("connects to servers without the tools capability without listing tools", async () => {
 		const methods: string[] = [];

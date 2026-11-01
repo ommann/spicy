@@ -283,10 +283,6 @@ Options:
   --verbose            Print the upstream runner output`);
 		return 0;
 	}
-	if (process.platform === "win32") {
-		console.error("The conformance runner needs a POSIX shell.");
-		return 1;
-	}
 	const modes = values.mode ?? [...MODES];
 	for (const mode of modes) {
 		if (!(MODES as readonly string[]).includes(mode)) {

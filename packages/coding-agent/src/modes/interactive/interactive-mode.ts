@@ -274,7 +274,7 @@ function isUsageSessionEntry(item: RenderSessionItem): item is Extract<SessionEn
 }
 
 // EIO: tty reads/ioctls from an orphaned background process group, or writes after hangup.
-// ENOTTY: the tty was revoked (macOS) and stdin is no longer a terminal.
+// ENOTTY: stdin is no longer a terminal.
 const DEAD_TERMINAL_ERROR_CODES = new Set(["EIO", "EPIPE", "ENOTCONN", "ENOTTY"]);
 
 function isDeadTerminalError(error: unknown): boolean {

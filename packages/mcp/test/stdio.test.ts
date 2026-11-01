@@ -27,38 +27,34 @@ describe("StdioTransport", () => {
 		expect(client.connectionState).toBe("closed");
 	});
 
-	it.skipIf(process.platform === "win32")(
-		"kills a server that ignores shutdown, including its children",
-		async () => {
-			const transport = new StdioTransport({
-				command: process.execPath,
-				args: [stubborn],
-				closeTimeoutMs: 100,
-			});
-			const client = new McpClient({ name: "stdio-test", version: "1.0.0" });
-			await client.connect(transport);
-			let grandchild: number | undefined;
-			for (let i = 0; i < 100 && grandchild === undefined; i++) {
-				const match = /grandchild (\d+)/.exec(transport.stderr);
-				if (match) grandchild = Number(match[1]);
-				else await new Promise((resolve) => setTimeout(resolve, 10));
-			}
-			expect(grandchild).toBeTypeOf("number");
+	it("kills a server that ignores shutdown, including its children", async () => {
+		const transport = new StdioTransport({
+			command: process.execPath,
+			args: [stubborn],
+			closeTimeoutMs: 100,
+		});
+		const client = new McpClient({ name: "stdio-test", version: "1.0.0" });
+		await client.connect(transport);
+		let grandchild: number | undefined;
+		for (let i = 0; i < 100 && grandchild === undefined; i++) {
+			const match = /grandchild (\d+)/.exec(transport.stderr);
+			if (match) grandchild = Number(match[1]);
+			else await new Promise((resolve) => setTimeout(resolve, 10));
+		}
+		expect(grandchild).toBeTypeOf("number");
 
-			const startedAt = Date.now();
-			await client.close();
-			expect(Date.now() - startedAt).toBeLessThan(5_000);
-			let alive = true;
-			for (let i = 0; i < 100 && alive; i++) {
-				try {
-					process.kill(grandchild as number, 0);
-					await new Promise((resolve) => setTimeout(resolve, 20));
-				} catch {
-					alive = false;
-				}
+		const startedAt = Date.now();
+		await client.close();
+		expect(Date.now() - startedAt).toBeLessThan(5_000);
+		let alive = true;
+		for (let i = 0; i < 100 && alive; i++) {
+			try {
+				process.kill(grandchild as number, 0);
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			} catch {
+				alive = false;
 			}
-			expect(alive).toBe(false);
-		},
-		10_000,
-	);
+		}
+		expect(alive).toBe(false);
+	}, 10_000);
 });

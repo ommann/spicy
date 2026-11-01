@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENV_AGENT_DIR } from "../../../src/config.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 
-const DIRECTORY_LINK_TYPE = process.platform === "win32" ? "junction" : "dir";
+const DIRECTORY_LINK_TYPE = "dir";
 
 describe("regression #7497: discover sessions through symlinked directories", () => {
 	let tempDir: string;
@@ -62,7 +62,7 @@ describe("regression #7497: discover sessions through symlinked directories", ()
 		expect(sessions.map((session) => session.id)).toEqual(["regular"]);
 	});
 
-	it.skipIf(process.platform === "win32")("ignores links to files", async () => {
+	it("ignores links to files", async () => {
 		writeSession(join(sessionsDir, "--regular--"), "regular");
 		const targetFile = join(tempDir, "not-a-directory");
 		writeFileSync(targetFile, "");

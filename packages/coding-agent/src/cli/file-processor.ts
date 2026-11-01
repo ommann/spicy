@@ -28,7 +28,7 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 	const images: ImageContent[] = [];
 
 	for (const fileArg of fileArgs) {
-		// Expand and resolve path (handles ~ expansion and macOS screenshot Unicode spaces)
+		// Expand ~ and resolve the path.
 		const absolutePath = resolve(resolveReadPath(fileArg, process.cwd()));
 
 		// Check if file exists

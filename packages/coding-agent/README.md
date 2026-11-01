@@ -22,27 +22,14 @@ Use Pi [interactively](docs/usage.md), automate it in [print or JSON mode](docs/
 
 ## Getting started
 
-Install the command-line interface:
+Spicy runs on Linux with Node.js 22.19 or newer. From the repository root:
 
 ```bash
-curl -fsSL https://pi.dev/install.sh | sh
+npm ci
+npm run dev
 ```
 
-On Windows:
-
-```shell
-powershell -c "irm https://pi.dev/install.ps1 | iex"
-```
-
-The installer pins all dependencies and updates Pi with `pi update`. Alternatively, install directly with npm, which does not pin transitive dependencies:
-
-```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-```
-
-Pi requires Node.js 22.19 or newer. The macOS, Linux, and Windows installers can install it if needed. Pi does not require dependency lifecycle scripts for a normal npm installation.
-
-On macOS and Linux, Nix users can install the latest release with `nix profile add github:earendil-works/pi/stable`. See the [quickstart](docs/quickstart.md#1-install-pi) for updating and pinning releases.
+Open http://localhost:5174 for the frontend. Spicy does not install or update itself through upstream Pi installers.
 
 Start Pi in the directory where you want it to work:
 

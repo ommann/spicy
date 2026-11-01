@@ -544,37 +544,29 @@ describe("Coding Agent Tools", () => {
 		});
 
 		// Regression tests for https://github.com/earendil-works/pi/issues/9577
-		it.skipIf(process.platform === "win32")(
-			"should map signal-killed commands to 128 plus the signal number",
-			async () => {
-				const operations = createLocalBashOperations();
-				for (const { signal, exitCode } of [
-					{ signal: "KILL", exitCode: 137 },
-					{ signal: "TERM", exitCode: 143 },
-				]) {
-					const result = await operations.exec(`kill -${signal} $$`, testDir, { onData: () => {} });
-					expect(result.exitCode).toBe(exitCode);
-				}
-			},
-		);
+		it("should map signal-killed commands to 128 plus the signal number", async () => {
+			const operations = createLocalBashOperations();
+			for (const { signal, exitCode } of [
+				{ signal: "KILL", exitCode: 137 },
+				{ signal: "TERM", exitCode: 143 },
+			]) {
+				const result = await operations.exec(`kill -${signal} $$`, testDir, { onData: () => {} });
+				expect(result.exitCode).toBe(exitCode);
+			}
+		});
 
-		it.skipIf(process.platform === "win32")(
-			"should report signal-killed commands as errors while preserving partial output",
-			async () => {
-				for (const { signal, exitCode } of [
-					{ signal: "KILL", exitCode: 137 },
-					{ signal: "TERM", exitCode: 143 },
-				]) {
-					const result = await bashTool.execute(`test-call-signal-${signal}`, {
-						command: `printf 'before-kill\\n'; kill -${signal} $$`,
-					});
-					expect(result.isError).toBe(true);
-					expect(getTextOutput(result)).toMatch(
-						new RegExp(`before-kill\\s+Command exited with code ${exitCode}$`),
-					);
-				}
-			},
-		);
+		it("should report signal-killed commands as errors while preserving partial output", async () => {
+			for (const { signal, exitCode } of [
+				{ signal: "KILL", exitCode: 137 },
+				{ signal: "TERM", exitCode: 143 },
+			]) {
+				const result = await bashTool.execute(`test-call-signal-${signal}`, {
+					command: `printf 'before-kill\\n'; kill -${signal} $$`,
+				});
+				expect(result.isError).toBe(true);
+				expect(getTextOutput(result)).toMatch(new RegExp(`before-kill\\s+Command exited with code ${exitCode}$`));
+			}
+		});
 
 		it("should reject a null exit code from custom operations", async () => {
 			const operations: BashOperations = {

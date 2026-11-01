@@ -2,7 +2,7 @@
  * Workaround for https://github.com/oven-sh/bun/issues/27802
  *
  * Bun compiled binaries have an empty `process.env` when running inside
- * sandbox environments (e.g. nono on Linux/macOS). On Linux we can recover
+ * sandbox environments (e.g. nono on Linux). We can recover
  * the environment from `/proc/self/environ`.
  *
  * Keep this in sync with getBunSandboxEnvValue() in
