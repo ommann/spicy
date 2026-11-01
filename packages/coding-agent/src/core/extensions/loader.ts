@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import type { Provider } from "@earendil-works/pi-ai";
 import type { KeyId } from "@earendil-works/pi-tui";
 import type { createJiti } from "jiti";
-import { CONFIG_DIR_NAME, getAgentDir, isBundledNode } from "../../config.ts";
+import { CONFIG_DIR_NAME, getAgentDir } from "../../config.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
@@ -38,18 +38,12 @@ import type {
 
 const require = createRequire(import.meta.url);
 
-const isNodeSeaBinary =
-	("sea" in process.features && process.features.sea === true) ||
-	process.getBuiltinModule("node:sea")?.isSea() === true;
 const isTypeScriptSourceRuntime = path.extname(fileURLToPath(import.meta.url)) === ".ts";
-const usesEmbeddedModules = isNodeSeaBinary || isBundledNode;
 
 let createJitiPromise: Promise<typeof createJiti> | undefined;
 
 function getCreateJiti(): Promise<typeof createJiti> {
-	createJitiPromise ??= (usesEmbeddedModules ? import("./jiti-static-loader.ts") : import("./jiti-loader.ts")).then(
-		(module) => module.createJiti,
-	);
+	createJitiPromise ??= import("./jiti-loader.ts").then((module) => module.createJiti);
 	return createJitiPromise;
 }
 
@@ -62,7 +56,6 @@ function getVirtualModules(): Promise<Record<string, unknown>> {
 
 /**
  * Get aliases for jiti (used in built Node.js mode).
- * In compiled binary mode, virtualModules is used instead.
  */
 let _aliases: Record<string, string> | null = null;
 
@@ -568,14 +561,11 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 	}
 
 	const createJitiImpl = await getCreateJiti();
-	// Compiled binaries and the bundled Node distribution use embedded modules.
-	// Source TypeScript reuses host modules and root tsconfig paths. Unbundled
-	// Node builds use dist aliases and do not need the bundled virtual modules.
-	const resolutionOptions = usesEmbeddedModules
-		? { virtualModules: await getVirtualModules(), tryNative: false }
-		: isTypeScriptSourceRuntime
-			? { virtualModules: await getVirtualModules(), tsconfigPaths: true }
-			: { alias: getAliases() };
+	// Source TypeScript reuses host modules and root tsconfig paths.
+	// Built Node modules use dist aliases.
+	const resolutionOptions = isTypeScriptSourceRuntime
+		? { virtualModules: await getVirtualModules(), tsconfigPaths: true }
+		: { alias: getAliases() };
 	const jiti = createJitiImpl(import.meta.url, {
 		moduleCache: false,
 		...resolutionOptions,

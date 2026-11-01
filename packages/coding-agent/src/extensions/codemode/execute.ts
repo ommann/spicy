@@ -24,7 +24,7 @@ import {
 	renderToolSample,
 	toCodemodeIdentifier,
 } from "@earendil-works/pi-codemode";
-import { getCodemodeWorkerSpecifier, getQuickJSWasmPath } from "../../config.ts";
+import { getQuickJSWasmPath } from "../../config.ts";
 import type { ExtensionToolContext, ToolNamespace } from "../../core/extensions/types.ts";
 import type { SessionEntry } from "../../core/session-manager.ts";
 import { formatSize } from "../../core/tools/truncate.ts";
@@ -592,7 +592,6 @@ export async function executeCodemode(
 			timeoutMs: Math.max(1, Math.round(deadline - waitedMs)),
 			memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
 			wasm: loadQuickJSWasm(getQuickJSWasmPath()),
-			workerUrl: getCodemodeWorkerSpecifier(),
 			acquireWorker: () => {
 				if (!reserved) throw new Error("The script already settled");
 				// From here the sandbox releases the slot when the worker actually exits.

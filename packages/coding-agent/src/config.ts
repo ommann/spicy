@@ -8,9 +8,6 @@ import { stripBom } from "./utils/text.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-declare const PI_BUNDLED_NODE: boolean;
-export const isBundledNode = typeof PI_BUNDLED_NODE !== "undefined" && PI_BUNDLED_NODE;
-
 /** Find the package root, ignoring metadata copied into dist/. */
 export function findNodePackageDir(startDir: string): string {
 	let dir = startDir;
@@ -68,24 +65,6 @@ let quickJSWasmPath: string | undefined;
 export function getQuickJSWasmPath(): string {
 	quickJSWasmPath ??= createRequire(import.meta.url).resolve("quickjs-wasi/quickjs.wasm");
 	return quickJSWasmPath;
-}
-
-export function resolveCodemodeWorkerSpecifier(
-	runtime: "bundled-node" | "unbundled",
-	moduleUrl: string,
-): string | URL | undefined {
-	if (runtime === "bundled-node") return new URL("./codemode-worker.js", moduleUrl);
-	return undefined;
-}
-
-let codemodeWorkerDataUrl: URL | undefined;
-
-export function getCodemodeWorkerSpecifier(): string | URL | undefined {
-	const runtime = isBundledNode ? "bundled-node" : "unbundled";
-	const specifier = resolveCodemodeWorkerSpecifier(runtime, import.meta.url);
-	if (runtime !== "bundled-node" || !(specifier instanceof URL)) return specifier;
-	codemodeWorkerDataUrl ??= new URL(`data:text/javascript;base64,${readFileSync(specifier).toString("base64")}`);
-	return codemodeWorkerDataUrl;
 }
 
 interface PackageJson {
