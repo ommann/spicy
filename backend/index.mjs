@@ -29,7 +29,9 @@ let diagnostic = '';
 const payload = () => ({ ...snapshot, live, dialogs: [...dialogs.values()], connected: !!rpc.child, running: rpc.running, cwd, diagnostic });
 function broadcast(type, data) {
   const wire = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of clients) if (!client.write(wire)) { client.destroy(); clients.delete(client); }
+  // A false return means backpressure, not failure. Node queues the snapshot;
+  // destroying the response here disconnects clients when switching large sessions.
+  for (const client of clients) client.write(wire);
 }
 async function refresh() {
   const [entries, state] = await Promise.all([rpc.command({ type: 'get_entries' }), rpc.command({ type: 'get_state' })]);

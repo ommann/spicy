@@ -331,8 +331,11 @@ export default function App(props: ParentProps) {
         }));
         setNotification({ message: JSON.parse((event as MessageEvent).data), isError: true });
       });
+      const reconnectingMessage = "Local bridge disconnected; reconnecting…";
+      events.onopen = () => setNotification(previous =>
+        previous.message === reconnectingMessage ? { message: "", isError: false } : previous);
       events.onerror = () =>
-        setNotification({ message: "Local bridge disconnected; reconnecting…", isError: true });
+        setNotification({ message: reconnectingMessage, isError: true });
     });
   });
   onCleanup(() => {
