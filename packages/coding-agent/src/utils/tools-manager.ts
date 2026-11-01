@@ -262,12 +262,6 @@ async function downloadTool(tool: "fd" | "rg"): Promise<string> {
 	return binaryPath;
 }
 
-// Termux package names for tools
-const TERMUX_PACKAGES: Record<string, string> = {
-	fd: "fd",
-	rg: "ripgrep",
-};
-
 export interface ToolStatus {
 	type: "info" | "warning";
 	message: string;
@@ -292,14 +286,6 @@ export async function ensureTool(
 
 	if (isOfflineModeEnabled()) {
 		onStatus?.({ type: "warning", message: `${config.name} not found. Offline mode enabled, skipping download.` });
-		return undefined;
-	}
-
-	// On Android/Termux, Linux binaries don't work due to Bionic libc incompatibility.
-	// Users must install via pkg.
-	if (platform() === "android") {
-		const pkgName = TERMUX_PACKAGES[tool] ?? tool;
-		onStatus?.({ type: "warning", message: `${config.name} not found. Install with: pkg install ${pkgName}` });
 		return undefined;
 	}
 

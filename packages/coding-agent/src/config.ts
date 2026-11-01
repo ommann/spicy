@@ -46,10 +46,6 @@ export function getDocsPath(): string {
 	return resolve(join(getPackageDir(), "docs"));
 }
 
-export function getExamplesPath(): string {
-	return resolve(join(getPackageDir(), "examples"));
-}
-
 export function getInteractiveAssetsDir(): string {
 	const packageDir = getPackageDir();
 	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
