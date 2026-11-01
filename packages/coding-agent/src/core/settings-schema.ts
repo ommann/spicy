@@ -265,15 +265,6 @@ export const SettingsSchema = Type.Object(
 					'Command used for npm package lookup and installation, in argv form such as ["mise", "exec", "node@20", "--", "npm"].',
 			}),
 		),
-		enableAnalytics: Type.Optional(
-			Type.Boolean({
-				description: "Opt in to analytics data sharing.",
-				default: SETTINGS_DEFAULTS.enableAnalytics,
-			}),
-		),
-		trackingId: Type.Optional(
-			Type.String({ description: "Analytics tracking identifier, generated when analytics is enabled." }),
-		),
 		packages: Type.Optional(
 			Type.Array(PackageSourceSchema, {
 				description: "npm or git package sources, as strings or objects with resource filtering.",

@@ -27,7 +27,6 @@ export const SETTINGS_DEFAULTS = {
 	showCacheMissNotices: false,
 	quietStartup: false,
 	defaultProjectTrust: "ask",
-	enableAnalytics: false,
 	enableSkillCommands: true,
 	terminal: {
 		showImages: true,

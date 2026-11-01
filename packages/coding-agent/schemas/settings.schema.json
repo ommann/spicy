@@ -237,15 +237,6 @@
       },
       "description": "Command used for npm package lookup and installation, in argv form such as [\"mise\", \"exec\", \"node@20\", \"--\", \"npm\"]."
     },
-    "enableAnalytics": {
-      "type": "boolean",
-      "description": "Opt in to analytics data sharing.",
-      "default": false
-    },
-    "trackingId": {
-      "type": "string",
-      "description": "Analytics tracking identifier, generated when analytics is enabled."
-    },
     "packages": {
       "type": "array",
       "items": {

@@ -1008,25 +1008,6 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getEnableAnalytics(): boolean {
-		return this.settings.enableAnalytics ?? SETTINGS_DEFAULTS.enableAnalytics;
-	}
-
-	getTrackingId(): string | undefined {
-		return this.settings.trackingId;
-	}
-
-	/** Set the analytics opt-in preference; generates a tracking identifier on first opt-in */
-	setEnableAnalytics(enabled: boolean): void {
-		this.globalSettings.enableAnalytics = enabled;
-		this.markModified("enableAnalytics");
-		if (enabled && !this.globalSettings.trackingId) {
-			this.globalSettings.trackingId = randomUUID();
-			this.markModified("trackingId");
-		}
-		this.save();
-	}
-
 	/**
 	 * Stable ID of this installation, e.g. sent to OpenAI as its agent host ID.
 	 * Created on first use. Project settings are ignored so a committed project
