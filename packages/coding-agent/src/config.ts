@@ -8,10 +8,6 @@ import { stripBom } from "./utils/text.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** Detect Bun's compiled virtual filesystem. */
-export const isBunBinary =
-	import.meta.url.includes("$bunfs") || import.meta.url.includes("~BUN") || import.meta.url.includes("%7EBUN");
-export const isBunRuntime = !!process.versions.bun;
 declare const PI_BUNDLED_NODE: boolean;
 export const isBundledNode = typeof PI_BUNDLED_NODE !== "undefined" && PI_BUNDLED_NODE;
 
@@ -32,12 +28,10 @@ export function findNodePackageDir(startDir: string): string {
 export function getPackageDir(): string {
 	const envDir = process.env.PI_PACKAGE_DIR;
 	if (envDir) return normalizePath(envDir);
-	if (isBunBinary) return dirname(process.execPath);
 	return findNodePackageDir(__dirname);
 }
 
 export function getThemesDir(): string {
-	if (isBunBinary) return join(getPackageDir(), "theme");
 	const packageDir = getPackageDir();
 	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
 	return join(packageDir, srcOrDist, "modes", "interactive", "theme");
@@ -60,7 +54,6 @@ export function getExamplesPath(): string {
 }
 
 export function getInteractiveAssetsDir(): string {
-	if (isBunBinary) return join(getPackageDir(), "assets");
 	const packageDir = getPackageDir();
 	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
 	return join(packageDir, srcOrDist, "modes", "interactive", "assets");
@@ -72,20 +65,15 @@ export function getBundledInteractiveAssetPath(name: string): string {
 
 let quickJSWasmPath: string | undefined;
 
-export function setEmbeddedQuickJSWasmPath(path: string): void {
-	quickJSWasmPath = path;
-}
-
 export function getQuickJSWasmPath(): string {
 	quickJSWasmPath ??= createRequire(import.meta.url).resolve("quickjs-wasi/quickjs.wasm");
 	return quickJSWasmPath;
 }
 
 export function resolveCodemodeWorkerSpecifier(
-	runtime: "bun-binary" | "bundled-node" | "unbundled",
+	runtime: "bundled-node" | "unbundled",
 	moduleUrl: string,
 ): string | URL | undefined {
-	if (runtime === "bun-binary") return "./src/extensions/codemode/worker.ts";
 	if (runtime === "bundled-node") return new URL("./codemode-worker.js", moduleUrl);
 	return undefined;
 }
@@ -93,7 +81,7 @@ export function resolveCodemodeWorkerSpecifier(
 let codemodeWorkerDataUrl: URL | undefined;
 
 export function getCodemodeWorkerSpecifier(): string | URL | undefined {
-	const runtime = isBunBinary ? "bun-binary" : isBundledNode ? "bundled-node" : "unbundled";
+	const runtime = isBundledNode ? "bundled-node" : "unbundled";
 	const specifier = resolveCodemodeWorkerSpecifier(runtime, import.meta.url);
 	if (runtime !== "bundled-node" || !(specifier instanceof URL)) return specifier;
 	codemodeWorkerDataUrl ??= new URL(`data:text/javascript;base64,${readFileSync(specifier).toString("base64")}`);
