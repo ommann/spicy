@@ -8,9 +8,6 @@
       "type": "string",
       "description": "JSON Schema reference."
     },
-    "lastChangelogVersion": {
-      "type": "string"
-    },
     "defaultProvider": {
       "type": "string"
     },
@@ -239,16 +236,6 @@
         "type": "string"
       },
       "description": "Command used for npm package lookup and installation, in argv form such as [\"mise\", \"exec\", \"node@20\", \"--\", \"npm\"]."
-    },
-    "collapseChangelog": {
-      "type": "boolean",
-      "description": "Show the condensed changelog after update; use /changelog for the full changelog.",
-      "default": false
-    },
-    "enableInstallTelemetry": {
-      "type": "boolean",
-      "description": "Send an anonymous version and update ping after changelog-detected updates.",
-      "default": true
     },
     "enableAnalytics": {
       "type": "boolean",

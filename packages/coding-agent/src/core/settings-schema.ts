@@ -201,7 +201,6 @@ const SkillsInputSchema = Type.Union(
 export const SettingsSchema = Type.Object(
 	{
 		$schema: Type.Optional(Type.String({ description: "JSON Schema reference." })),
-		lastChangelogVersion: Type.Optional(Type.String()),
 		defaultProvider: Type.Optional(Type.String()),
 		defaultModel: Type.Optional(Type.String()),
 		defaultThinkingLevel: Type.Optional(ModelThinkingLevelSchema),
@@ -264,18 +263,6 @@ export const SettingsSchema = Type.Object(
 			Type.Array(Type.String(), {
 				description:
 					'Command used for npm package lookup and installation, in argv form such as ["mise", "exec", "node@20", "--", "npm"].',
-			}),
-		),
-		collapseChangelog: Type.Optional(
-			Type.Boolean({
-				description: "Show the condensed changelog after update; use /changelog for the full changelog.",
-				default: SETTINGS_DEFAULTS.collapseChangelog,
-			}),
-		),
-		enableInstallTelemetry: Type.Optional(
-			Type.Boolean({
-				description: "Send an anonymous version and update ping after changelog-detected updates.",
-				default: SETTINGS_DEFAULTS.enableInstallTelemetry,
 			}),
 		),
 		enableAnalytics: Type.Optional(

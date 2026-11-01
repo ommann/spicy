@@ -265,26 +265,20 @@ See [Pi Packages](packages.md) for source formats, filtering, installation, and 
 
 Add `--local` or `-l` to `install`, `remove`, `uninstall`, or `config` to use project settings instead of global settings.
 
-### Update Pi or packages
+### Update packages
 
-Running `pi update` without a target updates Pi itself.
+Running `pi update` without a target updates all installed extensions. Spicy does not update itself.
 
 | Task | Command |
 |---|---|
-| Update Pi | `pi update` |
 | Update all installed packages | `pi update --extensions` |
 | Update one installed package | `pi update <source>` |
 | Refresh model catalogs | `pi update --models` |
-| Update Pi and all installed packages | `pi update --all` |
-
-Add `--force` to reinstall Pi when the selected update includes Pi.
-
-`pi update` cannot update Pi when another package manager provides it, such as Nix. Update Pi with that package manager, for example `nix profile upgrade pi`. Package and model catalog updates still work.
+| Update all installed packages | `pi update --all` |
 
 ### Aliases and command options
 
 - `pi uninstall <source>` is an alias for `pi remove <source>`.
-- `pi update --self`, `pi update self`, and `pi update pi` are aliases for `pi update`.
 - `pi update --extension <source>` is an alias for `pi update <source>`.
 - `-a`, `--approve` trusts project-local files for one command. `-na`, `--no-approve` ignores trust-gated project-local files.
 - Append `-h` or `--help` to a command for its exact usage and option constraints.

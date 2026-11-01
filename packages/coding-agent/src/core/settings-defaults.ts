@@ -27,8 +27,6 @@ export const SETTINGS_DEFAULTS = {
 	showCacheMissNotices: false,
 	quietStartup: false,
 	defaultProjectTrust: "ask",
-	collapseChangelog: false,
-	enableInstallTelemetry: true,
 	enableAnalytics: false,
 	enableSkillCommands: true,
 	terminal: {

@@ -673,16 +673,6 @@ export class SettingsManager {
 		return drained;
 	}
 
-	getLastChangelogVersion(): string | undefined {
-		return this.settings.lastChangelogVersion;
-	}
-
-	setLastChangelogVersion(version: string): void {
-		this.globalSettings.lastChangelogVersion = version;
-		this.markModified("lastChangelogVersion");
-		this.save();
-	}
-
 	getSessionDir(): string | undefined {
 		const sessionDir = this.settings.sessionDir;
 		return sessionDir ? normalizePath(sessionDir) : sessionDir;
@@ -1015,26 +1005,6 @@ export class SettingsManager {
 	setNpmCommand(command: string[] | undefined): void {
 		this.globalSettings.npmCommand = command ? [...command] : undefined;
 		this.markModified("npmCommand");
-		this.save();
-	}
-
-	getCollapseChangelog(): boolean {
-		return this.settings.collapseChangelog ?? SETTINGS_DEFAULTS.collapseChangelog;
-	}
-
-	setCollapseChangelog(collapse: boolean): void {
-		this.globalSettings.collapseChangelog = collapse;
-		this.markModified("collapseChangelog");
-		this.save();
-	}
-
-	getEnableInstallTelemetry(): boolean {
-		return this.settings.enableInstallTelemetry ?? SETTINGS_DEFAULTS.enableInstallTelemetry;
-	}
-
-	setEnableInstallTelemetry(enabled: boolean): void {
-		this.globalSettings.enableInstallTelemetry = enabled;
-		this.markModified("enableInstallTelemetry");
 		this.save();
 	}
 
