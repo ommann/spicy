@@ -322,25 +322,6 @@
       },
       "description": "Theme color definitions (scrollbar, thinkingMax, and search highlight colors are optional and use compatible fallbacks)",
       "additionalProperties": false
-    },
-    "export": {
-      "type": "object",
-      "properties": {
-        "pageBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Page background color"
-        },
-        "cardBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Card/container background color"
-        },
-        "infoBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Info sections background (system prompt, notices)"
-        }
-      },
-      "description": "Optional colors for HTML export (defaults derived from userMessageBg if not specified)",
-      "additionalProperties": false
     }
   },
   "title": "Pi Coding Agent Theme",

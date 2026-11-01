@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SessionImportFileNotFoundError } from "../src/core/agent-session-runtime.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 
-type PathCommand = "/export" | "/import";
+type PathCommand = "/import";
 
 type InteractiveModePrototype = {
 	getPathCommandArgument(this: unknown, text: string, command: PathCommand): string | undefined;
@@ -44,7 +44,7 @@ describe("InteractiveMode /import parsing", () => {
 		expect(interactiveModePrototype.getPathCommandArgument("/important /tmp/session.jsonl", "/import")).toBe(
 			undefined,
 		);
-		expect(interactiveModePrototype.getPathCommandArgument("/exporter out.html", "/export")).toBe(undefined);
+		expect(interactiveModePrototype.getPathCommandArgument("/importer session.jsonl", "/import")).toBe(undefined);
 		expect(interactiveModePrototype.getPathCommandArgument("/import /tmp/session.jsonl", "/import")).toBe(
 			"/tmp/session.jsonl",
 		);

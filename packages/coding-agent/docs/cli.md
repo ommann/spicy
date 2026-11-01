@@ -46,7 +46,6 @@ Pi resolves `@path` from the current working directory. The working directory al
 | `--mode text` | Select text output; still open the terminal UI when stdin and stdout are terminals |
 | `--mode json` | Run the supplied prompts, write JSONL events to stdout, then exit |
 | `--mode rpc` | Read JSONL commands from stdin and write responses and events to stdout until shutdown |
-| `--export <input> [output]` | Export a session file to HTML and exit; derive the destination when `output` is omitted |
 
 RPC mode rejects `@file` arguments. JSON and RPC modes reserve stdout for protocol records. See [JSON Event Stream](json.md) and [RPC Protocol](rpc.md).
 

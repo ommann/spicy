@@ -566,29 +566,6 @@ Response:
 
 `contextUsage` is omitted when no model or context window is available. `contextUsage.tokens` and `contextUsage.percent` are `null` immediately after compaction until a fresh post-compaction assistant response provides valid usage data.
 
-### export_html
-
-Export session to an HTML file.
-
-```json
-{"type": "export_html"}
-```
-
-With custom path:
-```json
-{"type": "export_html", "outputPath": "/tmp/session.html"}
-```
-
-Response:
-```json
-{
-  "type": "response",
-  "command": "export_html",
-  "success": true,
-  "data": {"path": "/tmp/session.html"}
-}
-```
-
 ### switch_session
 
 Load a different session file. Can be canceled by a `session_before_switch` extension event handler.

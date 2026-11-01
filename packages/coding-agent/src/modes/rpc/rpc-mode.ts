@@ -592,11 +592,6 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "get_session_stats", stats);
 			}
 
-			case "export_html": {
-				const path = await session.exportToHtml(command.outputPath);
-				return success(id, "export_html", { path });
-			}
-
 			case "switch_session": {
 				const result = await runtimeHost.switchSession(command.sessionPath);
 				if (!result.cancelled) {

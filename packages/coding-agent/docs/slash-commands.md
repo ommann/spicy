@@ -35,7 +35,6 @@ Extensions, prompt templates, and skills can add commands. The command menu in P
 | Command | Description |
 |---|---|
 | `/copy` | Copy the last assistant message |
-| `/export [path]` | Export the session as HTML or JSONL |
 
 Review a session before exporting or sharing it. Sessions can contain prompts, tool arguments, command output, file contents, and credentials exposed during the conversation.
 

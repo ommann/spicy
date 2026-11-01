@@ -68,19 +68,6 @@ export const ThemeJsonSchema = Type.Object(
 			}),
 		),
 		colors: ThemeColorsSchema,
-		export: Type.Optional(
-			Type.Object(
-				{
-					pageBg: Type.Optional(colorValue("Page background color")),
-					cardBg: Type.Optional(colorValue("Card/container background color")),
-					infoBg: Type.Optional(colorValue("Info sections background (system prompt, notices)")),
-				},
-				{
-					description: "Optional colors for HTML export (defaults derived from userMessageBg if not specified)",
-					additionalProperties: false,
-				},
-			),
-		),
 	},
 	{
 		title: "Pi Coding Agent Theme",
