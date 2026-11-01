@@ -1,13 +1,8 @@
 import { getNativeClipboard } from "@earendil-works/pi-tui";
-import { randomUUID } from "crypto";
-import { readFileSync, unlinkSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { detectSupportedImageMimeType } from "./mime.ts";
 import { loadPhoton } from "./photon.ts";
-import { isWSL } from "./wsl.ts";
 
 export type ClipboardImage = {
 	bytes: Uint8Array;
@@ -17,7 +12,6 @@ export type ClipboardImage = {
 const SUPPORTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 
 const DEFAULT_LIST_TIMEOUT_MS = 1000;
-const DEFAULT_POWERSHELL_TIMEOUT_MS = 5000;
 
 export function isWaylandSession(env: NodeJS.ProcessEnv = process.env): boolean {
 	return Boolean(env.WAYLAND_DISPLAY) || env.XDG_SESSION_TYPE === "wayland";
@@ -110,65 +104,6 @@ async function readClipboardImageViaWlPaste(): Promise<ClipboardImage | null | u
 	return { bytes: data, mimeType: baseMimeType(selectedType) };
 }
 
-/**
- * On WSL, the Linux clipboard (Wayland/X11) does not receive image data from
- * Windows screenshots (Win+Shift+S). PowerShell can access the Windows clipboard
- * directly, so we use it as a fallback.
- */
-async function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null> {
-	const tmpFile = join(tmpdir(), `pi-wsl-clip-${randomUUID()}.png`);
-
-	try {
-		const winPathResult = await runClipboardCommand("wslpath", ["-w", tmpFile], {
-			timeoutMs: DEFAULT_LIST_TIMEOUT_MS,
-		});
-		if (winPathResult === undefined) {
-			return null;
-		}
-
-		const winPath = winPathResult.toString("utf-8").trim();
-		if (!winPath) {
-			return null;
-		}
-
-		const psQuotedWinPath = winPath.replaceAll("'", "''");
-		const psScript = [
-			"Add-Type -AssemblyName System.Windows.Forms",
-			"Add-Type -AssemblyName System.Drawing",
-			`$path = '${psQuotedWinPath}'`,
-			"$img = [System.Windows.Forms.Clipboard]::GetImage()",
-			"if ($img) { $img.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); Write-Output 'ok' } else { Write-Output 'empty' }",
-		].join("; ");
-
-		const result = await runClipboardCommand("powershell.exe", ["-NoProfile", "-Command", psScript], {
-			timeoutMs: DEFAULT_POWERSHELL_TIMEOUT_MS,
-		});
-		if (result === undefined) {
-			return null;
-		}
-
-		const output = result.toString("utf-8").trim();
-		if (output !== "ok") {
-			return null;
-		}
-
-		const bytes = readFileSync(tmpFile);
-		if (bytes.length === 0) {
-			return null;
-		}
-
-		return { bytes: new Uint8Array(bytes), mimeType: "image/png" };
-	} catch {
-		return null;
-	} finally {
-		try {
-			unlinkSync(tmpFile);
-		} catch {
-			// Ignore cleanup errors.
-		}
-	}
-}
-
 async function readClipboardImageViaXclip(): Promise<ClipboardImage | null | undefined> {
 	const targets = await runClipboardCommand("xclip", ["-selection", "clipboard", "-t", "TARGETS", "-o"], {
 		timeoutMs: DEFAULT_LIST_TIMEOUT_MS,
@@ -202,32 +137,17 @@ export async function readClipboardImage(options?: {
 	platform?: NodeJS.Platform;
 }): Promise<ClipboardImage | null> {
 	const env = options?.env ?? process.env;
-	const platform = options?.platform ?? process.platform;
-
-	if (env.TERMUX_VERSION) {
-		return null;
-	}
-
 	let image: ClipboardImage | null | undefined;
 
-	if (platform === "linux") {
-		const wsl = isWSL(env);
-		if (isWaylandSession(env) || wsl) {
-			image = await readClipboardImageViaWlPaste();
-		}
-		if (image === undefined) image = await readClipboardImageViaXclip();
-		// Preserve Linux's empty/unavailable distinction if Windows has no image.
-		if (!image && wsl) image = (await readClipboardImageViaPowerShell()) ?? image;
-		if (image === undefined) image = await readClipboardImageViaNativeClipboard();
-	} else {
-		image = await readClipboardImageViaNativeClipboard();
-	}
+	if (isWaylandSession(env)) image = await readClipboardImageViaWlPaste();
+	if (image === undefined) image = await readClipboardImageViaXclip();
+	if (image === undefined) image = await readClipboardImageViaNativeClipboard();
 
 	if (!image) {
 		return null;
 	}
 
-	// Convert unsupported formats (e.g., Windows DIB data wrapped as BMP) to PNG
+	// Convert unsupported image formats to PNG
 	if (!isSupportedImageMimeType(image.mimeType)) {
 		const pngBytes = await convertToPng(image.bytes);
 		if (!pngBytes) {

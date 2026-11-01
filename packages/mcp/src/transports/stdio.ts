@@ -1,6 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import process from "node:process";
-import crossSpawn from "cross-spawn";
 import { type JsonRpcMessage, McpConnectionClosedError, parseJsonRpcMessage } from "../protocol/jsonrpc.ts";
 import { DEFAULT_MAX_MESSAGE_BYTES, type McpTransport, TransportEvents } from "./transport.ts";
 
@@ -8,7 +7,6 @@ const DEFAULT_MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_CLOSE_TIMEOUT_MS = 2_000;
 /** How long a server gets to exit on its own after stdin closes, before it is sent SIGTERM. */
 const STDIN_CLOSE_GRACE_MS = 500;
-const USE_PROCESS_GROUPS = process.platform !== "win32";
 
 /** Process groups of running servers, killed if the host exits without closing them. */
 const liveProcessGroups = new Set<number>();
@@ -16,17 +14,7 @@ let exitHookInstalled = false;
 
 function killProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
 	const pid = child.pid;
-	if (process.platform === "win32" && pid !== undefined) {
-		if (child.exitCode !== null) return;
-		// Windows has no graceful signals, and cross-spawn runs `.cmd` shims through cmd.exe; killing only
-		// that would leave the server running.
-		spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on(
-			"error",
-			() => {},
-		);
-		return;
-	}
-	if (USE_PROCESS_GROUPS && pid !== undefined) {
+	if (pid !== undefined) {
 		try {
 			// Negative pid: the whole group, so wrappers like `npx` or `uvx` do not leave the server behind.
 			process.kill(-pid, signal);
@@ -92,17 +80,16 @@ export class StdioTransport extends TransportEvents implements McpTransport {
 		if (this.closed) throw new McpConnectionClosedError();
 		this.started = true;
 		const env = this.options.inheritEnv === false ? { ...this.options.env } : { ...process.env, ...this.options.env };
-		const child = crossSpawn(this.options.command, this.options.args ?? [], {
+		const child = spawn(this.options.command, this.options.args ?? [], {
 			cwd: this.options.cwd,
 			env,
 			stdio: ["pipe", "pipe", this.options.stderr === "inherit" ? "inherit" : "pipe"],
-			windowsHide: true,
 			// Own process group, so closing the transport can terminate the server's children too.
-			detached: USE_PROCESS_GROUPS,
+			detached: true,
 		});
 		this.child = child;
 		const pid = child.pid;
-		if (USE_PROCESS_GROUPS && pid !== undefined) {
+		if (pid !== undefined) {
 			installExitHook();
 			liveProcessGroups.add(pid);
 			child.once("exit", () => liveProcessGroups.delete(pid));

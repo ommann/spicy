@@ -12,8 +12,7 @@ export function runClipboardCommand(
 		// (SIGTSTP to the group) does not stop the clipboard owner (#11179).
 		const child = spawn(command, args, {
 			stdio: ["pipe", options?.input === undefined ? "pipe" : "ignore", "ignore"],
-			detached: process.platform !== "win32",
-			windowsHide: true,
+			detached: true,
 		});
 		const chunks: Buffer[] = [];
 		let length = 0;

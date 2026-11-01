@@ -50,11 +50,7 @@
 	"engines": {
 		"node": ">=22.19.0"
 	},
-	"dependencies": {
-		"cross-spawn": "7.0.6"
-	},
 	"devDependencies": {
-		"@types/cross-spawn": "6.0.6",
 		"shx": "0.3.4",
 		"vitest": "4.1.11"
 	}

@@ -44,7 +44,6 @@
 		"@silvia-odwyer/photon-node": "0.3.4",
 		"brace-expansion": "5.0.12",
 		"chalk": "6.0.0",
-		"cross-spawn": "7.0.6",
 		"diff": "8.0.4",
 		"grok-mermaid": "0.2.3",
 		"highlight.js": "10.7.3",
@@ -63,7 +62,6 @@
 		"protobufjs": "7.6.6"
 	},
 	"devDependencies": {
-		"@types/cross-spawn": "6.0.6",
 		"@types/hosted-git-info": "3.0.5",
 		"@types/node": "22.19.19",
 		"@types/proper-lockfile": "4.1.4",

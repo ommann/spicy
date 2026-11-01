@@ -684,7 +684,7 @@ describe("Coding Agent Tools", () => {
 				commandTransport: "stdin",
 			});
 			const chunks: Buffer[] = [];
-			const ops = createLocalBashOperations({ shellPath: "C:\\Windows\\System32\\bash.exe" });
+			const ops = createLocalBashOperations({ shellPath: process.execPath });
 			const nameExpansion = "$" + "{name}";
 			const countExpansion = "$" + "{count}";
 			const iExpansion = "$" + "{i}";
@@ -696,32 +696,6 @@ describe("Coding Agent Tools", () => {
 
 			expect(result.exitCode).toBe(0);
 			expect(Buffer.concat(chunks).toString("utf-8")).toBe(command);
-		});
-
-		it("should resolve legacy WSL bash.exe to stdin command transport", () => {
-			if (process.platform === "win32") return;
-			const originalCwd = process.cwd();
-			const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
-			const shellPath = "C:\\Windows\\System32\\bash.exe";
-			writeFileSync(join(testDir, shellPath), "");
-			try {
-				process.chdir(testDir);
-				Object.defineProperty(process, "platform", {
-					configurable: true,
-					value: "win32",
-				});
-
-				expect(shellModule.getShellConfig(shellPath)).toEqual({
-					shell: shellPath,
-					args: ["-s"],
-					commandTransport: "stdin",
-				});
-			} finally {
-				process.chdir(originalCwd);
-				if (platformDescriptor) {
-					Object.defineProperty(process, "platform", platformDescriptor);
-				}
-			}
 		});
 
 		it("should prepend command prefix when configured", async () => {
