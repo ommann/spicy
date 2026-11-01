@@ -9,8 +9,6 @@ Pi uses extended-key protocols so terminals can distinguish combinations such as
 | Symptom | Start here |
 |---|---|
 | `Shift+Enter` submits instead of inserting a line | Your terminal's section below; for tmux, see [Run Pi in tmux](tmux.md) |
-| `Alt+Enter` does not queue a follow-up | [WezTerm](#wezterm), [Alacritty](#alacritty), or [Windows Terminal](#windows-terminal) |
-| Fullscreen scrolling is unusually slow | [iTerm2](#iterm2) |
 | Links work but show no hover preview | [Ghostty](#ghostty) |
 | Inline images or colors are not detected | [Override detected capabilities](#override-detected-capabilities) |
 | An IME candidate window appears in the wrong place | [WezTerm](#wezterm) or [IntelliJ IDEA](#intellij-idea-integrated-terminal) |
@@ -22,28 +20,6 @@ Use `/hotkeys` to inspect Pi's active shortcuts. See [Keybindings](keybindings.m
 
 Kitty supports the required keyboard protocol without additional configuration.
 
-## iTerm2
-
-Regular terminal mode works without additional configuration.
-
-### Fix slow fullscreen scrolling
-
-In fullscreen mode, Pi owns the viewport, so iTerm2 sends mouse-wheel reports instead of scrolling native terminal history. Fast trackpad gestures can then move only about one line at a time.
-
-To change this behavior:
-
-1. Open **iTerm2 > Settings > Advanced**.
-2. Search for **Trackpad scrolls fast?**.
-3. Set it to **No**.
-
-This is an iTerm2-wide setting and can also change native trackpad scrolling. The underlying behavior is tracked in [iTerm2 issue 9619](https://gitlab.com/gnachman/iterm2/-/work_items/9619).
-
-## Apple Terminal
-
-Pi enables enhanced key reporting when available. If Terminal.app still sends plain Return for `Shift+Enter`, Pi uses a local macOS modifier fallback and treats it as `Shift+Enter`.
-
-The fallback works only when Pi runs on the same Mac as Terminal.app. It cannot inspect the local modifier state when Pi runs on another machine over SSH.
-
 ## Ghostty
 
 Add this mapping to Ghostty's configuration if `Alt+Backspace` does not work:
@@ -52,7 +28,7 @@ Add this mapping to Ghostty's configuration if `Alt+Backspace` does not work:
 keybind = alt+backspace=text:\x1b\x7f
 ```
 
-The configuration file is `~/Library/Application Support/com.mitchellh.ghostty/config` on macOS and `~/.config/ghostty/config` on Linux.
+The configuration file is `~/.config/ghostty/config`.
 
 Older Claude Code configurations may contain:
 
@@ -64,7 +40,7 @@ This sends a raw linefeed, which Pi cannot distinguish from `Ctrl+J`. Remove the
 
 ### Open links in fullscreen mode
 
-Links remain clickable in fullscreen mode, but Ghostty does not show its normal hover underline or URL preview while Pi captures mouse input. Hold `Shift+Command` on macOS or `Shift+Ctrl` on Linux to use Ghostty's native link handling.
+Links remain clickable in fullscreen mode, but Ghostty does not show its normal hover underline or URL preview while Pi captures mouse input. Hold `Shift+Ctrl` to use Ghostty's native link handling.
 
 ## WezTerm
 
@@ -77,36 +53,9 @@ config.enable_kitty_keyboard = true
 return config
 ```
 
-### Forward Alt+Enter on macOS
+### Position an IME candidate window
 
-WezTerm binds `Option+Enter` to fullscreen by default on macOS. To use it for Pi's follow-up queue, add this entry to your `config.keys` table:
-
-```lua
-{
-  key = 'Enter',
-  mods = 'ALT',
-  action = wezterm.action.SendString('\x1b[13;3u'),
-}
-```
-
-A complete minimal configuration is:
-
-```lua
-local wezterm = require 'wezterm'
-local config = wezterm.config_builder()
-config.keys = {
-  {
-    key = 'Enter',
-    mods = 'ALT',
-    action = wezterm.action.SendString('\x1b[13;3u'),
-  },
-}
-return config
-```
-
-### Position an IME candidate window in WSL
-
-If CJK IME candidates do not follow Pi's text cursor in WSL, show the hardware cursor:
+If CJK IME candidates do not follow Pi's text cursor, show the hardware cursor:
 
 ```bash
 export PI_HARDWARE_CURSOR=1
@@ -117,16 +66,7 @@ You can instead set `showHardwareCursor` to `true` in Pi settings.
 
 ## Alacritty
 
-Alacritty normally reports `Shift+Enter`. On macOS, `Option+Enter` can arrive as plain `Enter`. Add this to `~/.config/alacritty/alacritty.toml` to forward it to Pi:
-
-```toml
-[[keyboard.bindings]]
-key = "Enter"
-mods = "Alt"
-chars = "\u001b[13;3u"
-```
-
-Restart Alacritty after changing the file.
+Alacritty normally reports `Shift+Enter`. Use a version with extended-key support for modified Enter shortcuts.
 
 ## VS Code integrated terminal
 
@@ -143,11 +83,7 @@ For an older version, add a `Shift+Enter` terminal binding to `keybindings.json`
 }
 ```
 
-The user `keybindings.json` file is normally located at:
-
-- macOS: `~/Library/Application Support/Code/User/keybindings.json`
-- Linux: `~/.config/Code/User/keybindings.json`
-- Windows: `%APPDATA%\\Code\\User\\keybindings.json`
+The user `keybindings.json` file is normally located at `~/.config/Code/User/keybindings.json`.
 
 ## Zed integrated terminal
 
@@ -164,34 +100,11 @@ Add these bindings to Zed's `keymap.json`:
 }
 ```
 
-## Windows Terminal
-
-Windows Terminal uses Pi's Windows and WSL shortcut defaults. See [Keybindings](keybindings.md) for the complete list.
-
-### Forward Shift+Enter
-
-Open Windows Terminal's `settings.json` with `Ctrl+Shift+,` or **Settings > Open JSON file**. Add this object to its `actions` array:
-
-```json
-{
-  "command": { "action": "sendInput", "input": "\u001b[13;2u" },
-  "keys": "shift+enter"
-}
-```
-
-Fully close and reopen Windows Terminal, then verify that `Shift+Enter` inserts a new line in Pi.
-
-### Use Alt+Enter for follow-ups
-
-Windows Terminal binds `Alt+Enter` to fullscreen by default. Pi therefore uses `Ctrl+Q` for follow-ups on Windows and WSL.
-
-To use `Alt+Enter` instead, configure Windows Terminal to forward the key and bind `app.message.followUp` to `alt+enter` in Pi's `keybindings.json`. See [Keybindings](keybindings.md#assign-keybindings).
-
 ## xfce4-terminal and Terminator
 
 These terminals cannot reliably distinguish modified Enter keys from plain `Enter`. Custom bindings such as `Ctrl+Enter` or `Shift+Enter` therefore may not work.
 
-Use a terminal with modern extended-key support when you need those shortcuts, such as Kitty, Ghostty, WezTerm, iTerm2, Windows Terminal, or a compatible Alacritty build.
+Use a terminal with modern extended-key support when you need those shortcuts, such as Kitty, Ghostty, WezTerm, or a compatible Alacritty build.
 
 ## IntelliJ IDEA integrated terminal
 

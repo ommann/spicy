@@ -1,46 +1,34 @@
 # Quickstart
 
-Pi runs in your terminal and works with files on your machine. To use it, you need access to a model through a supported provider. This can be a subscription, an API key, or a local model.
+Spicy is a Linux frontend/backend fork of Pi. It also retains Pi's terminal interface. To use it, you need access to a model through a supported provider: a subscription, an API key, or a local model.
 
+## 1. Set up Spicy
 
-## 1. Install Pi
-
-On macOS or Linux, you can use the installer:
-
-```bash
-curl -fsSL https://pi.dev/install.sh | sh
-```
-
-The installer pins all dependencies and updates Pi with `pi update`. Alternatively, install Pi from npm, which does not pin transitive dependencies. This requires Node.js 22.19 or newer:
+With Node.js 22.19 or newer, run from the repository root:
 
 ```bash
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+npm ci
+npm run dev
 ```
 
-Pi does not require dependency lifecycle scripts for a normal npm installation.
+Open http://localhost:5174 for the frontend. Upstream Pi installers do not install Spicy. The `pi update` command updates extension packages and refreshes models, not Spicy itself.
 
-With Nix on macOS or Linux, install the latest release from Pi's flake. Nix builds Pi from source:
+## 2. Use the terminal interface
+
+To use the TUI instead, build from the repository root:
 
 ```bash
-nix profile add github:earendil-works/pi/stable
+npm run build
 ```
 
-Older Nix versions use `nix profile install` instead. Update with `nix profile upgrade pi`; `pi update` cannot update a Nix installation. To pin a release, use a tag such as `github:earendil-works/pi/v1.0.0`.
-
-Verify the installation:
-
-```bash
-pi --version
-```
-
-## 2. Start Pi
-
-Change to the folder you want Pi to work with, then start it:
+Then start the built CLI in the folder you want it to work with:
 
 ```bash
 cd /path/to/folder
-pi
+node /path/to/spicy/packages/coding-agent/dist/cli.js
 ```
+
+The examples below use `pi` as shorthand for that CLI invocation.
 
 The working folder helps Pi discover relevant files, instructions, and configuration. Pi also uses it to group saved sessions.
 
@@ -90,7 +78,7 @@ Pi saves sessions automatically. Exit Pi, then resume the most recent session fo
 pi --continue
 ```
 
-Use `/resume` to choose another saved session. See [Continue or branch a session](sessions.md) for session naming, branching, compaction, export, and sharing.
+Use `/resume` to choose another saved session. See [Continue or branch a session](sessions.md) for session naming, branching, and compaction.
 
 ## Next steps
 
@@ -112,24 +100,6 @@ Start with the least powerful mechanism that meets your need:
 | Connect an unsupported model service | [Custom provider](custom-provider.md) |
 | Install or distribute several resources | [Pi package](packages.md) |
 
-## Uninstall Pi
+## Remove Spicy
 
-If you installed Pi with npm, run:
-
-```bash
-npm uninstall -g @earendil-works/pi-coding-agent
-```
-
-If you used the installer, run it again and choose **Uninstall Pi**:
-
-```bash
-curl -fsSL https://pi.dev/install.sh | sh
-```
-
-If you installed Pi with Nix, run:
-
-```bash
-nix profile remove pi
-```
-
-None of these methods removes configuration, credentials, sessions, or installed Pi packages from `~/.pi/agent/`.
+Stop the development server and remove the repository checkout when no longer needed. Configuration, credentials, sessions, and installed Pi packages in `~/.pi/agent/` remain separate; removing the checkout does not delete them.
