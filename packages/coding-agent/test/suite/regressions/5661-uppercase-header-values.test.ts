@@ -1,9 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ENV_AGENT_DIR } from "../../../src/config.ts";
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { runMigrations } from "../../../src/migrations.ts";
 import { createModelRegistry } from "../../model-runtime-test-utils.ts";
 import { createHarness } from "../harness.ts";
 
@@ -16,21 +14,7 @@ describe("regression #5661: uppercase models.json header values", () => {
 		}
 	});
 
-	function withAgentDir(agentDir: string, fn: () => void): void {
-		const previousAgentDir = process.env[ENV_AGENT_DIR];
-		process.env[ENV_AGENT_DIR] = agentDir;
-		try {
-			fn();
-		} finally {
-			if (previousAgentDir === undefined) {
-				delete process.env[ENV_AGENT_DIR];
-			} else {
-				process.env[ENV_AGENT_DIR] = previousAgentDir;
-			}
-		}
-	}
-
-	it("keeps uppercase header strings as literals during startup migrations", async () => {
+	it("keeps uppercase header strings as literals when loading models", async () => {
 		const harness = await createHarness({ withConfiguredAuth: false });
 		cleanups.push(harness.cleanup);
 
@@ -70,8 +54,6 @@ describe("regression #5661: uppercase models.json header values", () => {
 			)}\n`,
 			"utf-8",
 		);
-
-		withAgentDir(harness.tempDir, () => runMigrations(harness.tempDir));
 
 		const migrated = JSON.parse(readFileSync(modelsPath, "utf-8")) as {
 			providers: Record<string, { apiKey?: string; headers?: Record<string, string> }>;

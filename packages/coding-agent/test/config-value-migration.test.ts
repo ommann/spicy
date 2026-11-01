@@ -2,13 +2,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ENV_AGENT_DIR } from "../src/config.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { runMigrations } from "../src/migrations.ts";
 
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
 
-describe("config value env var syntax migration", () => {
+describe("literal config values", () => {
 	const tempDirs: string[] = [];
 
 	afterEach(() => {
@@ -22,20 +20,6 @@ describe("config value env var syntax migration", () => {
 		const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-config-value-migration-test-"));
 		tempDirs.push(agentDir);
 		return agentDir;
-	}
-
-	function withAgentDir(agentDir: string, fn: () => void): void {
-		const previousAgentDir = process.env[ENV_AGENT_DIR];
-		process.env[ENV_AGENT_DIR] = agentDir;
-		try {
-			fn();
-		} finally {
-			if (previousAgentDir === undefined) {
-				delete process.env[ENV_AGENT_DIR];
-			} else {
-				process.env[ENV_AGENT_DIR] = previousAgentDir;
-			}
-		}
 	}
 
 	it("leaves uppercase auth.json API key values unchanged", () => {
@@ -56,7 +40,7 @@ describe("config value env var syntax migration", () => {
 		);
 		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		withAgentDir(agentDir, () => runMigrations(agentDir));
+		AuthStorage.create(path.join(agentDir, "auth.json"));
 
 		const migrated = JSON.parse(fs.readFileSync(path.join(agentDir, "auth.json"), "utf-8")) as Record<
 			string,
@@ -72,12 +56,10 @@ describe("config value env var syntax migration", () => {
 	it.each([
 		["malformed", '{\n  "providers": {\n'],
 		["blank", ""],
-	])("does not throw on %s models.json during migrations", async (_name, content) => {
+	])("reports a parse error for %s models.json", async (_name, content) => {
 		const agentDir = createAgentDir();
 		const modelsPath = path.join(agentDir, "models.json");
 		fs.writeFileSync(modelsPath, content, "utf-8");
-
-		withAgentDir(agentDir, () => expect(() => runMigrations(agentDir)).not.toThrow());
 
 		expect(fs.readFileSync(modelsPath, "utf-8")).toBe(content);
 		const registry = await createModelRegistry(AuthStorage.create(path.join(agentDir, "auth.json")), modelsPath);
@@ -127,8 +109,6 @@ describe("config value env var syntax migration", () => {
 				"utf-8",
 			);
 			const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-			withAgentDir(agentDir, () => runMigrations(agentDir));
 
 			const migrated = JSON.parse(fs.readFileSync(path.join(agentDir, "models.json"), "utf-8")) as {
 				providers: Record<
