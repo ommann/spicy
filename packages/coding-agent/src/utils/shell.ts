@@ -6,7 +6,6 @@ import { getBinDir } from "../config.ts";
 export interface ShellConfig {
 	shell: string;
 	args: string[];
-	commandTransport?: "argv" | "stdin";
 }
 
 /** Resolve an explicit shell, /bin/bash, bash on PATH, or sh. */

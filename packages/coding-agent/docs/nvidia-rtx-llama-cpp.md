@@ -9,7 +9,7 @@ The examples below use Windows PowerShell. See [Local Models with llama.cpp](lla
 1. Open the [recipe catalog](https://nvidia.github.io/local-ai-inference-recipes/index.html), select your hardware, operating system, and model, then choose **llama.cpp**. Check the prerequisites and memory requirements. Keep the recipe's launch command for the conversion below.
 2. Install llama.cpp with the recipe's setup instructions. The recipe's settings depend on its build, for example CUDA support or speculative decoding options.
 3. Run `llama-server --help` and check that it lists `--models-preset`. Without it, the build cannot load the recipe as a router preset. Use a newer build that still meets the recipe's requirements.
-4. Install Pi with the [Quickstart](quickstart.md). On native Windows, also see [Run Pi on Windows](windows.md).
+4. Install Pi with the [Quickstart](quickstart.md).
 
 ## Convert the recipe to a preset
 

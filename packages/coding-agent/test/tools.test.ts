@@ -674,30 +674,6 @@ describe("Coding Agent Tools", () => {
 			expect(getShellConfigSpy).toHaveBeenCalledWith("/custom/bash");
 		});
 
-		it("should send commands over stdin when shell resolution requires it", async () => {
-			vi.spyOn(shellModule, "getShellConfig").mockReturnValue({
-				shell: process.execPath,
-				args: [
-					"-e",
-					'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => { input += chunk; }); process.stdin.on("end", () => { process.stdout.write(input); });',
-				],
-				commandTransport: "stdin",
-			});
-			const chunks: Buffer[] = [];
-			const ops = createLocalBashOperations({ shellPath: process.execPath });
-			const nameExpansion = "$" + "{name}";
-			const countExpansion = "$" + "{count}";
-			const iExpansion = "$" + "{i}";
-			const command = `name='World'; echo "Hello, ${nameExpansion}!"; count=3; for i in $(seq 1 ${countExpansion}); do echo "Iteration ${iExpansion} of ${countExpansion}"; done`;
-
-			const result = await ops.exec(command, testDir, {
-				onData: (data) => chunks.push(data),
-			});
-
-			expect(result.exitCode).toBe(0);
-			expect(Buffer.concat(chunks).toString("utf-8")).toBe(command);
-		});
-
 		it("should prepend command prefix when configured", async () => {
 			const bashWithPrefix = createBashTool(testDir, {
 				commandPrefix: "export TEST_VAR=hello",

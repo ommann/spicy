@@ -62,14 +62,6 @@
             {
               "title": "Run Pi in tmux",
               "path": "tmux.md"
-            },
-            {
-              "title": "Run Pi on Windows",
-              "path": "windows.md"
-            },
-            {
-              "title": "Run Pi on Android",
-              "path": "termux.md"
             }
           ]
         },

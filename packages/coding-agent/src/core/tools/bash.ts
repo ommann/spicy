@@ -108,17 +108,12 @@ export function createLocalShellOperations(shellName: string, resolveShellConfig
 				throw new Error(`Working directory does not exist: ${cwd}\nCannot execute ${shellName} commands.`);
 			}
 
-			const commandFromStdin = shellConfig.commandTransport === "stdin";
-			const child = spawn(shellConfig.shell, commandFromStdin ? shellConfig.args : [...shellConfig.args, command], {
+			const child = spawn(shellConfig.shell, [...shellConfig.args, command], {
 				cwd,
 				detached: true,
 				env: env ?? getShellEnv(),
-				stdio: [commandFromStdin ? "pipe" : "ignore", "pipe", "pipe"],
+				stdio: ["ignore", "pipe", "pipe"],
 			});
-			if (commandFromStdin) {
-				child.stdin?.on("error", () => {});
-				child.stdin?.end(command);
-			}
 			if (child.pid) trackDetachedChildPid(child.pid);
 			let timedOut = false;
 			let timeoutHandle: NodeJS.Timeout | undefined;
