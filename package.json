@@ -14,8 +14,7 @@
 		"build": "cd packages/codemode && npm run build && cd ../mcp && npm run build && cd ../agent && npm run build && cd ../coding-agent && npm run build",
 		"build:offline": "cd packages/codemode && npm run build && cd ../mcp && npm run build && cd ../agent && npm run build && cd ../coding-agent && npm run build",
 		"check": "biome check --error-on-warnings . && tsc --noEmit && npm run check --workspace=@spicy/frontend",
-		"test": "npm run test --workspaces --if-present",
-		"test:mcp-conformance": "node packages/coding-agent/test/mcp-conformance/run.ts"
+		"test": "npm run test --workspaces --if-present"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.5",
