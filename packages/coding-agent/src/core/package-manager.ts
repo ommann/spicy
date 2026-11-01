@@ -40,13 +40,7 @@ import { gt, maxSatisfying, rcompare, satisfies, valid, validRange } from "semve
 import { CONFIG_DIR_NAME } from "../config.ts";
 import { spawnProcess, spawnProcessSync } from "../utils/child-process.ts";
 import { type GitSource, parseGitUrl } from "../utils/git.ts";
-import {
-	canonicalizePath,
-	isLocalPath,
-	markPathIgnoredByCloudSync,
-	normalizePath,
-	resolvePath,
-} from "../utils/paths.ts";
+import { canonicalizePath, isLocalPath, normalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
 import { type PiManifest, readPiManifest } from "./pi-manifest.ts";
@@ -2069,7 +2063,6 @@ export class DefaultPackageManager implements PackageManager {
 		if (!existsSync(installRoot)) {
 			mkdirSync(installRoot, { recursive: true });
 		}
-		markPathIgnoredByCloudSync(installRoot);
 		this.ensureGitIgnore(installRoot);
 		const packageJsonPath = join(installRoot, "package.json");
 		if (!existsSync(packageJsonPath)) {
