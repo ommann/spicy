@@ -39,8 +39,6 @@ You can send more input while Pi is working:
 
 A message sent with `Enter` waits until the current response and its tool calls finish, then guides the next response. A follow-up sent with `Alt+Enter` waits until Pi finishes the current task. Aborting returns queued messages to the editor.
 
-Windows Terminal reserves some Alt shortcuts. See [Terminal Setup](terminal-setup.md) for the Windows alternatives.
-
 ## Change the model or settings
 
 Type `/` to search the available commands. The commands you will use most often are:

@@ -140,7 +140,6 @@ The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `re
 |---|---|
 | `read` | Read text files and supported images |
 | `bash` | Run shell commands |
-| `powershell` | Run PowerShell commands on Windows |
 | `edit` | Apply exact text replacements to an existing file |
 | `write` | Create or overwrite a file |
 | `grep` | Search file contents |

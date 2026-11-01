@@ -1,5 +1,3 @@
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import * as os from "node:os";
 import {
@@ -648,43 +646,14 @@ class SessionList implements Component, Focusable {
 
 type SessionsLoader = (onProgress?: SessionListProgress, signal?: AbortSignal) => Promise<SessionInfo[]>;
 
-/**
- * Delete a session file, trying the `trash` CLI first, then falling back to unlink
- */
-async function deleteSessionFile(
-	sessionPath: string,
-): Promise<{ ok: boolean; method: "trash" | "unlink"; error?: string }> {
-	// Try `trash` first (if installed)
-	const trashArgs = sessionPath.startsWith("-") ? ["--", sessionPath] : [sessionPath];
-	const trashResult = spawnSync("trash", trashArgs, { encoding: "utf-8" });
-
-	const getTrashErrorHint = (): string | null => {
-		const parts: string[] = [];
-		if (trashResult.error) {
-			parts.push(trashResult.error.message);
-		}
-		const stderr = trashResult.stderr?.trim();
-		if (stderr) {
-			parts.push(stderr.split("\n")[0] ?? stderr);
-		}
-		if (parts.length === 0) return null;
-		return `trash: ${parts.join(" · ").slice(0, 200)}`;
-	};
-
-	// If trash reports success, or the file is gone afterwards, treat it as successful
-	if (trashResult.status === 0 || !existsSync(sessionPath)) {
-		return { ok: true, method: "trash" };
-	}
-
-	// Fallback to permanent deletion
+/** Permanently delete a session file. */
+async function deleteSessionFile(sessionPath: string): Promise<{ ok: boolean; error?: string }> {
 	try {
 		await unlink(sessionPath);
-		return { ok: true, method: "unlink" };
+		return { ok: true };
 	} catch (err) {
-		const unlinkError = err instanceof Error ? err.message : String(err);
-		const trashErrorHint = getTrashErrorHint();
-		const error = trashErrorHint ? `${unlinkError} (${trashErrorHint})` : unlinkError;
-		return { ok: false, method: "unlink", error };
+		if ((err as NodeJS.ErrnoException).code === "ENOENT") return { ok: true };
+		return { ok: false, error: err instanceof Error ? err.message : String(err) };
 	}
 }
 
@@ -854,7 +823,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
 				const showCwd = this.scope === "all";
 				this.sessionList.setSessions(sessions, showCwd);
 
-				const msg = result.method === "trash" ? "Session moved to trash" : "Session deleted";
+				const msg = "Session deleted";
 				this.header.setStatusMessage({ type: "info", message: msg }, 2000);
 				await this.refreshSessionsAfterMutation();
 			} else {

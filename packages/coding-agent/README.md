@@ -1,28 +1,14 @@
-<p align="center">
-  <a href="https://pi.dev">
-    <img alt="Pi logo" src="https://pi.dev/logo-auto.svg" width="128">
-  </a>
-</p>
-<p align="center">
-  <a href="https://discord.com/invite/3cU7Bz4UPx"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?style=flat-square&logo=discord&logoColor=white" /></a>
-  <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@earendil-works/pi-coding-agent?style=flat-square&logo=npm&logoColor=white" /></a>
-</p>
+# Spicy
 
-> New issues and PRs from new contributors are closed automatically. Maintainers review closed submissions daily. See [CONTRIBUTING.md](https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md).
+Spicy is a Linux frontend/backend fork of Pi with its terminal interface retained.
 
-# Pi
+Customize it with [extensions](docs/extensions.md), [skills](docs/skills.md), [prompt templates](docs/prompt-templates.md), and [themes](docs/themes.md). Local extension folders and package installation are supported.
 
-Pi is a minimal, extensible agent harness that you can make your own.
-
-Adapt Pi to your workflows, not the other way around. Customize Pi with [extensions](docs/extensions.md), [skills](docs/skills.md), [prompt templates](docs/prompt-templates.md), and [themes](docs/themes.md). Bundle them as [Pi packages](docs/packages.md) and share via npm or git.
-
-Pi ships with powerful defaults but skips features like sub-agents and plan mode. Ask Pi to build what you want, or install a package that does it your way.
-
-Use Pi [interactively](docs/usage.md), automate it in [print or JSON mode](docs/cli.md), control it over [RPC](docs/rpc.md), or build apps with the [Pi TypeScript SDK](docs/sdk.md). See [OpenClaw](https://github.com/OpenClaw/OpenClaw) for a real-world integration.
+Use it [interactively](docs/usage.md), automate it in [print or JSON mode](docs/cli.md), control it over [RPC](docs/rpc.md), or build apps with the [TypeScript SDK](docs/sdk.md).
 
 ## Getting started
 
-Spicy runs on Linux with Node.js 22.19 or newer. From the repository root:
+With Node.js 22.19 or newer, run from the repository root:
 
 ```bash
 npm ci
@@ -31,51 +17,22 @@ npm run dev
 
 Open http://localhost:5174 for the frontend. Spicy does not install or update itself through upstream Pi installers.
 
-Start Pi in the directory where you want it to work:
-
-```bash
-cd /path/to/project
-pi
-```
-
-For a built-in AI provider, run `/login` inside Pi to connect a subscription or API key. Then give Pi a task.
-
-See the [documentation](docs/index.md) for full setup and usage instructions.
-
-## Share your OSS coding agent sessions
-
-If you use Pi for open source work, please share your coding agent sessions.
-
-Public OSS session data helps improve models, prompts, tools, and evaluations using real development workflows.
-
-For the full explanation, see [this post on X](https://x.com/badlogicgames/status/2037811643774652911).
-
-To publish sessions, use [`badlogic/pi-share-hf`](https://github.com/badlogic/pi-share-hf) using a Hugging Face account and the Hugging Face CLI.
-
-- [Demo video](https://x.com/badlogicgames/status/2041151967695634619) on how to publish Pi sessions
-- Published Pi development sessions: [`badlogicgames/pi-mono` on Hugging Face](https://huggingface.co/datasets/badlogicgames/pi-mono).
+See the [quickstart](docs/quickstart.md) for terminal setup and authentication, or the [documentation](docs/index.md) for full usage instructions.
 
 ## Development
 
-Clone the repository, install its dependencies, and run Pi from source:
-
-```bash
-git clone https://github.com/earendil-works/pi
-cd pi
-npm install --ignore-scripts
-./pi-test.sh
-```
-
-`pi-test.sh` can be called from any directory and preserves the caller's working directory.
-
-Before submitting changes, run:
+From the repository root:
 
 ```bash
 npm run check
-./test.sh
+npm run build
 ```
 
-Read [CONTRIBUTING.md](https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md) before opening an issue or pull request. It defines the contribution gate, issue quality bar, and required checks. Read [AGENTS.md](https://github.com/earendil-works/pi/blob/main/AGENTS.md) for repository-specific implementation, testing, dependency, and release rules.
+Run focused coding-agent tests with:
+
+```bash
+npm test --workspace=@earendil-works/pi-coding-agent -- test/args.test.ts
+```
 
 ## License
 

@@ -79,7 +79,7 @@ The dedicated history actions browse prompt history regardless of cursor positio
 | `tui.editor.deleteToLineEnd` | `ctrl+k` | Delete to line end |
 | `tui.editor.yank` | `ctrl+y` | Paste most recently deleted text |
 | `tui.editor.yankPop` | `alt+y` | Cycle through deleted text after yank |
-| `tui.editor.undo` | `ctrl+-` (`ctrl+z` on Windows; `alt+z` on WSL) | Undo last edit |
+| `tui.editor.undo` | `ctrl+-` | Undo last edit |
 
 #### Input and selection
 
@@ -108,9 +108,9 @@ In fullscreen mode, these actions control the transcript and take precedence ove
 | `tui.altScreen.halfPageDown` | None | Scroll the transcript down by half a page |
 | `tui.altScreen.lineUp` | None | Scroll the transcript up by one line |
 | `tui.altScreen.lineDown` | None | Scroll the transcript down by one line |
-| `tui.altScreen.previousPrompt` | `ctrl+shift+up`, `ctrl+up` (`ctrl+up` only on Windows and WSL) | Jump to the previous marked message |
-| `tui.altScreen.nextPrompt` | `ctrl+shift+down`, `ctrl+down` (`ctrl+down` only on Windows and WSL) | Jump to the next marked message |
-| `tui.altScreen.search` | `ctrl+shift+f` (`ctrl+f` on Windows and WSL) | Search the rendered transcript |
+| `tui.altScreen.previousPrompt` | `ctrl+shift+up`, `ctrl+up` | Jump to the previous marked message |
+| `tui.altScreen.nextPrompt` | `ctrl+shift+down`, `ctrl+down` | Jump to the next marked message |
+| `tui.altScreen.search` | `ctrl+shift+f` | Search the rendered transcript |
 | `tui.altScreen.searchNext` | `enter`, `ctrl+g` | Select the next search match while searching |
 | `tui.altScreen.searchPrevious` | `shift+enter`, `ctrl+shift+g` | Select the previous search match while searching |
 | `tui.altScreen.searchClose` | `escape` | Close transcript search |
@@ -124,11 +124,9 @@ In fullscreen mode, these actions control the transcript and take precedence ove
 | `app.interrupt` | `escape` | Cancel / abort |
 | `app.clear` | `ctrl+c` | Clear editor (first) / exit (second) |
 | `app.exit` | `ctrl+d` | Exit (when editor empty) |
-| `app.suspend` | `ctrl+z` (None on Windows) | Suspend to background |
-| `app.editor.external` | `ctrl+g` | Open in external editor (`externalEditor`, `$VISUAL`, `$EDITOR`, Notepad on Windows, or `nano` elsewhere) |
-| `app.clipboard.pasteImage` | `ctrl+v` (`alt+v` on Windows and WSL) | Paste files on macOS, images, or text from clipboard |
-
-On native Windows, `app.suspend` has no default because Windows terminals do not support Unix job control. If you assign it manually, Pi shows a status message instead of suspending. WSL uses the normal `ctrl+z` and `fg` behavior.
+| `app.suspend` | `ctrl+z` | Suspend to background |
+| `app.editor.external` | `ctrl+g` | Open in external editor (`externalEditor`, `$VISUAL`, `$EDITOR`, or `nano`) |
+| `app.clipboard.pasteImage` | `ctrl+v` | Paste images or text from clipboard |
 
 ### Sessions
 
@@ -151,7 +149,7 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 |--------|---------|-------------|
 | `app.model.select` | `ctrl+l` | Open model selector |
 | `app.model.cycleForward` | `ctrl+p` | Cycle to next model |
-| `app.model.cycleBackward` | `shift+ctrl+p` (`alt+p` on Windows and WSL) | Cycle to previous model |
+| `app.model.cycleBackward` | `shift+ctrl+p` | Cycle to previous model |
 | `app.models.save` | `ctrl+s` | Save the selected default model or scoped model configuration to settings |
 | `app.thinking.cycle` | `shift+tab` | Cycle thinking level |
 | `app.thinking.save` | `ctrl+s` | Save current thinking level to settings |
@@ -163,8 +161,8 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 |--------|---------|-------------|
 | `app.tools.expand` | `ctrl+o` | Collapse or expand tool output |
 | `app.message.copy` | `ctrl+x` | Copy the selected message in `/tree`; in fullscreen mode, copy the active selection when `fullscreenCopyOnSelect` is `false`; otherwise copy the last assistant message. On OAuth sign-in screens, copy the sign-in URL |
-| `app.message.followUp` | `alt+enter` (`ctrl+q` on Windows and WSL) | Queue follow-up message |
-| `app.message.dequeue` | `alt+up` (`alt+q` on Windows and WSL) | Restore queued messages to editor |
+| `app.message.followUp` | `alt+enter` | Queue follow-up message |
+| `app.message.dequeue` | `alt+up` | Restore queued messages to editor |
 
 ### Tree Navigation
 
