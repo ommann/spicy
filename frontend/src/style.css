@@ -1,0 +1,482 @@
+@import "./theme.css";
+@import "./lilim/style.css";
+@import "./lilim/tree.css";
+@import "./lilim/markdown.css";
+@import "./utw/handoff.css";
+
+.tui-checkbox {
+  position: relative;
+  cursor: pointer;
+}
+
+.tui-checkbox input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.tui-checkbox-mark {
+  font: inherit;
+  white-space: pre;
+  color: var(--toggle-state-on);
+}
+
+.tui-checkbox input:focus-visible + .tui-checkbox-mark {
+  outline: 1px solid var(--toggle-state-on);
+}
+
+.custom-scroll-area {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.scroll-area-viewport {
+  overflow: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+
+.scroll-area-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-area-content {
+  min-width: 0;
+}
+
+.textarea-scroll-area textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  scrollbar-width: none;
+}
+
+.textarea-scroll-area textarea::-webkit-scrollbar {
+  display: none;
+}
+
+.editor:has(.scroll-area-vertical) .composer-measure {
+  width: calc(100% - 14px);
+}
+
+.scroll-area-content.diff-view {
+  width: var(--code-content-width, max-content);
+  min-width: 100%;
+}
+
+.scroll-area-horizontal {
+  padding-bottom: 14px;
+}
+
+.scroll-area-vertical {
+  padding-right: 14px;
+}
+
+.custom-scroll-area > .canvas-scrollbar.horizontal {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+}
+
+.custom-scroll-area > .canvas-scrollbar.vertical {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+}
+
+.scroll-area-vertical > .canvas-scrollbar.horizontal { right: 14px; }
+.scroll-area-horizontal > .canvas-scrollbar.vertical { bottom: 14px; }
+
+.system-prompts-scroll-area > .scroll-area-viewport {
+  height: 100%;
+}
+
+.system-prompts-view .system-prompts-scroll-area .system-prompts-content {
+  overflow: visible;
+  width: max-content;
+  min-width: 100%;
+  height: auto;
+}
+
+.system-prompts-view .system-prompts-scroll-area .system-prompts-content.focused-columns {
+  width: 100%;
+}
+
+.app-settings {
+  display: contents;
+}
+
+.tool-body pre,
+.codemode-preview,
+.diff-view .diff-source,
+.source-code {
+  white-space: var(--code-white-space, pre-wrap);
+  overflow-wrap: var(--code-overflow-wrap, anywhere);
+}
+
+.source-code {
+  display: block;
+}
+
+.tool-body,
+.codemode-output {
+  min-width: 0;
+}
+
+.output-collapsed:has(> .terminal-scroll-area) {
+  max-height: none;
+  overflow: visible;
+}
+
+.output-collapsed > .terminal-scroll-area > .scroll-area-viewport {
+  max-height: 200px;
+}
+
+.tool-title > strong {
+  margin-right: 1ch;
+}
+
+.bash-tool .tool-title {
+  display: flex;
+  align-items: baseline;
+  gap: 1ch;
+  white-space: normal;
+}
+
+.bash-tool .tool-title > strong {
+  flex: none;
+  margin: 0;
+  user-select: none;
+}
+
+.bash-tool .tool-arguments {
+  min-width: 0;
+  user-select: text;
+}
+
+.diff-line {
+  user-select: none;
+}
+
+.diff-line .diff-source {
+  user-select: text;
+}
+
+.bash-tool .tool-title,
+.bash-tool .tool-body {
+  background: var(--terminal-background);
+  color: var(--terminal-text);
+  padding: 10px 12px;
+  border-radius: 4px;
+}
+
+.view-switch {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  border: 1px solid var(--border);
+}
+
+.tree-toolbar .state-toggle {
+  color: var(--toggle-state-off);
+  text-decoration: none;
+}
+
+.tree-toolbar .state-toggle[aria-pressed="true"] {
+  background: var(--toggle-state-fill);
+  color: var(--toggle-state-on);
+}
+
+.chat-dialog .width-option {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+}
+
+.width-option select {
+  min-width: 100px;
+}
+
+/* Keep lilim's original selectors, typography, colors, and card geometry.
+ * Grid replaces viewport-minus-composer calculations in the APP SHELL only.
+ * The established tree canvas keeps its own branch/connector layout engine.
+ */
+.lilim-host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 42px minmax(0, 1fr) auto;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+}
+
+.lilim-host.has-horizontal-scrollbar {
+  padding-bottom: 14px;
+}
+
+.lilim-host > .tree-toolbar {
+  grid-row: 1;
+}
+
+.lilim-host > .canvas-scroll-shell,
+.lilim-host.has-horizontal-scrollbar > .canvas-scroll-shell {
+  grid-row: 2;
+  height: auto;
+  min-height: 0;
+}
+
+.lilim-host > .transcript {
+  grid-row: 2;
+  height: auto;
+  min-height: 0;
+}
+
+.lilim-host > .bottom,
+.lilim-host.has-horizontal-scrollbar > .bottom {
+  grid-row: 3;
+  position: relative;
+  bottom: auto;
+  min-width: 0;
+}
+
+.lilim-host:has(.inline-composer) > .bottom {
+  position: absolute;
+  bottom: 14px;
+  pointer-events: none;
+  background: transparent;
+}
+
+.lilim-host:has(.inline-composer) > .bottom button {
+  pointer-events: auto;
+}
+
+.lilim-host .user {
+  position: relative;
+}
+
+.branch-trigger {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.branch-trigger::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.lilim-host .user:hover .branch-trigger,
+.branch-trigger:focus-visible {
+  opacity: 1;
+}
+
+.branch-draft {
+  min-height: 60px;
+  border: 1px dashed var(--focus-border);
+}
+
+.chat-dialog {
+  max-width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 20px;
+  border: 1px solid var(--dialog-border);
+  background: var(--background);
+  color: var(--text);
+  font: inherit;
+}
+
+.chat-dialog::backdrop {
+  background: var(--modal-backdrop);
+}
+
+.chat-dialog[open] {
+  display: grid;
+  gap: 20px;
+}
+
+.chat-dialog p {
+  margin: 0;
+}
+
+.chat-dialog-heading,
+.chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.chat-dialog-heading > button {
+  margin-left: auto;
+}
+
+.chat-dialog button,
+.chat-dialog select,
+.chat-dialog textarea {
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.chat-dialog button {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.chat-dialog button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.chat-dialog select {
+  max-width: 100%;
+}
+
+.chat-dialog label {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-dialog textarea {
+  width: 100%;
+  min-height: 100px;
+}
+
+.chat-muted {
+  color: var(--muted);
+}
+
+.chat-error {
+  color: var(--status-error);
+  white-space: pre-wrap;
+}
+
+.resume-dialog {
+  width: min(1400px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+
+.resume-search {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.resume-list {
+  display: grid;
+  min-width: 0;
+}
+
+.resume-list > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 3ch;
+  gap: 12px;
+  padding: 0 8px;
+  text-align: left;
+  text-decoration: none;
+  line-height: 20px;
+}
+
+.resume-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.resume-age {
+  text-align: right;
+}
+
+.resume-list > button:hover {
+  background: var(--user);
+}
+
+.route-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.system-prompts-view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--background);
+  color: var(--text);
+  font: inherit;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr);
+}
+
+.system-prompts-view .system-prompts-content {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 720px;
+  align-content: start;
+  align-items: start;
+  gap: 48px;
+  min-height: 0;
+  height: auto;
+  padding: 24px 50vw;
+  overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+}
+
+.system-prompts-content.pan-ready { cursor: grab; }
+.system-prompts-content.panning { cursor: grabbing; user-select: none; }
+
+.system-prompts-content.focused-columns {
+  grid-auto-columns: minmax(0, 1fr);
+  padding-inline: 24px;
+}
+
+.system-prompt-version[hidden] {
+  display: none;
+}
+
+.notification-error {
+  color: var(--status-error);
+}
+
+.tree-toolbar .tree-title {
+  padding: 0;
+  color: var(--text);
+}
+
+.system-prompt-reference {
+  cursor: pointer;
+}
+
+.system-prompt-reference:focus-visible {
+  outline: 1px solid var(--focus-border);
+}

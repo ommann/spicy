@@ -1,0 +1,341 @@
+:root {
+  --block-padding: 20px 8px;
+  font-family: "Liberation Mono", "DejaVu Sans Mono", monospace;
+  font-size: 14px;
+  line-height: 20px;
+  font-synthesis: none;
+  background: var(--background);
+  color: var(--text);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+.transcript {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 0 0 3px;
+  scrollbar-width: none;
+}
+.transcript::-webkit-scrollbar {
+  display: none;
+}
+.message {
+  margin: 0;
+  padding: 20px 8px;
+}
+.user {
+  padding: var(--block-padding);
+  background: var(--user);
+  color: var(--text-emphasis);
+  margin-bottom: 20px;
+}
+.thinking {
+  padding: 0 8px;
+  color: var(--thinking);
+  font-style: italic;
+}
+.thinking h2 {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 700;
+  margin: 20px 0;
+}
+.thinking p {
+  margin: 0 0 20px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.thinking p:last-child {
+  -webkit-line-clamp: 3;
+  margin-bottom: 0;
+}
+code {
+  font: inherit;
+  font-style: normal;
+  color: var(--purple);
+}
+.response {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+.tool {
+  background: var(--tool);
+  padding: var(--block-padding);
+  margin-bottom: 20px;
+  min-height: 60px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tool strong {
+  color: var(--tool-title-text);
+}
+.path {
+  color: var(--purple);
+  text-decoration: underline dashed;
+  text-underline-offset: 4px;
+}
+.range,
+.function {
+  color: var(--syntax-function);
+}
+.tool-title {
+  margin-bottom: 20px;
+  white-space: pre-wrap;
+  tab-size: 8;
+}
+pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre;
+  tab-size: 8;
+}
+.trace-text {
+  white-space: pre-wrap;
+  tab-size: 8;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+.keyword {
+  color: var(--syntax-keyword);
+}
+.parameter {
+  color: var(--syntax-property);
+}
+.type {
+  color: var(--syntax-type);
+}
+.literal {
+  color: var(--syntax-literal);
+}
+.comment {
+  color: var(--text-secondary);
+}
+.collapse-toggle {
+  display: block;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.collapse-toggle[hidden] {
+  display: none;
+}
+.collapse-toggle:hover {
+  color: var(--text);
+}
+.collapse-toggle:focus-visible {
+  outline: 1px solid var(--muted);
+  outline-offset: 2px;
+}
+.extra-lines[hidden] {
+  display: none;
+}
+.bottom {
+  width: 100%;
+  background: var(--background);
+}
+.jump-row {
+  height: 30px;
+  position: relative;
+}
+#jump {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 0;
+  background: var(--user);
+  color: var(--text-emphasis);
+  padding: 0 8px;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.editor {
+  margin: 0 8px;
+  border-top: 1px solid var(--focus-border);
+  border-bottom: 1px solid var(--focus-border);
+  position: relative;
+}
+.editor textarea,
+.composer-measure {
+  width: 100%;
+  padding: 9px 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.editor textarea {
+  display: block;
+  height: 38px;
+  min-height: 38px;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  caret-color: var(--text);
+}
+.composer-measure {
+  position: absolute;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+.user p,
+.real-message p {
+  margin: 0 0 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.user p:last-child,
+.real-message p:last-child {
+  margin-bottom: 0;
+}
+.real-message {
+  padding-top: 0;
+}
+.real-message h2 {
+  font-size: inherit;
+  margin: 0 0 20px;
+}
+.real-thinking {
+  padding-bottom: 20px;
+}
+.real-thinking p,
+.real-thinking p:last-child {
+  display: block;
+  overflow: visible;
+  margin: 0 0 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.real-thinking p:last-child {
+  margin-bottom: 0;
+}
+.real-thinking h2:first-child {
+  margin-top: 0;
+}
+.tool-body {
+  white-space: normal;
+}
+.tool-body pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.output-collapsed {
+  max-height: 200px;
+  overflow: hidden;
+}
+.tool-error {
+  background: var(--tool-error-background);
+}
+.tool-arguments {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.image-read-link {
+  cursor: pointer;
+}
+.image-read-link:focus-visible,
+.trace-image:focus-visible {
+  outline: 1px solid var(--image-focus);
+  outline-offset: 3px;
+}
+#image-preview {
+  padding: 12px;
+  border: 1px solid var(--dialog-border);
+  background: var(--background);
+  color: var(--text);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+}
+#image-preview::backdrop {
+  background: var(--modal-backdrop);
+}
+.image-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+.image-preview-caption {
+  flex: 1;
+  min-width: 0;
+  max-width: calc(100vw - 160px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-preview-header button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  margin-left: auto;
+}
+.image-preview-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: calc(100vw - 60px);
+  max-height: calc(100dvh - 100px);
+  border: 1px solid var(--dialog-border);
+  padding: 4px;
+  background: repeating-conic-gradient(var(--checker-dark) 0 25%, var(--checker-light) 0 50%) 0 / 12px
+    12px;
+}
+.trace-image {
+  cursor: zoom-in;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 800px);
+  max-height: 600px;
+  object-fit: initial;
+  margin-top: 20px;
+  padding: 4px;
+  border: 1px solid var(--dialog-border);
+  background-color: var(--checker-dark);
+  background-image: conic-gradient(
+    var(--checker-dark) 25%,
+    var(--checker-light) 0 50%,
+    var(--checker-dark) 0 75%,
+    var(--checker-light) 0
+  );
+  background-size: 12px 12px;
+}
+.markdown-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 10px 0;
+}
+.session-summary {
+  padding: 20px 8px;
+  color: var(--muted);
+}
+.session-summary summary {
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  #jump {
+    left: 50%;
+  }
+}

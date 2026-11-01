@@ -1,0 +1,174 @@
+/* UTW PoC harness styles. Scope card rules to handoffs; palette lives in theme.css. */
+.utw-tool {
+  padding: 20px 8px;
+  background: var(--utw-tool-background);
+  color: var(--utw-tool-text);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.utw-tool .command {
+  color: var(--utw-command-text);
+  font-weight: bold;
+  white-space: pre-wrap;
+}
+
+.handoff-header {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+}
+
+.handoff-status {
+  flex: none;
+  white-space: pre;
+  color: var(--utw-notice);
+}
+
+.handoff-status[aria-label="Rejected"],
+.handoff-status[aria-label="Failed"] {
+  color: var(--utw-rejected);
+}
+
+.handoff-id {
+  color: var(--utw-muted);
+  overflow-wrap: anywhere;
+}
+
+.utw-tool .handoff-instructions {
+  margin-top: 20px;
+  color: var(--utw-muted);
+  white-space: pre-wrap;
+}
+
+.handoff-instruction-content {
+  display: block;
+  padding-left: 2ch;
+  color: var(--utw-command-text);
+}
+
+.utw-tool .attachment-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 12px;
+}
+
+.utw-tool .handoff-inputs {
+  margin: 20px 0 0;
+  white-space: pre-wrap;
+}
+
+.utw-tool.handoff-ready {
+  cursor: pointer;
+}
+
+.utw-tool.handoff-ready:hover {
+  background: var(--utw-tool-hover);
+}
+
+.utw-tool.handoff-ready:focus-visible {
+  outline: 1px solid var(--utw-focus);
+  outline-offset: -1px;
+}
+
+.handoff-error {
+  margin-top: 20px;
+}
+
+.utw-tool pre {
+  margin: 20px 0 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.utw-tool .code {
+  color: var(--purple);
+}
+
+.utw-tool.error,
+.utw-tool .error {
+  color: var(--utw-error);
+}
+
+#handoff-overlay {
+  padding: 0;
+  border: 1px solid var(--utw-dialog-border);
+  overflow: hidden;
+  background: var(--utw-background);
+  color: var(--utw-text);
+  font: inherit;
+}
+
+#handoff-overlay::backdrop {
+  background: var(--utw-backdrop);
+}
+
+#handoff-overlay.floating {
+  width: min(850px, calc(100vw - 32px));
+  height: 70dvh;
+  resize: both;
+}
+
+#handoff-overlay.fullscreen {
+  inset: 0;
+  width: calc(100vw - 80px);
+  height: calc(100dvh - 80px);
+  max-width: none;
+  max-height: none;
+  margin: auto;
+}
+
+#handoff-overlay[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+#handoff-overlay header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--utw-focus);
+}
+
+.handoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.handoff-actions button {
+  border: 1px solid var(--utw-button-border);
+  background: transparent;
+  padding: 0 8px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.handoff-actions button:hover:not(:disabled) {
+  background: var(--utw-button-hover);
+}
+
+.handoff-actions button:focus-visible {
+  outline: 1px solid var(--utw-focus);
+}
+
+#handoff-connection {
+  padding: 8px;
+  color: var(--utw-notice);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#handoff-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--utw-frame-background);
+}

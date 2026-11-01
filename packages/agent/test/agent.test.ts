@@ -1,4 +1,4 @@
-import { type ClientIdentity, PI_ATTRIBUTION } from "@earendil-works/pi-ai";
+import type { ClientIdentity } from "@earendil-works/pi-ai";
 import {
 	type AssistantMessage,
 	createAssistantMessageEventStream,
@@ -1200,7 +1200,7 @@ describe("Agent", () => {
 		expect(receivedSessionId).toBe("session-def");
 	});
 
-	it("attributes requests to pi by default and merges a configured identity over it", async () => {
+	it("forwards configured identity without adding default attribution", async () => {
 		const received: (ClientIdentity | undefined)[] = [];
 		const agent = new Agent({
 			streamFn: (_model, _context, options) => {
@@ -1220,10 +1220,6 @@ describe("Agent", () => {
 		agent.identity = { userAgent: "short" };
 		await agent.prompt("and again");
 
-		expect(received).toEqual([
-			{ attribution: PI_ATTRIBUTION },
-			{ attribution: acme, userAgent: "short" },
-			{ attribution: PI_ATTRIBUTION, userAgent: "short" },
-		]);
+		expect(received).toEqual([undefined, { attribution: acme, userAgent: "short" }, { userAgent: "short" }]);
 	});
 });

@@ -140,8 +140,7 @@ export interface AgentOptions {
 	maxRetryDelayMs?: number;
 	toolExecution?: ToolExecutionMode;
 	/**
-	 * How requests identify the app to providers, merged field by field over `DEFAULT_AGENT_IDENTITY`
-	 * (`{ attribution: PI_ATTRIBUTION }`). Pass `{ attribution: null }` to send no attribution headers.
+	 * How requests identify the app to providers. Forwarded without default attribution.
 	 */
 	identity?: ClientIdentity;
 }
@@ -232,7 +231,7 @@ export class Agent {
 	public maxRetryDelayMs?: number;
 	/** Tool execution strategy for assistant messages that contain multiple tool calls. */
 	public toolExecution: ToolExecutionMode;
-	/** Request identity forwarded to the stream function, over `DEFAULT_AGENT_IDENTITY`. */
+	/** Request identity forwarded to the stream function. */
 	public identity?: ClientIdentity;
 
 	constructor(options: AgentOptions) {

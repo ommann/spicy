@@ -7,7 +7,6 @@ import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
 import { formatNoModelsAvailableMessage } from "./auth-guidance.ts";
 import { CacheWarmer } from "./cache-warmer.ts";
-import { getClientIdentity } from "./client-identity.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ExtensionRunner, LoadExtensionsResult, SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { createToolNameMatcher } from "./mcp-servers.ts";
@@ -32,7 +31,6 @@ import {
 	createFindTool,
 	createGrepTool,
 	createLsTool,
-	createPowerShellTool,
 	createReadOnlyTools,
 	createReadTool,
 	createWriteTool,
@@ -144,7 +142,6 @@ export {
 	createGrepTool,
 	createFindTool,
 	createLsTool,
-	createPowerShellTool,
 };
 
 // Helper Functions
@@ -348,8 +345,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			websocketConnectTimeoutMs: options.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs(),
 			maxRetries: options.maxRetries ?? providerRetrySettings.maxRetries,
 			maxRetryDelayMs: options.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
-			// Replaces the agent loop's default identity; read per request so telemetry changes apply at once.
-			identity: getClientIdentity(settingsManager),
 			transformHeaders: async (headers) =>
 				headerRunner?.hasHandlers("before_provider_headers")
 					? headerRunner.emitBeforeProviderHeaders(headers)

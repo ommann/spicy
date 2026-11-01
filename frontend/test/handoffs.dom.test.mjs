@@ -1,0 +1,107 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
+import { build } from 'vite';
+import solid from 'vite-plugin-solid';
+import { fileURLToPath } from 'node:url';
+
+const bundle = await build({ configFile: false, plugins: [solid()], logLevel: 'silent', build: {
+  write: false, minify: false, lib: { entry: fileURLToPath(new URL('./handoffs.dom-fixture.tsx', import.meta.url)), formats: ['es'] },
+} });
+const code = (Array.isArray(bundle) ? bundle[0] : bundle).output.find(output => output.type === 'chunk').code;
+const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost:5173/', pretendToBeVisual: true });
+const { window } = dom;
+for (const name of ['window', 'document', 'HTMLElement', 'HTMLDialogElement', 'Element', 'Node', 'NodeFilter', 'MutationObserver', 'Event', 'KeyboardEvent']) globalThis[name] = name === 'window' ? window : window[name];
+globalThis.getComputedStyle = window.getComputedStyle.bind(window);
+globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+window.HTMLDialogElement.prototype.close = function () { if (this.open) { this.open = false; this.dispatchEvent(new window.Event('close')); } };
+const components = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const root = window.document.getElementById('root');
+const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+const button = text => [...root.querySelectorAll('button')].find(element => element.textContent.trim() === text);
+const id = 'joke-7k3m9p';
+
+test('handoffs fetch only on click, preserve the PoC presentation and retain the iframe across close and resize', async () => {
+  let status = 'incomplete', offline = false;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push([url, options]);
+    if (offline) throw new Error('offline');
+    return { ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: async () => ({ task_id: id, tool: 'joke', status,
+      ui: { url: `http://127.0.0.1:4317/tasks/${id}/view`, embeddable: true } }) };
+  };
+  const mounted = components.mount(root);
+  try {
+    await flush();
+    assert.equal(requests.length, 0, 'Rendering does not contact UTW');
+    let card = root.querySelector('.handoff');
+    assert.equal(card.getAttribute('role'), 'button');
+    assert.equal(card.getAttribute('aria-label'), 'handoff_task_to_user · joke · open handoff');
+    assert.equal(card.querySelector('.command').textContent, 'Handoff: Joke');
+    assert.equal(card.querySelector('.handoff-id').textContent, id);
+    assert.equal(card.querySelector('.handoff-instructions').textContent, '```txt\nChoose a joke```');
+    assert.equal(card.querySelector('.handoff-inputs').textContent, '{\n  "topic": "cats"\n}');
+    assert.equal(card.querySelector('button'), null);
+    card.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    assert.equal(requests.length, 1);
+    const dialog = root.querySelector('dialog');
+    const frame = root.querySelector('iframe');
+    assert.equal(dialog.open, true);
+    assert.equal(dialog.className, 'floating');
+    button('Maximize').click();
+    assert.equal(dialog.className, 'fullscreen');
+    button('Restore').click();
+    button('Close').click();
+    card.click();
+    await flush();
+    assert.equal(requests.length, 2);
+    assert.equal(root.querySelector('iframe'), frame);
+    button('Reject').click();
+    await flush();
+    assert.match(root.querySelector('iframe').src, /\/reject$/);
+    assert.equal(requests.length, 2, 'Rejection is UTW-owned navigation');
+    button('Back to task').click();
+    await flush();
+    assert.equal(requests.length, 3);
+    assert.match(root.querySelector('iframe').src, /\/view$/);
+    window.dispatchEvent(new window.Event('online'));
+    document.dispatchEvent(new window.Event('visibilitychange'));
+    await flush();
+    assert.equal(requests.length, 3, 'No background tracker or online/visibility refetch');
+    button('Close').click();
+    offline = true;
+    card.click();
+    await flush();
+    assert.match(card.textContent, /Could not open handoff: offline/);
+    assert.equal(dialog.open, false);
+    offline = false;
+    card.click();
+    await flush();
+    assert.doesNotMatch(card.textContent, /Could not open/);
+    assert.equal(dialog.open, true);
+    button('Close').click();
+    status = 'completed';
+    card.click();
+    await flush();
+    assert.equal(card.querySelector('.handoff-status').textContent, '[X]');
+    assert.equal(button('Reject'), undefined);
+    button('Close').click();
+    mounted.setFetchedResult({ details: { status: 'rejected', instruction: 'Try another', output: { answer: 1 }, files: ['a.png'], written: '/tmp/a.png', rejection: { reason: 'No thanks' } }, content: [{ type: 'text', text: 'Raw JSON should not be duplicated' }] });
+    await flush();
+    const result = root.querySelector('.handoff-result');
+    assert.equal(result.querySelector('.handoff-output').textContent, '{\n  "answer": 1\n}');
+    assert.equal(result.querySelector('.handoff-written').textContent, 'Written: /tmp/a.png');
+    assert.doesNotMatch(result.textContent, /Raw JSON/);
+    assert.ok(requests.every(([url, options]) => url === `/utw/tasks/${id}` && !options.method));
+    const count = requests.length;
+    mounted.setSessionKey('session-2');
+    await flush();
+    assert.equal(root.querySelector('dialog').open, false);
+    assert.equal(root.querySelector('iframe'), null);
+    assert.equal(requests.length, count, 'Changing session does not fetch');
+    card = root.querySelector('.handoff');
+    assert.equal(card.querySelector('.handoff-status').textContent, '[ ]');
+  } finally { mounted.dispose(); dom.window.close(); }
+});

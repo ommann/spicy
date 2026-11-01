@@ -1,0 +1,84 @@
+/* Color source text without converting Markdown into rendered HTML. */
+.markdown-source {
+  white-space: pre-wrap;
+  tab-size: 8;
+  overflow-wrap: anywhere;
+}
+.markdown-source .syntax-highlighted {
+  font-style: inherit;
+}
+.syntax-highlighted {
+  color: var(--text);
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-type {
+  color: var(--syntax-keyword);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--syntax-function);
+}
+.hljs-title.class_,
+.hljs-built_in {
+  color: var(--syntax-type);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--syntax-string);
+}
+.hljs-number,
+.hljs-literal {
+  color: var(--syntax-literal);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--syntax-comment);
+}
+.hljs-params,
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: var(--syntax-property);
+}
+.hljs-variable,
+.hljs-template-variable,
+.hljs-subst,
+.hljs-operator,
+.hljs-punctuation {
+  color: var(--syntax-operator);
+}
+.hljs-meta,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--syntax-meta);
+}
+.hljs-addition {
+  color: var(--diff-add-text);
+  background: var(--diff-add-background);
+}
+.hljs-deletion {
+  color: var(--diff-remove-text);
+  background: var(--diff-remove-background);
+}
+.markdown-source .hljs-section,
+.markdown-source .hljs-strong {
+  color: var(--syntax-heading);
+}
+.markdown-source .hljs-emphasis {
+  color: var(--syntax-type);
+}
+.markdown-source .hljs-code {
+  color: var(--purple);
+}
+.markdown-source .hljs-link {
+  color: var(--syntax-link);
+}

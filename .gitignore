@@ -4,21 +4,31 @@ dist/
 *.log
 .DS_Store
 *.tsbuildinfo
-# packages/*/node_modules/
-packages/*/dist/
 packages/*/dist-chrome/
 packages/*/dist-firefox/
 packages/ai/src/providers/data/
 packages/ai/src/providers/.model-generation-*/
 *.cpuprofile
 
-# Environment
+# Local sessions and environment secrets
+.sessions/
 .env
+.env.*
+!.env.example
+!.env.*.example
+
+# Development caches and browser output
+.cache/
+.vite/
+.playwright-mcp/
+playwright-report/
+test-results/
 
 # Editor files
 .vscode/
 .zed/
 .idea/
+Thumbs.db
 .claude/
 *.swp
 *.swo
