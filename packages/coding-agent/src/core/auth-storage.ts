@@ -16,15 +16,9 @@ import { isCommandConfigValue, resolveConfigValue } from "./resolve-config-value
 
 type AuthStorageData = Record<string, Credential>;
 
-// On Windows, a just-removed lock directory can stay "delete pending" while another process
-// (antivirus, indexer, another pi checking the lock) still has it open. mkdir then fails with
-// EPERM until that handle closes. Retry this briefly so real permission errors still fail fast.
-const MAX_EPERM_RETRIES = 5;
-
-function getRetryableLockErrorCode(error: unknown): "ELOCKED" | "EPERM" | undefined {
+function getRetryableLockErrorCode(error: unknown): "ELOCKED" | undefined {
 	const code = error instanceof Error && "code" in error ? error.code : undefined;
 	if (code === "ELOCKED") return code;
-	if (code === "EPERM" && process.platform === "win32") return code;
 	return undefined;
 }
 
@@ -122,7 +116,6 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 		const maxDelayMs = 2_000;
 		const deadline = Date.now() + staleMs;
 		let retry = 0;
-		let epermRetries = 0;
 		while (true) {
 			signal?.throwIfAborted();
 			let release: (() => Promise<void>) | undefined;
@@ -138,8 +131,6 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 				const code = getRetryableLockErrorCode(error);
 				const remainingMs = deadline - Date.now();
 				if (!code || remainingMs <= 0) throw error;
-				// The 30s deadline is for waiting on another holder; cap EPERM retries separately.
-				if (code === "EPERM" && ++epermRetries > MAX_EPERM_RETRIES) throw error;
 				const baseDelayMs = Math.min(10 * 2 ** retry, maxDelayMs / 2);
 				retry++;
 				const delayMs = Math.min(Math.round(baseDelayMs * (1 + Math.random())), remainingMs);

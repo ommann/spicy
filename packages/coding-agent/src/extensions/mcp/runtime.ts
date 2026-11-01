@@ -86,10 +86,10 @@ function usesOAuth(entry: McpServerEntry): boolean {
 	return !Object.keys(config.headers ?? {}).some((header) => header.toLowerCase() === "authorization");
 }
 
-/** `~` and `~/…` (also `~\…` on Windows) name the home directory, like in a shell. */
+/** `~` and `~/…` name the home directory, like in a shell. */
 function expandHome(value: string): string {
 	if (value === "~") return homedir();
-	if (value.startsWith("~/") || (process.platform === "win32" && value.startsWith("~\\"))) {
+	if (value.startsWith("~/")) {
 		return join(homedir(), value.slice(2));
 	}
 	return value;

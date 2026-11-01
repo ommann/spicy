@@ -254,7 +254,7 @@ export const SettingsSchema = Type.Object(
 		),
 		shellPath: Type.Optional(
 			Type.String({
-				description: "Custom shell path, for example for Cygwin on Windows, with support for leading ~ expansion.",
+				description: "Custom shell path with support for leading ~ expansion.",
 			}),
 		),
 		quietStartup: Type.Optional(

@@ -967,7 +967,7 @@ export class SettingsManager {
 		if (environmentEditor) {
 			return environmentEditor;
 		}
-		return process.platform === "win32" ? "notepad" : "nano";
+		return "nano";
 	}
 
 	setHideThinkingBlock(hide: boolean): void {

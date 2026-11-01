@@ -54,11 +54,7 @@ export class ExtensionEditorComponent extends Container implements Focusable {
 
 		this.tui = tui;
 		this.keybindings = keybindings;
-		this.externalEditorCommand =
-			externalEditorCommand ||
-			process.env.VISUAL ||
-			process.env.EDITOR ||
-			(process.platform === "win32" ? "notepad" : "nano");
+		this.externalEditorCommand = externalEditorCommand || process.env.VISUAL || process.env.EDITOR || "nano";
 		this.onSubmitCallback = onSubmit;
 		this.onCancelCallback = onCancel;
 		const { description, ...editorOptions } = options ?? {};

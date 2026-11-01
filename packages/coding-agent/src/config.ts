@@ -1,7 +1,7 @@
 import { accessSync, constants, existsSync, readFileSync, realpathSync } from "fs";
 import { createRequire } from "module";
 import { homedir } from "os";
-import { basename, dirname, join, resolve, sep, win32 } from "path";
+import { basename, dirname, join, resolve, sep } from "path";
 import { fileURLToPath } from "url";
 import { spawnProcessSync } from "./utils/child-process.ts";
 import { normalizePath } from "./utils/paths.ts";
@@ -81,7 +81,7 @@ export function detectInstallMethod(): InstallMethod {
 		return "bun-binary";
 	}
 
-	const resolvedPath = `${__dirname}\0${process.execPath || ""}`.toLowerCase().replace(/\\/g, "/");
+	const resolvedPath = `${__dirname}\0${process.execPath || ""}`.toLowerCase();
 
 	if (resolvedPath.includes("/pnpm/") || resolvedPath.includes("/.pnpm/")) {
 		return "pnpm";
@@ -101,7 +101,7 @@ export function detectInstallMethod(): InstallMethod {
 
 function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
 	const packageDir = getPackageDir();
-	const path = process.platform === "win32" || packageDir.includes("\\") ? win32 : { basename, dirname };
+	const path = { basename, dirname };
 	const parent = path.dirname(packageDir);
 	let root: string | undefined;
 	if (path.basename(parent).startsWith("@") && path.basename(path.dirname(parent)) === "node_modules") {
@@ -112,9 +112,7 @@ function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
 	if (!root) return undefined;
 	const rootParent = path.dirname(root);
 	if (path.basename(rootParent) === "lib") return { root, prefix: path.dirname(rootParent) };
-	// Windows global npm prefixes use `<prefix>\\node_modules`, which is
-	// indistinguishable from local project installs by path shape alone. Do not
-	// infer unsupported Windows custom prefixes without `npm root -g` evidence.
+	// A node_modules directory outside lib may belong to a local project.
 	return undefined;
 }
 
@@ -269,9 +267,6 @@ function normalizeExistingPathForComparison(path: string, resolveSymlinks: boole
 		} catch {
 			return undefined;
 		}
-	}
-	if (process.platform === "win32") {
-		normalizedPath = normalizedPath.toLowerCase();
 	}
 	return normalizedPath;
 }

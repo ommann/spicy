@@ -161,9 +161,9 @@ describe("findNodePackageDir", () => {
 });
 
 describe("detectInstallMethod", () => {
-	test("detects pnpm from Windows .pnpm install paths", () => {
+	test("detects pnpm from .pnpm install paths", () => {
 		setExecPath(
-			"C:\\Users\\Admin\\Documents\\pnpm-repository\\global\\5\\.pnpm\\@earendil-works+pi-coding-agent@0.67.68\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\cli.js",
+			"/home/user/pnpm-repository/global/5/.pnpm/@earendil-works+pi-coding-agent@0.67.68/node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
 		);
 
 		expect(detectInstallMethod()).toBe("pnpm");
@@ -293,17 +293,6 @@ describe("detectInstallMethod", () => {
 
 		expect(command?.display).toBe(
 			`npm --prefix "${prefix}" install -g --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent`,
-		);
-	});
-
-	test("does not infer Windows npm custom prefixes from package paths", () => {
-		const packageDir = "C:\\Users\\Admin\\npm prefix\\node_modules\\@earendil-works\\pi-coding-agent";
-		process.env.PI_PACKAGE_DIR = packageDir;
-		setExecPath(`${packageDir}\\dist\\cli.js`);
-
-		expect(detectInstallMethod()).toBe("npm");
-		expect(getUpdateInstruction("@earendil-works/pi-coding-agent")).toBe(
-			"Run: npm install -g --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent",
 		);
 	});
 

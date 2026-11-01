@@ -13,21 +13,12 @@ import { getAgentDir } from "../config.ts";
 import { stripBom } from "../utils/text.ts";
 import { KeybindingValueSchema } from "./key-id-schema.ts";
 
-export function useWindowsKeybindings(
-	platform: NodeJS.Platform = process.platform,
-	env: NodeJS.ProcessEnv = process.env,
-): boolean {
-	return platform === "win32" || (platform === "linux" && Boolean(env.WSL_DISTRO_NAME || env.WSL_INTEROP));
-}
-
-const windowsKeybindings = useWindowsKeybindings();
-
 const APP_KEYBINDINGS = {
 	"app.interrupt": { defaultKeys: "escape", description: "Cancel or abort" },
 	"app.clear": { defaultKeys: "ctrl+c", description: "Clear editor" },
 	"app.exit": { defaultKeys: "ctrl+d", description: "Exit when editor is empty" },
 	"app.suspend": {
-		defaultKeys: process.platform === "win32" ? [] : "ctrl+z",
+		defaultKeys: "ctrl+z",
 		description: "Suspend to background",
 	},
 	"app.thinking.cycle": {
@@ -43,7 +34,7 @@ const APP_KEYBINDINGS = {
 		description: "Cycle to next model",
 	},
 	"app.model.cycleBackward": {
-		defaultKeys: windowsKeybindings ? "alt+p" : "shift+ctrl+p",
+		defaultKeys: "shift+ctrl+p",
 		description: "Cycle to previous model",
 	},
 	"app.model.select": { defaultKeys: "ctrl+l", description: "Open model selector" },
@@ -65,27 +56,27 @@ const APP_KEYBINDINGS = {
 		description: "Copy selection or last assistant message",
 	},
 	"app.message.followUp": {
-		defaultKeys: windowsKeybindings ? "ctrl+q" : "alt+enter",
+		defaultKeys: "alt+enter",
 		description: "Queue follow-up message",
 	},
 	"app.message.dequeue": {
-		defaultKeys: windowsKeybindings ? "alt+q" : "alt+up",
+		defaultKeys: "alt+up",
 		description: "Restore queued messages",
 	},
 	"app.clipboard.pasteImage": {
-		defaultKeys: windowsKeybindings ? "alt+v" : "ctrl+v",
-		description: "Paste files on macOS, images, or text from clipboard",
+		defaultKeys: "ctrl+v",
+		description: "Paste images or text from clipboard",
 	},
 	"app.session.new": { defaultKeys: [], description: "Start a new session" },
 	"app.session.tree": { defaultKeys: [], description: "Open session tree" },
 	"app.session.fork": { defaultKeys: [], description: "Fork current session" },
 	"app.session.resume": { defaultKeys: [], description: "Resume a session" },
 	"app.tree.foldOrUp": {
-		defaultKeys: process.platform === "darwin" ? ["alt+left", "ctrl+left"] : ["ctrl+left", "alt+left"],
+		defaultKeys: ["ctrl+left", "alt+left"],
 		description: "Fold tree branch or move up",
 	},
 	"app.tree.unfoldOrDown": {
-		defaultKeys: process.platform === "darwin" ? ["alt+right", "ctrl+right"] : ["ctrl+right", "alt+right"],
+		defaultKeys: ["ctrl+right", "alt+right"],
 		description: "Unfold tree branch or move down",
 	},
 	"app.tree.editLabel": {
@@ -181,19 +172,19 @@ export const KEYBINDINGS = {
 	...TUI_KEYBINDINGS,
 	"tui.editor.undo": {
 		...TUI_KEYBINDINGS["tui.editor.undo"],
-		defaultKeys: process.platform === "win32" ? "ctrl+z" : windowsKeybindings ? "alt+z" : "ctrl+-",
+		defaultKeys: "ctrl+-",
 	},
 	"tui.altScreen.previousPrompt": {
 		...TUI_KEYBINDINGS["tui.altScreen.previousPrompt"],
-		defaultKeys: windowsKeybindings ? "ctrl+up" : ["ctrl+shift+up", "ctrl+up"],
+		defaultKeys: ["ctrl+shift+up", "ctrl+up"],
 	},
 	"tui.altScreen.nextPrompt": {
 		...TUI_KEYBINDINGS["tui.altScreen.nextPrompt"],
-		defaultKeys: windowsKeybindings ? "ctrl+down" : ["ctrl+shift+down", "ctrl+down"],
+		defaultKeys: ["ctrl+shift+down", "ctrl+down"],
 	},
 	"tui.altScreen.search": {
 		...TUI_KEYBINDINGS["tui.altScreen.search"],
-		defaultKeys: windowsKeybindings ? "ctrl+f" : "ctrl+shift+f",
+		defaultKeys: "ctrl+shift+f",
 	},
 	...APP_KEYBINDINGS,
 } as const satisfies KeybindingDefinitions;

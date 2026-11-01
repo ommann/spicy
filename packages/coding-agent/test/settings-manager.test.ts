@@ -437,7 +437,6 @@ describe("SettingsManager", () => {
 	describe("externalEditor", () => {
 		const originalVisual = process.env.VISUAL;
 		const originalEditor = process.env.EDITOR;
-		const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
 
 		function setEditorEnv(visual?: string, editor?: string): void {
 			if (visual === undefined) delete process.env.VISUAL;
@@ -448,9 +447,6 @@ describe("SettingsManager", () => {
 
 		afterEach(() => {
 			setEditorEnv(originalVisual, originalEditor);
-			if (originalPlatform) {
-				Object.defineProperty(process, "platform", originalPlatform);
-			}
 		});
 
 		it("should resolve editor commands by precedence", () => {
@@ -464,15 +460,8 @@ describe("SettingsManager", () => {
 			expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("emacs");
 		});
 
-		it("should fall back to platform defaults", () => {
+		it("should fall back to nano", () => {
 			setEditorEnv();
-			Object.defineProperty(process, "platform", { value: "win32" });
-			expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("notepad");
-
-			Object.defineProperty(process, "platform", { value: "darwin" });
-			expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("nano");
-
-			Object.defineProperty(process, "platform", { value: "linux" });
 			expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("nano");
 		});
 	});
