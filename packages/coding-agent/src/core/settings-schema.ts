@@ -134,11 +134,6 @@ const ThinkingBudgetsSettingsSchema = thinkingBudgetsSettings();
 
 const MarkdownSettingsSchema = Type.Object({
 	codeBlockIndent: Type.Optional(Type.String({ default: SETTINGS_DEFAULTS.markdown.codeBlockIndent })),
-	mermaid: Type.Optional(
-		Type.Union([Type.Literal("off"), Type.Literal("final"), Type.Literal("streaming")], {
-			default: SETTINGS_DEFAULTS.markdown.mermaid,
-		}),
-	),
 });
 
 const WarningSettingsSchema = Type.Object({
@@ -220,13 +215,6 @@ export const SettingsSchema = Type.Object(
 				[Type.Literal("auto"), Type.Literal("sse"), Type.Literal("websocket"), Type.Literal("websocket-cached")],
 				{ default: SETTINGS_DEFAULTS.transport },
 			),
-		),
-		sessionShareDestination: Type.Optional(
-			Type.Union([Type.Literal("auto"), Type.Literal("gist"), Type.Literal("radius")], {
-				description:
-					'Destination used by /share. "auto" uses Radius when authenticated and otherwise creates a GitHub gist.',
-				default: SETTINGS_DEFAULTS.sessionShareDestination,
-			}),
 		),
 		steeringMode: Type.Optional(
 			Type.Union([Type.Literal("all"), Type.Literal("one-at-a-time")], {
@@ -463,7 +451,6 @@ export interface RetrySettings extends Omit<Static<typeof RetrySettingsSchema>, 
 export interface TerminalSettings extends Static<typeof TerminalSettingsSchema> {}
 export interface ImageSettings extends Static<typeof ImageSettingsSchema> {}
 export interface ThinkingBudgetsSettings extends Static<typeof ThinkingBudgetsSettingsSchema> {}
-export type MermaidRenderingMode = NonNullable<Static<typeof MarkdownSettingsSchema>["mermaid"]>;
 export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> {}
 export interface WarningSettings extends Static<typeof WarningSettingsSchema> {}
 export type CodemodeMode = Static<typeof CodemodeModeSchema>;
@@ -471,7 +458,6 @@ export interface CodemodeSettings extends Static<typeof CodemodeSettingsSchema> 
 export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
 export type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
 export type TransportSetting = NonNullable<SettingsInput["transport"]>;
-export type SessionShareDestination = NonNullable<SettingsInput["sessionShareDestination"]>;
 export type PackageSource = Static<typeof PackageSourceSchema>;
 export type FullscreenExitOutput = NonNullable<SettingsInput["fullscreenExitOutput"]>;
 export type TuiMode = NonNullable<SettingsInput["tuiMode"]>;

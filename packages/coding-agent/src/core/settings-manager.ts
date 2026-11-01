@@ -15,10 +15,8 @@ import type {
 	CompactionModelOverride,
 	DefaultProjectTrust,
 	FullscreenExitOutput,
-	MermaidRenderingMode,
 	PackageSource,
 	QuietStartup,
-	SessionShareDestination,
 	Settings,
 	ThinkingBudgetsSettings,
 	TransportSetting,
@@ -37,12 +35,10 @@ export type {
 	FullscreenExitOutput,
 	ImageSettings,
 	MarkdownSettings,
-	MermaidRenderingMode,
 	PackageSource,
 	ProviderRetrySettings,
 	QuietStartup,
 	RetrySettings,
-	SessionShareDestination,
 	Settings,
 	TerminalSettings,
 	ThinkingBudgetsSettings,
@@ -804,19 +800,6 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getSessionShareDestination(): SessionShareDestination {
-		const destination = this.settings.sessionShareDestination;
-		return destination === "gist" || destination === "radius"
-			? destination
-			: SETTINGS_DEFAULTS.sessionShareDestination;
-	}
-
-	setSessionShareDestination(destination: SessionShareDestination): void {
-		this.globalSettings.sessionShareDestination = destination;
-		this.markModified("sessionShareDestination");
-		this.save();
-	}
-
 	getCompactionEnabled(): boolean {
 		return this.settings.compaction?.enabled ?? SETTINGS_DEFAULTS.compaction.enabled;
 	}
@@ -1417,18 +1400,6 @@ export class SettingsManager {
 
 	getCodeBlockIndent(): string {
 		return this.settings.markdown?.codeBlockIndent ?? SETTINGS_DEFAULTS.markdown.codeBlockIndent;
-	}
-
-	getMermaidRenderingMode(): MermaidRenderingMode {
-		const mode = this.settings.markdown?.mermaid;
-		return mode === "off" || mode === "final" ? mode : SETTINGS_DEFAULTS.markdown.mermaid;
-	}
-
-	setMermaidRenderingMode(mode: MermaidRenderingMode): void {
-		this.globalSettings.markdown ??= {};
-		this.globalSettings.markdown.mermaid = mode;
-		this.markModified("markdown", "mermaid");
-		this.save();
 	}
 
 	getWarnings(): WarningSettings {

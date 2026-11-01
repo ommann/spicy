@@ -19,9 +19,7 @@ import {
 	type CacheWarmingMode,
 	type DefaultProjectTrust,
 	type FullscreenExitOutput,
-	type MermaidRenderingMode,
 	type QuietStartup,
-	type SessionShareDestination,
 	type TuiMode,
 	type WarningSettings,
 } from "../../../core/settings-manager.ts";
@@ -71,7 +69,6 @@ export interface SettingsConfig {
 	steeringMode: "all" | "one-at-a-time";
 	followUpMode: "all" | "one-at-a-time";
 	transport: Transport;
-	sessionShareDestination: SessionShareDestination;
 	httpIdleTimeoutMs: number;
 	cacheWarmingMode: CacheWarmingMode;
 	thinkingLevel: ThinkingLevel;
@@ -81,7 +78,6 @@ export interface SettingsConfig {
 	terminalTheme: TerminalTheme;
 	availableThemes: string[];
 	hideThinkingBlock: boolean;
-	mermaidRenderingMode: MermaidRenderingMode;
 	showCacheMissNotices: boolean;
 	collapseChangelog: boolean;
 	enableInstallTelemetry: boolean;
@@ -113,7 +109,6 @@ export interface SettingsCallbacks {
 	onSteeringModeChange: (mode: "all" | "one-at-a-time") => void;
 	onFollowUpModeChange: (mode: "all" | "one-at-a-time") => void;
 	onTransportChange: (transport: Transport) => void;
-	onSessionShareDestinationChange: (destination: SessionShareDestination) => void;
 	onHttpIdleTimeoutMsChange: (timeoutMs: number) => void;
 	onCacheWarmingModeChange: (mode: CacheWarmingMode) => void;
 	onModelThinkingLevelChange: (provider: string, modelId: string, level: ThinkingLevel) => void;
@@ -121,7 +116,6 @@ export interface SettingsCallbacks {
 	onThemeChange: (theme: string) => void;
 	onThemePreview?: (theme: string) => void;
 	onHideThinkingBlockChange: (hidden: boolean) => void;
-	onMermaidRenderingModeChange: (mode: MermaidRenderingMode) => void;
 	onShowCacheMissNoticesChange: (shown: boolean) => void;
 	onCollapseChangelogChange: (collapsed: boolean) => void;
 	onEnableInstallTelemetryChange: (enabled: boolean) => void;
@@ -513,14 +507,6 @@ export class SettingsSelectorComponent extends Container {
 				values: ["sse", "websocket", "websocket-cached", "auto"],
 			},
 			{
-				id: "share-destination",
-				label: "Session share destination",
-				description:
-					"Where to upload sessions with /share (auto prefers Radius when authenticated, otherwise GitHub Gist)",
-				currentValue: config.sessionShareDestination,
-				values: ["auto", "gist", "radius"],
-			},
-			{
 				id: "http-idle-timeout",
 				label: "HTTP idle timeout",
 				description:
@@ -542,13 +528,6 @@ export class SettingsSelectorComponent extends Container {
 				description: "Hide thinking blocks in assistant responses",
 				currentValue: config.hideThinkingBlock ? "true" : "false",
 				values: ["true", "false"],
-			},
-			{
-				id: "mermaid-rendering",
-				label: "Mermaid diagrams",
-				description: "Render Mermaid code blocks as Unicode diagrams",
-				currentValue: config.mermaidRenderingMode,
-				values: ["off", "final", "streaming"],
 			},
 			{
 				id: "cache-miss-notices",
@@ -911,9 +890,6 @@ export class SettingsSelectorComponent extends Container {
 					case "transport":
 						callbacks.onTransportChange(newValue as Transport);
 						break;
-					case "share-destination":
-						callbacks.onSessionShareDestinationChange(newValue as SessionShareDestination);
-						break;
 					case "http-idle-timeout": {
 						const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.label === newValue);
 						if (choice) {
@@ -926,9 +902,6 @@ export class SettingsSelectorComponent extends Container {
 						break;
 					case "hide-thinking":
 						callbacks.onHideThinkingBlockChange(newValue === "true");
-						break;
-					case "mermaid-rendering":
-						callbacks.onMermaidRenderingModeChange(newValue as MermaidRenderingMode);
 						break;
 					case "cache-miss-notices":
 						callbacks.onShowCacheMissNoticesChange(newValue === "true");

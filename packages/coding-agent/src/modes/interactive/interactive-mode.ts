@@ -46,7 +46,6 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import chalk from "chalk";
-import { spawn } from "child_process";
 import {
 	APP_NAME,
 	APP_TITLE,
@@ -144,7 +143,6 @@ import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { FooterComponent, formatTokens } from "./components/footer.ts";
 import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
-import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import {
 	type AuthSelectorProvider,
@@ -177,7 +175,6 @@ import { editInExternalEditor } from "./external-editor.ts";
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
 import { type BlockedStatus, ProgramStatusReporter } from "./program-status-reporter.ts";
-import { shareSession } from "./session-share.ts";
 import {
 	getAvailableThemes,
 	getAvailableThemesWithPaths,
@@ -508,10 +505,6 @@ export class InteractiveMode {
 	// Thinking block visibility state
 	private hideThinkingBlock = false;
 	private outputPad = 1;
-	private readonly mermaidMarkdownTransformer: MarkdownTransformer = createMermaidMarkdownTransformer({
-		getMode: () => this.settingsManager.getMermaidRenderingMode(),
-		theme,
-	});
 
 	// Skill commands: command name -> skill file path
 	private skillCommands = new Map<string, string>();
@@ -1161,13 +1154,6 @@ export class InteractiveMode {
 			}
 		});
 
-		// Check tmux keyboard setup asynchronously
-		this.checkTmuxKeyboardSetup().then((warning) => {
-			if (warning) {
-				this.showWarning(warning);
-			}
-		});
-
 		// Show startup warnings
 		const {
 			migratedProviders,
@@ -1258,53 +1244,6 @@ export class InteractiveMode {
 		} catch {
 			return [];
 		}
-	}
-
-	private async checkTmuxKeyboardSetup(): Promise<string | undefined> {
-		if (!process.env.TMUX) return undefined;
-
-		const runTmuxShow = (option: string): Promise<string | undefined> => {
-			return new Promise((resolve) => {
-				const proc = spawn("tmux", ["show", "-gv", option], {
-					stdio: ["ignore", "pipe", "ignore"],
-				});
-				let stdout = "";
-				const timer = setTimeout(() => {
-					proc.kill();
-					resolve(undefined);
-				}, 2000);
-
-				proc.stdout?.on("data", (data) => {
-					stdout += data.toString();
-				});
-				proc.on("error", () => {
-					clearTimeout(timer);
-					resolve(undefined);
-				});
-				proc.on("close", (code) => {
-					clearTimeout(timer);
-					resolve(code === 0 ? stdout.trim() : undefined);
-				});
-			});
-		};
-
-		const [extendedKeys, extendedKeysFormat] = await Promise.all([
-			runTmuxShow("extended-keys"),
-			runTmuxShow("extended-keys-format"),
-		]);
-
-		// If we couldn't query tmux (timeout, sandbox, etc.), don't warn
-		if (extendedKeys === undefined) return undefined;
-
-		if (extendedKeys !== "on" && extendedKeys !== "always") {
-			return "tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart tmux.";
-		}
-
-		if (extendedKeysFormat === "xterm") {
-			return "tmux extended-keys-format is xterm. Pi works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.";
-		}
-
-		return undefined;
 	}
 
 	/**
@@ -2193,7 +2132,7 @@ export class InteractiveMode {
 	}
 
 	private getMarkdownTransformers(): MarkdownTransformer[] {
-		return [this.mermaidMarkdownTransformer, ...this.session.extensionRunner.getMarkdownTransformers()];
+		return this.session.extensionRunner.getMarkdownTransformers();
 	}
 
 	/**
@@ -3147,11 +3086,6 @@ export class InteractiveMode {
 			}
 			if (text === "/import" || text.startsWith("/import ")) {
 				await this.handleImportCommand(text);
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/share") {
-				await this.handleShareCommand();
 				this.editor.setText("");
 				return;
 			}
@@ -4840,7 +4774,6 @@ export class InteractiveMode {
 					steeringMode: this.session.steeringMode,
 					followUpMode: this.session.followUpMode,
 					transport: this.settingsManager.getTransport(),
-					sessionShareDestination: this.settingsManager.getSessionShareDestination(),
 					httpIdleTimeoutMs: this.settingsManager.getHttpIdleTimeoutMs(),
 					cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
 					thinkingLevel: this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
@@ -4850,7 +4783,6 @@ export class InteractiveMode {
 					terminalTheme: this.themeController.getTerminalTheme(),
 					availableThemes: getAvailableThemes(),
 					hideThinkingBlock: this.hideThinkingBlock,
-					mermaidRenderingMode: this.settingsManager.getMermaidRenderingMode(),
 					collapseChangelog: this.settingsManager.getCollapseChangelog(),
 					enableInstallTelemetry: this.settingsManager.getEnableInstallTelemetry(),
 					doubleEscapeAction: this.settingsManager.getDoubleEscapeAction(),
@@ -4912,9 +4844,6 @@ export class InteractiveMode {
 						this.settingsManager.setTransport(transport);
 						this.session.agent.transport = transport;
 					},
-					onSessionShareDestinationChange: (destination) => {
-						this.settingsManager.setSessionShareDestination(destination);
-					},
 					onHttpIdleTimeoutMsChange: (timeoutMs) => {
 						this.settingsManager.setHttpIdleTimeoutMs(timeoutMs);
 						configureHttpDispatcher(timeoutMs);
@@ -4954,11 +4883,6 @@ export class InteractiveMode {
 						this.hideThinkingBlock = hidden;
 						this.settingsManager.setHideThinkingBlock(hidden);
 						this.updateThinkingBlockVisibility();
-					},
-					onMermaidRenderingModeChange: (mode) => {
-						this.settingsManager.setMermaidRenderingMode(mode);
-						this.chatContainer.invalidate();
-						this.ui.requestRender();
 					},
 					onShowCacheMissNoticesChange: (shown) => {
 						this.settingsManager.setShowCacheMissNotices(shown);
@@ -6524,17 +6448,6 @@ export class InteractiveMode {
 			}
 			await this.handleFatalRuntimeError("Failed to import session", error);
 		}
-	}
-
-	private async handleShareCommand(): Promise<void> {
-		await shareSession({
-			session: this.session,
-			ui: this.ui,
-			editorContainer: this.editorContainer,
-			editor: this.editor,
-			showStatus: (message) => this.showStatus(message),
-			showError: (message) => this.showError(message),
-		});
 	}
 
 	private async handleCopyCommand(

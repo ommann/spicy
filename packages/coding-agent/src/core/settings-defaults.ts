@@ -3,7 +3,6 @@ import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@earendil-works/pi-ai/utils/re
 /** Runtime defaults shared by settings accessors and the published JSON Schema. */
 export const SETTINGS_DEFAULTS = {
 	transport: "auto",
-	sessionShareDestination: "auto",
 	steeringMode: "one-at-a-time",
 	followUpMode: "one-at-a-time",
 	compaction: {
@@ -49,7 +48,6 @@ export const SETTINGS_DEFAULTS = {
 	autocompleteMaxVisible: 5,
 	markdown: {
 		codeBlockIndent: "  ",
-		mermaid: "streaming",
 	},
 	warnings: {
 		anthropicExtraUsage: true,

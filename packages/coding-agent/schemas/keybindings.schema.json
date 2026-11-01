@@ -261,7 +261,7 @@
     },
     "app.clipboard.pasteImage": {
       "$ref": "#/$defs/KeybindingValue",
-      "description": "Paste files on macOS, images, or text from clipboard"
+      "description": "Paste images or text from clipboard"
     },
     "app.session.new": {
       "$ref": "#/$defs/KeybindingValue",

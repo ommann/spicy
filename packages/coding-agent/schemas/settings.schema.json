@@ -50,24 +50,6 @@
       ],
       "default": "auto"
     },
-    "sessionShareDestination": {
-      "anyOf": [
-        {
-          "type": "string",
-          "const": "auto"
-        },
-        {
-          "type": "string",
-          "const": "gist"
-        },
-        {
-          "type": "string",
-          "const": "radius"
-        }
-      ],
-      "description": "Destination used by /share. \"auto\" uses Radius when authenticated and otherwise creates a GitHub gist.",
-      "default": "auto"
-    },
     "steeringMode": {
       "anyOf": [
         {
@@ -214,7 +196,7 @@
     },
     "shellPath": {
       "type": "string",
-      "description": "Custom shell path, for example for Cygwin on Windows, with support for leading ~ expansion."
+      "description": "Custom shell path with support for leading ~ expansion."
     },
     "quietStartup": {
       "anyOf": [
@@ -577,23 +559,6 @@
         "codeBlockIndent": {
           "type": "string",
           "default": "  "
-        },
-        "mermaid": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "off"
-            },
-            {
-              "type": "string",
-              "const": "final"
-            },
-            {
-              "type": "string",
-              "const": "streaming"
-            }
-          ],
-          "default": "streaming"
         }
       }
     },
