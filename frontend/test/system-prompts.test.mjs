@@ -20,6 +20,23 @@ test('prompt versions have stable numbers across branches and reuse identical st
   assert.deepEqual(createSystemPromptCatalog(entries).versions, catalog.versions);
 });
 
+test('an observed candidate keeps its number when a recorded priority revision arrives first', () => {
+  const numbers = new Map();
+  const original = entries.slice(0, 2);
+  const candidate = { id: 'candidate', parentId: 'user', type: 'message', message: {
+    role: 'system', sections: { mcp_servers: 'REA description' },
+  } };
+  const first = createSystemPromptCatalog([...original, candidate], numbers);
+  const candidateKey = first.versions[1].key;
+  assert.equal(first.versions[1].number, 2);
+  const updated = createSystemPromptCatalog([...original, entries[2], candidate], numbers);
+  assert.deepEqual(updated.versions.map(version => version.number), [1, 2, 3]);
+  assert.equal(updated.versions[1].key, candidateKey);
+  assert.equal(updated.versions[2].full.message.sections.tools, 'New tools');
+  const recordedOnly = createSystemPromptCatalog([...original, entries[2]], numbers);
+  assert.deepEqual(recordedOnly.versions.map(version => version.number), [1, 3]);
+});
+
 test('compaction checkpoints are available as numbered prompt states', () => {
   const catalog = createSystemPromptCatalog([...entries, {
     id: 'checkpoint', parentId: 'delta', type: 'compaction',

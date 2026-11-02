@@ -47,15 +47,15 @@ export function projectChatParts(entries) {
   return parts;
 }
 
-export function createConversationGraph(entries) {
+export function createConversationGraph(entries, promptNumbers) {
   // An empty conversation is a draft lane, rendered exactly like a branch draft.
   if (!projectChatParts(entries).size) return createConversationGraph([...entries, {
     id: 'empty-chat-draft', parentId: entries.at(-1)?.id || null, type: 'branch_draft', optimistic: true,
-  }]);
+  }], promptNumbers);
   const raw = new Map(entries.filter(entry => entry.parentId !== undefined).map(entry => [entry.id, entry]));
   const parts = projectChatParts(entries);
   const prefix = createPrefixResolver(entries);
-  const prompts = createSystemPromptCatalog(entries);
+  const prompts = createSystemPromptCatalog(entries, promptNumbers);
   const nodes = new Map([...parts].filter(([id]) => raw.has(id)).map(([id, content]) => [id, {
     id, entry: raw.get(id), parts: content, children: [], anchors: [],
     isPrefixDelta: prefix.isDelta(raw.get(id)), parent: undefined, prefixBoundary: false,

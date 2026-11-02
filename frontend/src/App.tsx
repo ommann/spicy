@@ -59,6 +59,12 @@ export default function App(props: ParentProps) {
   const streamedMessages = createMemo(() => snapshot().live);
   const sessionId = createMemo(() => snapshot().state?.sessionId || '');
   const sessionCwd = createMemo(() => snapshot().cwd);
+  const sessionPromptNumbers = new Map<string, Map<string, number>>();
+  function promptNumbers() {
+    const id = sessionId();
+    if (!sessionPromptNumbers.has(id)) sessionPromptNumbers.set(id, new Map());
+    return sessionPromptNumbers.get(id)!;
+  }
   const sessionLeafId = createMemo(() => snapshot().leafId);
 
   const [live, setLive] = createSignal(false);
@@ -135,7 +141,7 @@ export default function App(props: ParentProps) {
     }))];
   });
 
-  const graph = createMemo(() => createConversationGraph(viewEntries()));
+  const graph = createMemo(() => createConversationGraph(viewEntries(), promptNumbers()));
 
   function createBranch(sourceId: string) {
     const source = actualEntries().find(entry => entry.id === sourceId && entry.message?.role === 'user');
@@ -199,7 +205,7 @@ export default function App(props: ParentProps) {
       type: 'message', id: `candidate-${candidate.key}`, parentId: candidate.parentId,
       message: { role: 'system', content: '', sections: candidate.sections },
     }))] : [];
-    const versions: PromptVersion[] = createSystemPromptCatalog(entries).versions.map((version: PromptVersion) => {
+    const versions: PromptVersion[] = createSystemPromptCatalog(entries, promptNumbers()).versions.map((version: PromptVersion) => {
       const sections = JSON.stringify(version.full?.message?.sections || {});
       const candidate = candidates.find(item => JSON.stringify(item.sections) === sections);
       return candidate ? { ...version, candidateKey: candidate.key } : version;
