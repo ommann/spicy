@@ -49,6 +49,46 @@ const root = window.document.getElementById('root');
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 const button = (parent, text) => [...parent.querySelectorAll('button')].find(element => element.textContent.trim() === text);
 
+test('creator edits parts and saves a prompt without sending a chat message', async () => {
+  const selections = [];
+  const dispose = components.mountCreator(root, {
+    current: { content: 'Accepted instructions.', sections: {} },
+    document: { version: 1, forced: { id: 'forced', label: 'Whole text', source: 'extension', text: 'Whole prompt override.' }, parts: [
+      { id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Original instructions.' },
+      { id: 'tools', section: 'tools', label: 'Descriptions', source: 'core', separator: '\n', children: [
+        { id: 'tools/read', label: 'Read description', source: 'tool:read', text: '- read: Read files' },
+        { id: 'tools/bash', label: 'Bash description', source: 'tool:bash', text: '- bash: Run commands' },
+      ] },
+    ] },
+  }, value => selections.push(value));
+  try {
+    await flush();
+    assert.match(root.querySelector('.creator-preview').textContent, /Whole prompt override/);
+    assert.equal(root.querySelectorAll('.creator-switchboard textarea').length, 4);
+    const read = [...root.querySelectorAll('label')].find(label => label.textContent.includes('Read description')).querySelector('input');
+    read.click();
+    await flush();
+    assert.doesNotMatch(root.querySelector('.creator-preview').textContent, /Read files/);
+    assert.match(root.querySelector('.creator-preview').textContent, /Run commands/);
+    assert.deepEqual(selections, []);
+    const editor = root.querySelector('textarea[aria-label="Edit Instructions"]');
+    editor.focus();
+    editor.value = 'Edited instructions.';
+    editor.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await flush();
+    assert.match(root.querySelector('.creator-preview').textContent, /Edited instructions/);
+    assert.equal(root.querySelector('textarea[aria-label="Edit Instructions"]'), editor);
+    assert.equal(document.activeElement, editor);
+    assert.deepEqual(selections, []);
+    button(root, 'Save to System Prompts').click();
+    assert.equal(selections.length, 1);
+    assert.equal(selections[0].document.parts[0].text, 'Edited instructions.');
+    assert.deepEqual(selections[0].excludedIds, ['tools/read']);
+    assert.equal(selections[0].title, 'New prompt');
+    assert.equal(selections[0].document.forced, undefined);
+  } finally { dispose(); }
+});
+
 test('shared custom scroll areas use their own viewport for both scrollbar axes', () => {
   const dispose = components.mountScrollArea(root);
   try {
@@ -198,6 +238,43 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
     button(dialog, 'Back to chat').click();
     assert.equal(closed, 1);
   } finally { dispose(); }
+});
+
+test('saving adds a persistent prompt to the viewer and leaves chat requests and entries alone', async () => {
+  globalThis.localStorage = window.localStorage;
+  const requests = [];
+  const snapshot = { entries, leafId: 'user2', state: { sessionId: 'creator-test' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test', token: 'test' };
+  const before = JSON.stringify(snapshot.entries);
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, body: options?.body && JSON.parse(options.body) });
+    return { ok: true, json: async () => url === '/api/info' ? snapshot : {
+      document: { version: 1, parts: [{ id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Original instructions' }] },
+      current: { content: 'Original instructions', sections: {}, toolsAdded: [] },
+    } };
+  };
+  globalThis.EventSource = class { addEventListener() {} close() {} };
+  let dispose = components.mountApp(root, '/system-prompt-creator');
+  try {
+    for (let i = 0; i < 6; i++) await flush();
+    const editor = root.querySelector('textarea[aria-label="Edit Instructions"]');
+    assert.ok(editor);
+    editor.value = 'Saved unique instructions.';
+    editor.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const name = root.querySelector('[aria-label="Prompt name"]');
+    name.value = 'Saved example';
+    name.dispatchEvent(new window.Event('input', { bubbles: true }));
+    button(root, 'Save to System Prompts').click();
+    await flush();
+    assert.ok(root.querySelector('.system-prompts-view'));
+    assert.match(root.textContent, /Saved unique instructions/);
+    assert.match(root.textContent, /Saved example/);
+    assert.equal(JSON.stringify(snapshot.entries), before);
+    assert.deepEqual([...new Set(requests.filter(item => item.body).map(item => item.body.type))], ['get_system_prompt_document']);
+    dispose();
+    dispose = components.mountApp(root, '/system-prompts');
+    for (let i = 0; i < 4; i++) await flush();
+    assert.match(root.textContent, /Saved unique instructions/);
+  } finally { dispose(); localStorage.removeItem('spicy.created-system-prompts'); }
 });
 
 test('chat references open the Solid view without creating a model request or modifying session entries', async () => {

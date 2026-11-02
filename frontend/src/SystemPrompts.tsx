@@ -13,6 +13,7 @@ interface Props {
   selected: number;
   onSelect?: (number: number) => void;
   onClose: () => void;
+  onCreate?: () => void;
   ignored?: (key: string) => boolean;
   onIgnore?: (key: string, ignored: boolean) => void;
 }
@@ -81,6 +82,7 @@ export default function SystemPrompts(props: Props) {
         previousDisabled={selected() === props.versions[0]} nextDisabled={selected() === props.versions.at(-1)}
         actions={<CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />}>
         <span class="tree-title">System prompts</span>
+        <Show when={props.onCreate}><button onClick={() => props.onCreate?.()}>System Prompt Creator</button></Show>
         <button onClick={() => props.onClose()}>Back to chat</button>
       </ColumnToolbar>
       <ScrollArea class="system-prompts-scroll-area" vertical viewportRef={element => { viewport = element; }}
@@ -94,7 +96,7 @@ export default function SystemPrompts(props: Props) {
               hidden={mode() === 'focused' && !focused()} data-system-prompt-version={version.number}
               ref={element => sections.set(version.number, element)}>
               <div class="system-prompt-heading">
-                <div><Show when={version.priorityReason}><span>{version.priorityReason}</span></Show></div>
+                <div><Show when={version.title}><span>{version.title}</span></Show><Show when={version.priorityReason}><span>{version.priorityReason}</span></Show></div>
                 <div><Show when={version.candidateKey}>{key => <label>
                   <input type="checkbox" checked={props.ignored?.(key()) ?? false}
                     onChange={event => props.onIgnore?.(key(), event.currentTarget.checked)} />

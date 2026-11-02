@@ -13,6 +13,7 @@ export interface PromptVersion {
   unified?: Wire;
   candidateKey?: string;
   priorityReason?: string;
+  title?: string;
 }
 
 export const SystemPromptContext = createContext<Accessor<PromptVersion[]>>(() => []);
@@ -29,5 +30,6 @@ export default function SystemPromptRoute() {
 
   return <SystemPrompts versions={versions()} selected={Number(params.number) || 1}
     onSelect={number => navigate(`/system-prompts/${number}`, { replace: true })}
-    onClose={() => navigate('/')} ignored={policy.ignored} onIgnore={policy.setIgnored} />;
+    onClose={() => navigate('/')} onCreate={() => navigate('/system-prompt-creator')}
+    ignored={policy.ignored} onIgnore={policy.setIgnored} />;
 }

@@ -23,6 +23,8 @@ import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import Handoffs from './Handoffs';
+import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
+import { renderSystemPromptDocument, systemPromptDocumentFromState } from '../../packages/coding-agent/src/core/system-prompt-document';
 
 const empty: Snapshot = {
   entries: [],
@@ -51,7 +53,7 @@ interface DraftBranch {
 export default function App(props: ParentProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const showingPrompts = () => location.pathname.startsWith('/system-prompts');
+  const showingPrompts = () => location.pathname.startsWith('/system-prompt');
   const openSystemPrompt = (number: number) => navigate(`/system-prompts/${number}`);
 
   const [snapshot, setSnapshot] = createSignal<Snapshot>(empty);
@@ -77,6 +79,13 @@ export default function App(props: ParentProps) {
   const [extensionDialogs, setExtensionDialogs] = createSignal<Wire[]>([]);
   const [models, setModels] = createSignal<Wire[]>([]);
   const [previewImage, setPreviewImage] = createSignal<PreviewImage | null>(null);
+  const [createdPrompts, setCreatedPrompts] = createSignal<Record<string, CreatedPrompt[]>>((() => {
+    try { return JSON.parse(localStorage.getItem('spicy.created-system-prompts') || '{}') || {}; }
+    catch { return {}; }
+  })());
+  function createdPromptEntry(prompt: CreatedPrompt): Wire {
+    return { id: prompt.id, parentId: null, type: 'message', message: { role: 'system', ...renderSystemPromptDocument(prompt.document, prompt.excludedIds), toolsAdded: prompt.toolsAdded } };
+  }
   const [promptCandidates, setPromptCandidates] = createSignal<Record<string, Wire[]>>({});
   const [pendingPrompt, setPendingPrompt] = createSignal<{ candidate: Wire; message: string; leafId: string; sessionId: string }>();
   const [ignoredPrompts, setIgnoredPrompts] = createSignal<Record<string, boolean>>((() => {
@@ -109,6 +118,8 @@ export default function App(props: ParentProps) {
 
   const appLifecycle = new AbortController();
   let token = "";
+  let markBridgeReady!: () => void;
+  const bridgeReady = new Promise<void>(resolve => { markBridgeReady = resolve; });
   let events: EventSource | undefined;
   let conversation: ConversationController | undefined;
 
@@ -201,14 +212,17 @@ export default function App(props: ParentProps) {
 
   const systemPrompts = createMemo<PromptVersion[]>((previous = []) => {
     const candidates = promptCandidates()[sessionId()] || [];
-    const entries = live() ? [...sessionEntries(), ...candidates.map(candidate => ({
+    const entries: Wire[] = live() ? [...sessionEntries(), ...candidates.map(candidate => ({
       type: 'message', id: `candidate-${candidate.key}`, parentId: candidate.parentId,
       message: { role: 'system', content: '', sections: candidate.sections },
     }))] : [];
+    const created = createdPrompts()[sessionId()] || [];
+    entries.push(...created.map(createdPromptEntry));
     const versions: PromptVersion[] = createSystemPromptCatalog(entries, promptNumbers()).versions.map((version: PromptVersion) => {
       const sections = JSON.stringify(version.full?.message?.sections || {});
       const candidate = candidates.find(item => JSON.stringify(item.sections) === sections);
-      return candidate ? { ...version, candidateKey: candidate.key } : version;
+      const saved = created.find(item => item.id === version.full?.id);
+      return saved ? { ...version, title: saved.title } : candidate ? { ...version, candidateKey: candidate.key } : version;
     });
     const existing = new Map(previous.map(version => [version.key, version]));
 
@@ -392,7 +406,7 @@ export default function App(props: ParentProps) {
         previous.message === reconnectingMessage ? { message: "", isError: false } : previous);
       events.onerror = () =>
         setNotification({ message: reconnectingMessage, isError: true });
-    });
+    }).finally(markBridgeReady);
   });
   onCleanup(() => {
     appLifecycle.abort();
@@ -405,6 +419,27 @@ export default function App(props: ParentProps) {
       '--code-overflow-wrap': codeLinewrap() ? 'anywhere' : 'normal',
       '--code-content-width': codeLinewrap() ? '100%' : 'max-content',
     }}>
+      <SystemPromptCreatorContext.Provider value={{
+        load: async () => {
+          await bridgeReady;
+          if (!token) throw new Error('Could not connect to the local bridge');
+          if (!snapshot().connected) await start();
+          const promptSnapshot = await post('command', { type: 'get_system_prompt_document' }) as PromptDocumentSnapshot;
+          return { ...promptSnapshot, sources: [
+            ...systemPrompts().filter(version => !version.title).map(version => ({ id: version.key, label: `System Prompt ${version.number}`, document: systemPromptDocumentFromState({ content: version.full?.message?.content || '', sections: version.full?.message?.sections || {} }), toolsAdded: version.full?.message?.toolsAdded || [] })),
+            ...(createdPrompts()[sessionId()] || []).map(prompt => ({ ...prompt, label: prompt.title })),
+          ] };
+        },
+        save: value => {
+          const prompt = { ...value, id: `created-prompt-${crypto.randomUUID()}` };
+          const next = { ...createdPrompts(), [sessionId()]: [...(createdPrompts()[sessionId()] || []), prompt] };
+          localStorage.setItem('spicy.created-system-prompts', JSON.stringify(next));
+          setCreatedPrompts(next);
+          const key = createSystemPromptCatalog([createdPromptEntry(prompt)]).versions[0]?.key;
+          const number = systemPrompts().find(version => version.key === key)?.number;
+          navigate(`/system-prompts/${number || 1}`);
+        },
+      }}>
       <SystemPromptPolicyContext.Provider value={{ ignored: ignoredPrompt, setIgnored: ignorePrompt }}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <Handoffs sessionKey={branchKey()}>
@@ -419,6 +454,7 @@ export default function App(props: ParentProps) {
         </Handoffs>
       </SystemPromptContext.Provider>
       </SystemPromptPolicyContext.Provider>
+      </SystemPromptCreatorContext.Provider>
       <dialog ref={promptDialog} class="chat-dialog" aria-label="New system prompts available">
         <h2>New system prompts available</h2>
         <p>The current branch keeps its accepted prompt unless you choose the new version.</p>

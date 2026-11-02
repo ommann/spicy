@@ -8,6 +8,14 @@ import SystemPrompts from '../src/SystemPrompts';
 import SystemPromptContent from '../src/SystemPromptContent';
 import ChatContent from '../src/ChatContent';
 import ScrollArea from '../src/ScrollArea';
+import SystemPromptCreator from '../src/SystemPromptCreator';
+import { SystemPromptCreatorContext, type PromptDocumentSnapshot, type CreatedPrompt } from '../src/SystemPromptCreatorContext';
+
+export function mountCreator(root: HTMLElement, snapshot: PromptDocumentSnapshot, save: (prompt: Omit<CreatedPrompt, 'id'>) => void) {
+  return render(() => <MemoryRouter root={props => <SystemPromptCreatorContext.Provider value={{ load: async () => snapshot, save }}>{props.children}</SystemPromptCreatorContext.Provider>}>
+    <Route path="/" component={SystemPromptCreator} />
+  </MemoryRouter>, root);
+}
 
 export function mountScrollArea(root: HTMLElement) {
   return render(() => <ScrollArea vertical><pre>Wide content</pre></ScrollArea>, root);
@@ -20,6 +28,7 @@ export function mountApp(root: HTMLElement, path = '/') {
   const dispose = render(() => <MemoryRouter root={App} history={history}>
     <Route path="/" component={() => null} />
     <Route path="/system-prompts/:number?" component={SystemPromptRoute} />
+    <Route path="/system-prompt-creator" component={SystemPromptCreator} />
   </MemoryRouter>, root);
 
   return Object.assign(dispose, { history });

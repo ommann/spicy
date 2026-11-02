@@ -26,6 +26,34 @@ import type { ExtensionFactory } from "../src/index.ts";
 import { createHarness } from "./suite/harness.ts";
 
 describe("system prompt updates", () => {
+	test("editor can read all parts after a chat starts without changing the chat or tools", async () => {
+		let hooks = 0;
+		const harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("before_agent_start", (event) => {
+						hooks++;
+						return { systemPrompt: event.systemPrompt };
+					});
+				},
+			],
+		});
+		try {
+			harness.setResponses([() => fauxAssistantMessage("done")]);
+			await harness.session.prompt("hello");
+			const entries = [...harness.sessionManager.getEntries()];
+			const tools = harness.session.agent.state.tools;
+			const source = harness.session.getSystemPromptDocument();
+			expect(source.document.parts.length).toBeGreaterThan(1);
+			expect(source.document.forced).toBeDefined();
+			expect(harness.session.getSystemPromptDocument()).toEqual(source);
+			expect(hooks).toBe(1);
+			expect(harness.sessionManager.getEntries()).toEqual(entries);
+			expect(harness.session.agent.state.tools).toBe(tools);
+		} finally {
+			harness.cleanup();
+		}
+	});
 	test("web candidates can be cancelled, retained for one submission, and explicitly adopted", async () => {
 		let instruction = "Accepted instructions.";
 		const extension: ExtensionFactory = (pi) => {

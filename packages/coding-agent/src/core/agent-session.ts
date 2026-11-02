@@ -143,11 +143,13 @@ import type { SlashCommandInfo } from "./slash-commands.ts";
 import { BUILTIN_PATH_PREFIX, createSyntheticSourceInfo, isSyntheticPath, type SourceInfo } from "./source-info.ts";
 import {
 	buildSystemPrompt,
+	buildSystemPromptDocument,
 	buildSystemPromptSections,
 	diffSystemPromptSections,
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
+import { type SystemPromptDocument, systemPromptDocumentFromState } from "./system-prompt-document.ts";
 import { isDiscoveryOnlyChange, promptCandidateKey, type SystemPromptPolicy } from "./system-prompt-policy.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
@@ -488,6 +490,7 @@ export class AgentSession {
 	/** Prompt options after before_agent_start mutations for the active run. */
 	private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions;
 	private _webPromptSections?: Record<string, string>;
+	private _promptDocuments = new Map<string, SystemPromptDocument>();
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -1492,6 +1495,29 @@ export class AgentSession {
 		return !this._isAgentRunActive && !this.isCompacting;
 	}
 
+	/** Read-only editor source. No hooks, transcript writes, or tool changes. */
+	getSystemPromptDocument() {
+		const current = getCurrentSystemMessage(this.agent.state.messages);
+		const sections = Object.fromEntries(
+			Object.entries(current?.sections ?? {}).filter(
+				(entry): entry is [string, string] => typeof entry[1] === "string",
+			),
+		);
+		const document =
+			this._promptDocuments.get(promptCandidateKey(sections)) ??
+			(current
+				? systemPromptDocumentFromState({ content: contentText(current.content), sections })
+				: buildSystemPromptDocument(this._baseSystemPromptOptions));
+		return {
+			document,
+			current: {
+				content: current ? contentText(current.content) : "",
+				sections,
+				toolsAdded: getCurrentTools(this.agent.state.messages),
+			},
+		};
+	}
+
 	/** Current effective system prompt, including changes not yet sent to the model. */
 	get systemPrompt(): string {
 		const options = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
@@ -1778,6 +1804,7 @@ export class AgentSession {
 		// The tool list and rules must match the declarations the request carries.
 		options.hiddenTools = [...this._hiddenDeclarations];
 		const proposed = buildSystemPromptSections(options);
+		this._promptDocuments.set(promptCandidateKey(proposed), buildSystemPromptDocument(options));
 		const toolChanges = getToolStateChanges(getCurrentTools(messages), this.agent.state.tools.map(toToolDeclaration));
 		if (
 			this._webPromptSections &&

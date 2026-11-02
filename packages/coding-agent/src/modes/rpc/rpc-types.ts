@@ -36,6 +36,7 @@ export type RpcCommand =
 
 	// State
 	| { id?: string; type: "get_state" }
+	| { id?: string; type: "get_system_prompt_document" }
 
 	// Model
 	| { id?: string; type: "set_model"; provider: string; modelId: string }
@@ -149,6 +150,13 @@ export type RpcResponse =
 
 	// State
 	| { id?: string; type: "response"; command: "get_state"; success: true; data: RpcSessionState }
+	| {
+			id?: string;
+			type: "response";
+			command: "get_system_prompt_document";
+			success: true;
+			data: ReturnType<import("../../core/agent-session.ts").AgentSession["getSystemPromptDocument"]>;
+	  }
 
 	// Model
 	| {
