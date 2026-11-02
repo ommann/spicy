@@ -15,7 +15,21 @@ npm run dev
 
 Open http://localhost:5174 for the frontend. Spicy does not install or update itself through upstream Pi installers.
 
-For the TUI, run `npm run build` from the repository root, then start `node /path/to/spicy/packages/coding-agent/dist/cli.js` in your project folder. Use `/login` to connect a provider and `/model` to select a model.
+One launcher supports both interfaces:
+
+```bash
+npm run dev           # web app
+npm run dev -- --tui  # terminal interface
+```
+
+To use `spicy` from any project directory, run `npm link --ignore-scripts` once at the repository root:
+
+```bash
+spicy        # web app
+spicy --tui  # terminal interface
+```
+
+Both use the current directory as the project (`PI_CWD` overrides it for the web app). No build step is required. Use `/login` in the TUI to connect a provider and `/model` to select a model.
 
 The retained [codemode reference](docs/codemode.md) describes script globals, tool discovery, and classifier/image model APIs.
 

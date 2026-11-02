@@ -2,13 +2,17 @@
 	"name": "spicy",
 	"private": true,
 	"type": "module",
+	"bin": {
+		"spicy": "./spicy.mjs"
+	},
 	"workspaces": [
 		"packages/*",
 		"backend",
 		"frontend"
 	],
 	"scripts": {
-		"dev": "npm run dev --workspace=@spicy/backend",
+		"dev": "node spicy.mjs",
+		"start": "node spicy.mjs --production",
 		"restart": "npm run dev",
 		"clean": "npm run clean --workspaces",
 		"build": "cd packages/codemode && npm run build && cd ../mcp && npm run build && cd ../agent && npm run build && cd ../coding-agent && npm run build",
