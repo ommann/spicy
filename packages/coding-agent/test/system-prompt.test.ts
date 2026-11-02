@@ -94,17 +94,16 @@ describe("buildSystemPrompt", () => {
 			expect(prompt).toContain("- write:");
 		});
 
-		test("instructs models to resolve pi docs under the absolute base path", () => {
+		test("points models to the retained codemode reference", () => {
 			const prompt = buildSystemPrompt({
 				contextFiles: [],
 				skills: [],
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain(
-				"- When reading pi docs, resolve docs/... under Additional docs, not the current working directory",
-			);
-			expect(prompt).toContain("environment variables (docs/environment-variables.md), MCP servers (docs/mcp.md)");
+			expect(prompt).toContain("For codemode scripts and non-LLM models");
+			expect(prompt).toContain("/docs/codemode.md");
+			expect(prompt).not.toContain("docs/extensions.md");
 		});
 	});
 

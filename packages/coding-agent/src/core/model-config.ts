@@ -123,7 +123,7 @@ export const ModelsConfigSchema = Type.Object({
 	...ModelsConfigProperties,
 });
 
-/** Entry schemas rendered into docs/models-configuration.md. */
+/** Model configuration entry schemas. */
 export const ModelsJsonSchemas = {
 	provider: ProviderConfigSchema,
 	model: ModelDefinitionSchema,

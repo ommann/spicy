@@ -2,9 +2,7 @@
 
 Spicy is a Linux frontend/backend fork of Pi with its terminal interface retained.
 
-Customize it with [extensions](docs/extensions.md), [skills](docs/skills.md), [prompt templates](docs/prompt-templates.md), and [themes](docs/themes.md). Local extension folders and package installation are supported.
-
-Use it [interactively](docs/usage.md), automate it in [print or JSON mode](docs/cli.md), control it over [RPC](docs/rpc.md), or build apps with the [TypeScript SDK](docs/sdk.md).
+Extensions, skills, prompt templates, themes, local extension folders, and package installation remain supported, along with the TUI, print/JSON modes, RPC, and TypeScript SDK.
 
 ## Getting started
 
@@ -17,7 +15,9 @@ npm run dev
 
 Open http://localhost:5174 for the frontend. Spicy does not install or update itself through upstream Pi installers.
 
-See the [quickstart](docs/quickstart.md) for terminal setup and authentication, or the [documentation](docs/index.md) for full usage instructions.
+For the TUI, run `npm run build` from the repository root, then start `node /path/to/spicy/packages/coding-agent/dist/cli.js` in your project folder. Use `/login` to connect a provider and `/model` to select a model.
+
+The retained [codemode reference](docs/codemode.md) describes script globals, tool discovery, and classifier/image model APIs.
 
 ## Development
 

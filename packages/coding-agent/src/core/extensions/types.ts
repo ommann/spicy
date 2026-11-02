@@ -1887,8 +1887,7 @@ export interface ExtensionAPI {
 	 * messages record the physical model and thinking level the router picked.
 	 *
 	 * `provider` may be any provider id, including one with physical models, and may list several
-	 * virtual models. Registering the same provider and id again replaces the virtual model. See
-	 * docs/virtual-models.md.
+	 * virtual models. Registering the same provider and id again replaces the virtual model.
 	 */
 	registerVirtualModel<TState = unknown>(model: ExtensionVirtualModel<TState>): void;
 
