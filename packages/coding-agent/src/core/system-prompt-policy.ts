@@ -8,7 +8,15 @@ export interface SystemPromptCandidate {
 	parentId: string | null;
 }
 
+export interface SelectedSystemPrompt {
+	key: string;
+	content: string;
+	sections: Record<string, string>;
+}
+
 export interface SystemPromptPolicy {
+	/** An explicitly chosen composition, applied only to this branch's next run. */
+	selected?: SelectedSystemPrompt;
 	/** Web-only: preview the candidate before recording any starting messages. */
 	decide(candidate: SystemPromptCandidate): "accept" | "current" | "cancel";
 }

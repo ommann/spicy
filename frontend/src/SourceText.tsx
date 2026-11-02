@@ -37,7 +37,7 @@ export default function SourceText(props: { text: string; language?: string }) {
     return parts;
   });
 
-  return <div class={`trace-text syntax-highlighted ${props.language === 'markdown' ? 'markdown-source' : ''}`}>
+  return <div class={`trace-text syntax-highlighted ${props.language === 'markdown' ? 'markdown-source' : props.language ? 'source-code' : ''}`}>
     <Show when={!props.text.includes('\x1b')} fallback={<AnsiText text={props.text} />}>
       <For each={chunks()}>{chunk => <Show when={props.language === 'markdown' && chunk.language !== 'markdown'}
         fallback={<HighlightedText text={chunk.text} language={chunk.language} />}>
@@ -55,7 +55,7 @@ export function TerminalText(props: {
   ref?: (element: HTMLPreElement) => void;
 }) {
   return <ScrollArea class="terminal-scroll-area" vertical><pre class={props.class} classList={{ 'syntax-highlighted': !!props.language && !props.text.includes('\x1b') }}
-    data-codemode-part={props.part} ref={props.ref}>
+    data-language={props.language} data-codemode-part={props.part} ref={props.ref}>
     <Show when={props.language} fallback={<AnsiText text={props.text} />}>
       <HighlightedText text={props.text} language={props.language} />
     </Show>

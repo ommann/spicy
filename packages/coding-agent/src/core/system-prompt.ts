@@ -319,21 +319,17 @@ export function buildSystemPrompt(input: BuildSystemPromptOptions): string {
 	return getSystemMessageText({ role: "system", ...buildSystemPromptState(input), timestamp: 0 });
 }
 
-/**
- * Diff the sections the model currently has (replayed from the transcript, so never null)
- * against the desired ones. Returns a `SystemMessage.sections` patch, or undefined when
- * nothing changed.
- */
+/** @deprecated Legacy comparison utility only. New runs never write prompt patches. */
 export function diffSystemPromptSections(
 	previous: Record<string, string | null>,
 	current: SystemPromptSections,
 ): Record<string, string | null> | undefined {
-	const patch: Record<string, string | null> = {};
+	const changes: Record<string, string | null> = {};
 	for (const [name, text] of Object.entries(current)) {
-		if (previous[name] !== text) patch[name] = text;
+		if (previous[name] !== text) changes[name] = text;
 	}
 	for (const name of Object.keys(previous)) {
-		if (current[name] === undefined) patch[name] = null;
+		if (current[name] === undefined) changes[name] = null;
 	}
-	return Object.keys(patch).length > 0 ? patch : undefined;
+	return Object.keys(changes).length ? changes : undefined;
 }

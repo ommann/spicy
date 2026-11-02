@@ -3,6 +3,8 @@ function emptyState() {
   return {captured: false, rootId: null, content: '', sections: new Map(), tools: new Map(), key: ''};
 }
 function applyMessage(previous, message, sourceId) {
+  const inherited = previous;
+  if (message.systemPromptSnapshot) previous = {...emptyState(), rootId: previous.rootId, tools: previous.tools};
   const state = {
     captured: true,
     rootId: previous.rootId || sourceId,
@@ -18,6 +20,7 @@ function applyMessage(previous, message, sourceId) {
   for (const name of message.toolsRemoved || []) state.tools.delete(name);
   for (const tool of message.toolsAdded || []) state.tools.set(tool.name, tool);
   state.key = JSON.stringify([state.content, [...state.sections], [...state.tools]]);
+  state.promptKey = message.systemPromptKey ?? (state.key === inherited.key ? inherited.promptKey : undefined);
   return state;
 }
 export function createPrefixResolver(entries) {

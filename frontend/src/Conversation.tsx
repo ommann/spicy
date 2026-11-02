@@ -16,6 +16,8 @@ import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createColumnShortcuts } from './column-shortcuts';
 import { CHAT_BLOCK_GAP, layoutConversation, matchConversationLanes } from './conversation-model.mjs';
 import type { Wire } from './types';
+import type { PromptVersion } from './SystemPromptRoute';
+import type { SelectOption } from './Select';
 
 export interface ViewOptions {
   widths: { focused: number; side: number };
@@ -38,16 +40,20 @@ interface Props {
   notification: { message: string; isError: boolean };
   onReady: (controller: ConversationController) => void;
   onSubmit: (text: string, leafId: string) => Promise<boolean>;
-  onBranch: (sourceId: string) => void;
+  onBranch: (sourceId: string, anchorId?: string) => void;
+  onDismissBranch: (id: string) => void;
+  prompts: PromptVersion[];
+  onSelectBranchPrompt: (id: string, key?: string) => void;
   onOpenSystemPrompt: (number: number) => void;
   onImage: (image: PreviewImage) => void;
   onAbort: () => void;
   onOptions: () => void;
 }
 
-function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?: number;
+function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?: number; scrollTop: number; promptRowTop: number;
+  selection?: { value: string; options: SelectOption[]; onChange: (value: string) => void };
   registerSection: (id: string, element: HTMLElement) => () => void;
-  width: number; onBranch: (id: string) => void; onPrompt: (number: number) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
+  width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; onPrompt: (number: number) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
   let element!: HTMLElement;
 
   onMount(() => props.measure(props.id, element));
@@ -56,12 +62,17 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?
   return <SectionContext.Provider value={element => { const dispose = props.registerSection(props.id, element); onCleanup(dispose); }}><article class="tree-node" classList={{ 'prefix-preview': props.node.isPrefixDelta }} data-entry-id={props.id}
     hidden={props.position.hidden} style={{ left: `${props.position.left}px`, top: `${props.position.top}px`, width: `${props.position.span}px` }}>
     <Card ref={element} anchors={props.node.anchors} style={{ left: `${props.position.cardLeft}px`, width: `${props.width}px` }}>
-      <Show when={props.id === 'empty-chat-draft'}><SystemPromptPlaceholder /></Show>
-      <Show when={props.node.entry.message?.role === 'system'} fallback={
-        <Index each={props.node.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch} />}</Index>
-      }>
-        <SystemPromptReference entryId={props.id} number={props.promptNumber!} onOpen={props.onPrompt} />
+      <Show when={props.node.entry.type === 'branch_draft'}>
+        <SystemPromptPlaceholder number={props.promptNumber} stickyOffset={props.scrollTop - props.promptRowTop}
+          rowOffset={props.node.entry.draftSourceId ? props.promptRowTop - props.position.top : undefined} selection={props.selection} />
+        <Show when={props.node.entry.draftSourceId}>
+          <button class="text-action branch-dismiss" aria-label="Dismiss pending branch"
+            style={{ top: `calc(${props.promptRowTop - props.position.top}px + 1lh)`,
+              transform: `translateY(max(0px, calc(${props.scrollTop - props.promptRowTop}px + 1lh)))` }}
+            onClick={() => props.onDismiss(props.id)}>Dismiss</button>
+        </Show>
       </Show>
+      <Index each={props.node.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch} />}</Index>
     </Card>
   </article></SectionContext.Provider>;
 }
@@ -80,10 +91,12 @@ export default function Conversation(props: Props) {
   const interaction = createColumnInteraction({
     viewport: () => viewport, enabled: () => props.active && mode() === 'side',
     columns: () => ({ inset: layout().inset, starts: layout().starts, width: workingWidth() }),
-    onColumn: lane => selectLane(lane), onScroll: updateScroll,
+    onColumn: lane => {
+      if (layout().starts[lane] !== layout().starts[focused()]) selectLane(lane);
+    }, onScroll: updateScroll,
   });
   const lanes = createMemo<Wire[]>((previous = []) => matchConversationLanes(props.graph, previous), []);
-  const nodeIds = () => props.graph.ids as string[];
+  const nodeIds = () => (props.graph.ids as string[]).filter(id => props.graph.nodes.get(id).entry.message?.role !== 'system');
   const laneKeys = createMemo(() => lanes().map(lane => lane.key as string));
   const focused = () => Math.max(0, Math.min(selectedLane(), lanes().length - 1));
   const maxWidth = () => Math.max(480, dimensions().width - 48);
@@ -194,6 +207,13 @@ export default function Conversation(props: Props) {
     interaction.resetPointer();
     centerAfterLayout = true;
     selectLane(next);
+  }
+
+  function dismissBranch(id: string) {
+    const lane = lanes().find(item => item.leafId === id);
+    if (lane) setDrafts(lane.key, '');
+    interaction.resetPointer();
+    props.onDismissBranch(id);
   }
 
   async function submit(key: string, leafId: string) {
@@ -320,13 +340,31 @@ export default function Conversation(props: Props) {
         <svg class="tree-connections" aria-hidden="true" width={layout().width} height={layout().height}>
           <For each={layout().paths}>{path => <path d={path.d} classList={{ 'fork-connection': path.fork }} />}</For>
         </svg>
+        <For each={props.graph.leaves}>{(leaf: Wire, index) => <Show when={leaf.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf.id).captured}>
+          <article class="tree-node" hidden={mode() === 'focused' && index() !== focused()}
+            style={{ left: `${layout().inset + layout().starts[index()]}px`, top: '24px', width: `${workingWidth()}px` }}>
+            <Card><SystemPromptReference entryId={leaf.id}
+              number={props.prompts.find(prompt => prompt.key === leaf.entry.draftPromptKey)?.number
+                ?? props.graph.prompts.numberFor(props.graph.prefix.get(leaf.id))} onOpen={props.onOpenSystemPrompt} /></Card>
+          </article>
+        </Show>}</For>
         <For each={nodeIds()}>{id => {
           const node = () => props.graph.nodes.get(id);
-          const number = () => props.graph.prompts.numberFor(props.graph.prefix.get(id));
+          const inheritedNumber = () => props.graph.prompts.numberFor(props.graph.prefix.get(id));
+          const inheritedKey = () => props.prompts.find(prompt => prompt.number === inheritedNumber())?.key;
+          const number = () => props.prompts.find(prompt => prompt.key === node().entry.draftPromptKey)?.number ?? inheritedNumber();
+          const selection = () => node().entry.type === 'branch_draft' && node().entry.draftSourceId ? {
+            value: node().entry.draftPromptKey ?? inheritedKey() ?? '',
+            options: props.prompts.map(prompt => ({ value: prompt.key,
+              label: `System Prompt ${prompt.number}${prompt.title ? ` — ${prompt.title}` : ''}${prompt.key === inheritedKey() ? ' (inherited)' : ''}` })),
+            onChange: (key: string) => props.onSelectBranchPrompt(id, key === inheritedKey() ? undefined : key),
+          } : undefined;
 
-          return <TreeCard id={id} node={node()} position={layout().items.get(id)} promptNumber={number()}
+          const promptRoot = () => props.graph.prefix.get(id).rootId;
+          return <TreeCard id={id} node={node()} position={layout().items.get(id)} promptNumber={number()} scrollTop={scroll().top}
+            promptRowTop={layout().items.get(promptRoot())?.top ?? 24} selection={selection()}
             registerSection={registerSection} width={workingWidth()}
-            onBranch={props.onBranch} onPrompt={props.onOpenSystemPrompt}
+            onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch} onPrompt={props.onOpenSystemPrompt}
             measure={(key, element) => observe(key, element, 'node')} unmeasure={unobserve} />;
         }}</For>
       </div>

@@ -27,13 +27,14 @@ import {
 	type AgentToolCallOutcome,
 	type BeforeToolCallContext,
 	type BeforeToolCallResult,
+	createSystemPromptSnapshot,
+	getCurrentSystemMessage,
 	type PrepareNextTurnContext,
 	runToolCall,
 	type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import {
 	contentText,
-	getCurrentSystemMessage,
 	getCurrentTools,
 	getSystemMessageText,
 	getToolStateChanges,
@@ -145,7 +146,6 @@ import {
 	buildSystemPrompt,
 	buildSystemPromptDocument,
 	buildSystemPromptSections,
-	diffSystemPromptSections,
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
@@ -1542,9 +1542,17 @@ export class AgentSession {
 	/** Current effective system prompt, including changes not yet sent to the model. */
 	get systemPrompt(): string {
 		const options = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
-		return this._webPromptSections && options.forceSystemPrompt === undefined
-			? getSystemMessageText({ role: "system", content: "", sections: this._webPromptSections, timestamp: 0 })
-			: buildSystemPrompt(options);
+		const current = getCurrentSystemMessage(this.agent.state.messages);
+		if (this._webPromptSections) {
+			return getSystemMessageText({
+				role: "system",
+				content: current?.content ?? "",
+				sections: this._webPromptSections,
+				timestamp: 0,
+			});
+		}
+		if (options.forceSystemPrompt !== undefined) return buildSystemPrompt(options);
+		return current ? getSystemMessageText(current) : buildSystemPrompt(options);
 	}
 
 	/** Current retry attempt (0 if not retrying) */
@@ -1810,17 +1818,18 @@ export class AgentSession {
 
 	/**
 	 * Apply a prompt and tool loadout for the next request. Sets the executable tools and
-	 * returns a system message patching the prompt sections the model currently has (replayed
-	 * from `messages`), or undefined when the prompt is unchanged. Tool changes are declared by
+	 * records a complete prompt when its instructions change, or returns undefined when they
+	 * are unchanged. Earlier prompts are never patched. Tool changes are declared by
 	 * the agent loop before the request.
 	 *
-	 * A forced prompt does not affect the transcript: the structured sections are still diffed
-	 * and persisted, and the forced text is projected onto the request by
+	 * A forced prompt does not affect the transcript: complete structured prompts are still
+	 * persisted, and the forced text is projected onto the request by
 	 * {@link _installAgentForcedPromptProjection}.
 	 */
 	private _preparePromptAndToolLoadout(
 		options: NormalizedBuildSystemPromptOptions,
 		messages: AgentMessage[] = this.agent.state.messages,
+		selected?: SystemPromptPolicy["selected"],
 	): SystemMessage | undefined {
 		options.selectedTools = this._applyToolLoadout(options.selectedTools).map((tool) => tool.name);
 		// The tool list and rules must match the declarations the request carries.
@@ -1829,6 +1838,7 @@ export class AgentSession {
 		this._promptDocuments.set(promptCandidateKey(proposed), buildSystemPromptDocument(options));
 		const toolChanges = getToolStateChanges(getCurrentTools(messages), this.agent.state.tools.map(toToolDeclaration));
 		if (
+			!selected &&
 			this._webPromptSections &&
 			isDiscoveryOnlyChange(
 				this._webPromptSections,
@@ -1840,11 +1850,14 @@ export class AgentSession {
 		) {
 			this._webPromptSections = proposed;
 		}
-		const sections = diffSystemPromptSections(
-			getCurrentSystemMessage(messages)?.sections ?? {},
-			this._webPromptSections ?? proposed,
-		);
-		return sections ? { role: "system", content: "", sections, timestamp: Date.now() } : undefined;
+		if (selected) return createSystemPromptSnapshot(selected);
+		const current = getCurrentSystemMessage(messages);
+		const sections = this._webPromptSections ?? proposed;
+		if (current && JSON.stringify(current.sections ?? {}) === JSON.stringify(sections)) return undefined;
+		return createSystemPromptSnapshot({
+			content: typeof current?.content === "string" ? current.content : "",
+			sections,
+		});
 	}
 
 	/**
@@ -1886,6 +1899,9 @@ export class AgentSession {
 		const previousTransformContext = this.agent.transformContext;
 		this.agent.transformContext = async (messages, signal) => {
 			const transformed = previousTransformContext ? await previousTransformContext(messages, signal) : messages;
+			// An explicitly retained or selected complete prompt is authoritative. Hooks may
+			// still run for tools and messages, but cannot silently replace those instructions.
+			if (this._webPromptSections !== undefined) return transformed;
 			const forced = this._runSystemPromptOptions?.forceSystemPrompt;
 			if (forced === undefined) return transformed;
 			const current = getCurrentSystemMessage(transformed);
@@ -2031,7 +2047,9 @@ export class AgentSession {
 			result.systemPromptOptions.selectedTools.some((name, index) => name !== selectedToolsBefore[index]);
 		if (!handlerEditedTools) result.systemPromptOptions.selectedTools = this.getActiveToolNames();
 
-		if (policy) {
+		if (policy?.selected) {
+			this._webPromptSections = { ...policy.selected.sections };
+		} else if (policy) {
 			const options = result.systemPromptOptions;
 			const preview = this._resolveToolLoadout(options.selectedTools);
 			const proposed = buildSystemPromptSections({
@@ -2061,7 +2079,7 @@ export class AgentSession {
 				}).rules,
 				toolChanges.toolsAdded.length > 0 || toolChanges.toolsRemoved.length > 0,
 			);
-			const changed = diffSystemPromptSections(current, proposed);
+			const changed = JSON.stringify(current) !== JSON.stringify(proposed);
 			const decision =
 				recorded && changed && !discoveryOnly
 					? policy.decide({
@@ -2111,7 +2129,11 @@ export class AgentSession {
 				timestamp: Date.now(),
 			});
 		}
-		const updateMessage = this._preparePromptAndToolLoadout(result.systemPromptOptions);
+		const updateMessage = this._preparePromptAndToolLoadout(
+			result.systemPromptOptions,
+			this.agent.state.messages,
+			policy?.selected,
+		);
 		this._runSystemPromptOptions = result.systemPromptOptions;
 		if (updateMessage) messages.unshift(updateMessage);
 		return messages;

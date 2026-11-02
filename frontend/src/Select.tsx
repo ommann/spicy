@@ -1,4 +1,4 @@
-import { For, createSignal, onCleanup } from 'solid-js';
+import { For, createSignal, onCleanup, type JSX } from 'solid-js';
 import ScrollArea from './ScrollArea';
 
 export interface SelectOption {
@@ -11,6 +11,9 @@ export default function Select(props: {
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  class?: string;
+  style?: JSX.CSSProperties;
+  children?: JSX.Element;
 }) {
   let dialog!: HTMLDialogElement;
   const [open, setOpen] = createSignal(false);
@@ -36,8 +39,8 @@ export default function Select(props: {
   }
   onCleanup(() => dialog?.close());
   return <>
-    <button type="button" class="select-choice" aria-label={`${props.label}: ${selected()}`}
-      aria-haspopup="dialog" aria-expanded={open()} onClick={show}>{selected()}</button>
+    <button type="button" class={props.class || 'select-choice'} style={props.style} aria-label={`${props.label}: ${selected()}`}
+      aria-haspopup="dialog" aria-expanded={open()} onClick={show}>{props.children ?? selected()}</button>
     <dialog ref={dialog} class="chat-dialog select-dialog" aria-label={props.label} onClose={() => setOpen(false)}>
       <div class="chat-dialog-heading"><span>{props.label}</span><button type="button" onClick={() => dialog.close()}>Close</button></div>
       <ScrollArea class="select-options" vertical>

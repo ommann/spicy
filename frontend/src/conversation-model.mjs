@@ -1,5 +1,5 @@
 import { createPrefixResolver } from './lilim/prefix-state.js';
-import { createSystemPromptCatalog } from './lilim/system-prompts.js';
+import { createSystemPromptCatalog, systemPromptText } from './lilim/system-prompts.js';
 import { branchEntries } from './session-entries.mjs';
 
 export const CHAT_BLOCK_GAP = 20;
@@ -47,18 +47,20 @@ export function projectChatParts(entries) {
   return parts;
 }
 
-export function createConversationGraph(entries, promptNumbers) {
+export function createConversationGraph(entries, promptNumbers, promptVersions) {
   // An empty conversation is a draft lane, rendered exactly like a branch draft.
   if (!projectChatParts(entries).size) return createConversationGraph([...entries, {
     id: 'empty-chat-draft', parentId: entries.at(-1)?.id || null, type: 'branch_draft', optimistic: true,
-  }], promptNumbers);
+  }], promptNumbers, promptVersions);
   const raw = new Map(entries.filter(entry => entry.parentId !== undefined).map(entry => [entry.id, entry]));
   const parts = projectChatParts(entries);
   const prefix = createPrefixResolver(entries);
-  const prompts = createSystemPromptCatalog(entries, promptNumbers);
+  const prompts = promptVersions ? { versions: promptVersions, numberFor: state => state?.captured
+    ? promptVersions.find(version => version.key === (state.promptKey ?? systemPromptText(state)))?.number : undefined
+  } : createSystemPromptCatalog(entries, promptNumbers);
   const nodes = new Map([...parts].filter(([id]) => raw.has(id)).map(([id, content]) => [id, {
     id, entry: raw.get(id), parts: content, children: [], anchors: [],
-    isPrefixDelta: prefix.isDelta(raw.get(id)), parent: undefined, prefixBoundary: false,
+    isPrefixDelta: prefix.isDelta(raw.get(id)), parent: undefined,
     first: 0, last: 0, depth: 0,
   }]));
   const labels = new Map();
@@ -105,14 +107,13 @@ export function createConversationGraph(entries, promptNumbers) {
       siblings.splice(siblings.indexOf(node), 1);
       siblings.splice(siblings.indexOf(source) + 1, 0, node);
     }
-    if (prefix.changesPrefix(node.entry) && node.parent) node.parent.prefixBoundary = true;
   }
 
   const leaves = [];
   function assign(node, depth) {
     node.depth = depth;
     node.first = leaves.length;
-    if (!node.children.length || node.prefixBoundary) leaves.push(node);
+    if (!node.children.length) leaves.push(node);
     for (const child of node.children) assign(child, depth + 1);
     node.last = leaves.length - 1;
   }
@@ -133,7 +134,7 @@ export function createConversationGraph(entries, promptNumbers) {
   };
 
   return { raw, nodes, roots, leaves, activeLeaf, prefix, prompts, ancestors,
-    ids: [...nodes.keys()], forks: [...nodes.values()].filter(node => node.children.length > 1 || node.prefixBoundary) };
+    ids: [...nodes.keys()], forks: [...nodes.values()].filter(node => node.children.length > 1) };
 }
 
 export function matchConversationLanes(graph, previous = []) {
@@ -175,35 +176,50 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
   const focused = Math.max(0, Math.min(lane, graph.leaves.length - 1));
   const gap = 48;
   const inset = mode === 'focused' ? Math.max(24, (viewportWidth - width) / 2) : Math.max(24, viewportWidth / 2);
-  const starts = graph.leaves.map((_, index) => mode === 'focused' ? 0 : index * (width + gap));
+  const pending = node => node.entry.type === 'branch_draft' && node.entry.draftSourceId;
+  const committed = graph.leaves.filter(node => !pending(node));
+  const drafts = graph.leaves.filter(pending);
+  const starts = graph.leaves.map(node => {
+    const column = pending(node) ? committed.length + drafts.indexOf(node) : committed.indexOf(node);
+    return mode === 'focused' ? 0 : column * (width + gap);
+  });
+  const anchor = pending(graph.leaves[focused]) ? committed.find(leaf => leaf.id === graph.leaves[focused].entry.draftAnchorId) : undefined;
+  const historyFocus = anchor ? graph.leaves.indexOf(anchor) : pending(graph.leaves[focused])
+    ? graph.leaves.indexOf(committed.find(leaf => graph.ancestors(leaf.id).includes(graph.leaves[focused].entry.draftSourceId))) : focused;
   const totalWidth = inset * 2 + (mode === 'focused' ? width : Math.max(0, graph.leaves.length * (width + gap) - gap));
   const items = new Map();
   const prefixHeight = Math.max(0, ...[...graph.nodes.values()].filter(node => node.entry.message?.role === 'system').map(node => heights[node.id] || 60));
 
   for (const node of [...graph.nodes.values()].sort((a, b) => a.depth - b.depth)) {
     const onPath = node.first <= focused && node.last >= focused;
-    const column = Math.max(node.first, Math.min(node.last, focused));
-    const hidden = mode === 'focused' && !onPath;
+    const candidates = graph.leaves.map((_, index) => index).filter(index => index >= node.first && index <= node.last
+      && (pending(node) || !pending(graph.leaves[index])));
+    const range = candidates.map(index => starts[index]);
+    const target = pending(node) ? focused : historyFocus;
+    const column = candidates.reduce((closest, index) =>
+      Math.abs(starts[index] - starts[target]) < Math.abs(starts[closest] - starts[target]) ? index : closest, candidates[0]);
+    const system = node.entry.message?.role === 'system';
+    const hidden = system || (mode === 'focused' && !onPath);
     let parent = node.parent;
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
-
-    const top = node.entry.message?.role === 'system' ? 24
-      : parent ? items.get(parent.id).top + items.get(parent.id).height + CHAT_BLOCK_GAP
-      : prefixHeight ? 24 + prefixHeight + CHAT_BLOCK_GAP : 24;
-    const height = heights[node.id] || node.parts.reduce((sum, part) => sum + (part.kind === 'message' || part.kind === 'thinking' ? 44 : 60), 0);
+    const top = system ? 24 : parent ? items.get(parent.id).top + items.get(parent.id).height + CHAT_BLOCK_GAP
+      : 24 + (graph.prefix.get(node.id).captured ? prefixHeight + CHAT_BLOCK_GAP : 0);
+    const height = system ? 0 : heights[node.id] || (pending(node) ? 60 : node.entry.type === 'branch_draft' ? 120 + CHAT_BLOCK_GAP
+      : node.parts.reduce((sum, part) => sum + (part.kind === 'message' || part.kind === 'thinking' ? 44 : 60), 0));
+    const first = Math.min(...range);
     items.set(node.id, { top, height, hidden, column,
-      left: inset + starts[node.first], span: starts[node.last] + width - starts[node.first], cardLeft: starts[column] - starts[node.first] });
+      left: inset + first, span: Math.max(...range) + width - first, cardLeft: starts[column] - first });
   }
 
   const composers = graph.leaves.map((_, index) => {
     const bottom = Math.max(24 + prefixHeight, ...[...graph.nodes.values()]
-      .filter(node => !items.get(node.id).hidden && !node.isPrefixDelta && node.first <= index && node.last >= index)
+      .filter(node => !items.get(node.id).hidden && node.first <= index && node.last >= index)
       .map(node => items.get(node.id).top + items.get(node.id).height));
     return { left: inset + starts[index], top: bottom + CHAT_BLOCK_GAP, height: composerHeights[index] || 40 };
   });
   const height = Math.max(24 + prefixHeight,
     ...(mode === 'side' ? composers.map(composer => composer.top + composer.height) : []),
-    ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden && !node.isPrefixDelta).map(node => items.get(node.id).top + items.get(node.id).height))
+    ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden).map(node => items.get(node.id).top + items.get(node.id).height))
     + Math.max(80, viewportHeight * .75);
   const paths = [];
 
@@ -212,7 +228,7 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
     if (position.hidden || node.entry.message?.role === 'system') continue;
     let parent = node.parent;
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
-    if (!parent || (parent.children.length < 2 && !parent.prefixBoundary)) continue;
+    if (!parent || parent.children.length < 2) continue;
 
     const previous = items.get(parent.id);
     paths.push({ id: node.id, fork: parent.children.length > 1,

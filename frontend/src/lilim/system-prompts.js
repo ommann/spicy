@@ -24,15 +24,17 @@ export function createSystemPromptCatalog(entries, assignedNumbers = new Map()) 
     const state = prefix.get(entry.id);
     if (!state.captured) continue;
     const text = systemPromptText(state);
-    if (numbers.has(text)) continue;
-    if (!assignedNumbers.has(text)) assignedNumbers.set(text, Math.max(0, ...assignedNumbers.values()) + 1);
-    const number = assignedNumbers.get(text);
+    const key = entry.systemPromptKey ?? state.promptKey ?? text;
+    if (numbers.has(key)) continue;
+    if (!assignedNumbers.has(key)) assignedNumbers.set(key, Math.max(0, ...assignedNumbers.values()) + 1);
+    const number = assignedNumbers.get(key);
     const previous = prefix.get(entry.parentId);
     const previousText = previous.captured ? systemPromptText(previous) : undefined;
-    const previousNumber = numbers.get(previousText);
-    numbers.set(text, number);
+    const previousKey = previous.promptKey ?? previousText;
+    const previousNumber = numbers.get(previousKey);
+    numbers.set(key, number);
     versions.push({
-      key: text,
+      key,
       number,
       previousNumber,
       priorityReason: previous.captured && (entry.message?.toolsAdded?.length || entry.message?.toolsRemoved?.length)
@@ -42,12 +44,12 @@ export function createSystemPromptCatalog(entries, assignedNumbers = new Map()) 
         ...entry, message: { role: 'system' }, prefixPreview: true, unifiedDiff: true,
         prefixDiff: promptDocument(previous.captured ? previous : state, state),
       },
-      previousKey: previousText,
+      previousKey,
       detail: previous.captured
         ? { ...entry, message: { role: 'system' }, prefixPreview: true, prefixDiff: diffPrefixes(previous, state) }
         : systemEntryForState(entry, state),
     });
   }
   versions.sort((left, right) => left.number - right.number);
-  return { versions, numberFor: state => state?.captured ? numbers.get(systemPromptText(state)) : undefined };
+  return { versions, numberFor: state => state?.captured ? numbers.get(state.promptKey ?? systemPromptText(state)) : undefined };
 }

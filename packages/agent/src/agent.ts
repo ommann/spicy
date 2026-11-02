@@ -1,8 +1,6 @@
 import {
 	type ClientIdentity,
 	createInitialSystemMessage,
-	getCurrentSystemMessage,
-	getCurrentSystemPrompt,
 	type ImageContent,
 	type Message,
 	type Model,
@@ -14,6 +12,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { runAgentLoop, runAgentLoopContinue } from "./agent-loop.ts";
 import { getDefaultStreamFn } from "./stream-fn.ts";
+import { getCurrentSystemMessage, getCurrentSystemPrompt } from "./system-prompt.ts";
 import type {
 	AfterToolCallContext,
 	AfterToolCallResult,

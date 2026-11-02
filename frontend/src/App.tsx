@@ -18,7 +18,8 @@ import { createConversationGraph, continuationTarget } from './conversation-mode
 import { applyRecord } from "./stream.mjs";
 import { hasCommittedDraft } from "./branch-drafts.mjs";
 import { createSystemPromptCatalog } from "./lilim/system-prompts.js";
-import { SystemPromptContext, SystemPromptPolicyContext, type PromptVersion } from './SystemPromptRoute';
+import { createPromptNumberRegistry, reservePromptNumber } from './prompt-numbers';
+import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
@@ -47,6 +48,8 @@ const empty: Snapshot = {
 interface DraftBranch {
   id: string;
   sourceId: string;
+  anchorId?: string;
+  prompt?: { key: string; content: string; sections: Record<string, string> };
   parentId: string | null;
   text?: string;
   sentAt?: number;
@@ -64,12 +67,8 @@ export default function App(props: ParentProps) {
   const streamedMessages = createMemo(() => snapshot().live);
   const sessionId = createMemo(() => snapshot().state?.sessionId || '');
   const sessionCwd = createMemo(() => snapshot().cwd);
-  const sessionPromptNumbers = new Map<string, Map<string, number>>();
-  function promptNumbers() {
-    const id = sessionId();
-    if (!sessionPromptNumbers.has(id)) sessionPromptNumbers.set(id, new Map());
-    return sessionPromptNumbers.get(id)!;
-  }
+  const sessionPromptNumbers = createPromptNumberRegistry();
+  function promptNumbers() { return sessionPromptNumbers(sessionId()); }
   const sessionLeafId = createMemo(() => snapshot().leafId);
 
   const [live, setLive] = createSignal(false);
@@ -87,20 +86,8 @@ export default function App(props: ParentProps) {
     catch { return {}; }
   })());
   function createdPromptEntry(prompt: CreatedPrompt): Wire {
-    return { id: prompt.id, parentId: null, type: 'message', message: { role: 'system', ...renderSystemPromptDocument(prompt.document, prompt.excludedIds), toolsAdded: prompt.toolsAdded } };
+    return { id: prompt.id, systemPromptKey: prompt.id, parentId: null, type: 'message', message: { role: 'system', ...renderSystemPromptDocument(prompt.document, prompt.excludedIds), toolsAdded: prompt.toolsAdded } };
   }
-  const [promptCandidates, setPromptCandidates] = createSignal<Record<string, Wire[]>>({});
-  const [pendingPrompt, setPendingPrompt] = createSignal<{ candidate: Wire; message: string; leafId: string; sessionId: string }>();
-  const [ignoredPrompts, setIgnoredPrompts] = createSignal<Record<string, boolean>>((() => {
-    try { return JSON.parse(localStorage.getItem('spicy.ignored-system-prompts') || '{}') || {}; }
-    catch { return {}; }
-  })());
-  const ignoredPrompt = (key: string) => !!ignoredPrompts()[`${sessionId()}:${key}`];
-  function ignorePrompt(key: string, ignored: boolean) {
-    setIgnoredPrompts(previous => ({ ...previous, [`${sessionId()}:${key}`]: ignored }));
-    try { localStorage.setItem('spicy.ignored-system-prompts', JSON.stringify(ignoredPrompts())); } catch { /* Storage may be unavailable. */ }
-  }
-
   const [resumeSessions, setResumeSessions] = createSignal<Wire[]>([]);
   const [resumeSearch, setResumeSearch] = createSignal("");
   const filteredResumeSessions = createMemo(() => {
@@ -111,9 +98,8 @@ export default function App(props: ParentProps) {
   let chatDialog!: HTMLDialogElement;
   let resumeDialog!: HTMLDialogElement;
   let optionsDialog!: HTMLDialogElement;
-  let promptDialog!: HTMLDialogElement;
   onMount(() => {
-    const dispose = [chatDialog, resumeDialog, optionsDialog, promptDialog].map(trackModal);
+    const dispose = [chatDialog, resumeDialog, optionsDialog].map(trackModal);
     onCleanup(() => dispose.forEach(cleanup => cleanup()));
   });
   const [viewOptions, setViewOptions] = createSignal<ViewOptions | null>(null);
@@ -148,27 +134,70 @@ export default function App(props: ParentProps) {
     const actual = actualEntries();
     const drafts = (draftBranches()[branchKey()] || []).filter(draft => !hasCommittedDraft(actual, draft));
     return [...actual, ...drafts.map(draft => ({
-      id: draft.id, parentId: draft.parentId, draftSourceId: draft.sourceId,
+      id: draft.id, parentId: draft.parentId, draftSourceId: draft.sourceId, draftAnchorId: draft.anchorId, draftPromptKey: draft.prompt?.key,
       type: draft.text === undefined ? 'branch_draft' : 'message',
       optimistic: true,
       ...(draft.text === undefined ? {} : { message: { role: 'user', content: draft.text, timestamp: draft.sentAt } }),
     }))];
   });
 
-  const graph = createMemo(() => createConversationGraph(viewEntries(), promptNumbers()));
+  const systemPrompts = createMemo<PromptVersion[]>((previous = []) => {
+    const entries: Wire[] = [...actualEntries()];
+    const created = createdPrompts()[sessionId()] || [];
+    for (const prompt of created) if (prompt.number && !promptNumbers().has(prompt.id)) promptNumbers().set(prompt.id, prompt.number);
+    entries.push(...created.map(createdPromptEntry));
+    const versions: PromptVersion[] = createSystemPromptCatalog(entries, promptNumbers()).versions.map((version: PromptVersion) => {
+      const saved = created.find(item => item.id === version.key || item.id === version.full?.id);
+      return saved ? { ...version, title: saved.title } : version;
+    });
+    const existing = new Map(previous.map(version => [version.key, version]));
+    return versions.map(version => {
+      const saved = existing.get(version.key);
+      return saved && saved.number === version.number && saved.previousKey === version.previousKey && saved.candidateKey === version.candidateKey ? saved : version;
+    });
+  }, [], {
+    equals: (previous, next) => previous.length === next.length && previous.every((version, index) => version === next[index]),
+  });
 
-  function createBranch(sourceId: string) {
+  const graph = createMemo(() => createConversationGraph(viewEntries(), promptNumbers(), systemPrompts()));
+
+  function createBranch(sourceId: string, anchorId?: string) {
     const source = actualEntries().find(entry => entry.id === sourceId && entry.message?.role === 'user');
     if (!source) return;
 
     const key = branchKey();
     const drafts = draftBranches()[key] || [];
     const existing = drafts.find(draft => draft.sourceId === sourceId && draft.text === undefined);
-    const draft = existing || { id: `draft-${crypto.randomUUID()}`, sourceId, parentId: source.parentId };
+    const draft = existing || { id: `draft-${crypto.randomUUID()}`, sourceId, anchorId, parentId: source.parentId };
 
     batch(() => {
       setDraftBranches(previous => ({ ...previous, [key]: existing ? [...drafts] : [...drafts, draft] }));
       setFocusRequest(previous => ({ id: draft.id, revision: (previous?.revision || 0) + 1 }));
+    });
+  }
+
+  function selectBranchPrompt(id: string, promptKey?: string) {
+    const version = systemPrompts().find(prompt => prompt.key === promptKey);
+    const message = version?.full?.message;
+    const prompt = version && message ? {
+      key: version.key,
+      content: typeof message.content === 'string' ? message.content
+        : (message.content || []).filter((block: Wire) => block.type === 'text').map((block: Wire) => block.text).join('\n'),
+      sections: Object.fromEntries(Object.entries(message.sections || {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+    } : undefined;
+    const key = branchKey();
+    setDraftBranches(previous => ({ ...previous, [key]: (previous[key] || []).map(draft =>
+      draft.id === id && draft.text === undefined ? { ...draft, prompt } : draft) }));
+  }
+
+  function dismissBranch(id: string) {
+    const key = branchKey();
+    const draft = (draftBranches()[key] || []).find(item => item.id === id && item.text === undefined);
+    if (!draft) return;
+    const target = draft.anchorId || graph().activeLeaf?.id;
+    batch(() => {
+      setDraftBranches(previous => ({ ...previous, [key]: previous[key].filter(item => item.id !== id) }));
+      if (target) setFocusRequest(previous => ({ id: target, revision: (previous?.revision || 0) + 1 }));
     });
   }
 
@@ -211,49 +240,6 @@ export default function App(props: ParentProps) {
 
   function openImage(image: PreviewImage) {
     setPreviewImage(image);
-  }
-
-  const systemPrompts = createMemo<PromptVersion[]>((previous = []) => {
-    const candidates = promptCandidates()[sessionId()] || [];
-    const entries: Wire[] = live() ? [...sessionEntries(), ...candidates.map(candidate => ({
-      type: 'message', id: `candidate-${candidate.key}`, parentId: candidate.parentId,
-      message: { role: 'system', content: '', sections: candidate.sections },
-    }))] : [];
-    const created = createdPrompts()[sessionId()] || [];
-    entries.push(...created.map(createdPromptEntry));
-    const versions: PromptVersion[] = createSystemPromptCatalog(entries, promptNumbers()).versions.map((version: PromptVersion) => {
-      const sections = JSON.stringify(version.full?.message?.sections || {});
-      const candidate = candidates.find(item => JSON.stringify(item.sections) === sections);
-      const saved = created.find(item => item.id === version.full?.id);
-      return saved ? { ...version, title: saved.title } : candidate ? { ...version, candidateKey: candidate.key } : version;
-    });
-    const existing = new Map(previous.map(version => [version.key, version]));
-
-    return versions.map(version => {
-      const saved = existing.get(version.key);
-      return saved && saved.number === version.number && saved.previousKey === version.previousKey && saved.candidateKey === version.candidateKey ? saved : version;
-    });
-  }, [], {
-    equals: (previous, next) => previous.length === next.length && previous.every((version, index) => version === next[index]),
-  });
-
-  createEffect(() => {
-    const pending = pendingPrompt();
-    if (pending && pending.sessionId !== sessionId()) { setPendingPrompt(undefined); return; }
-    if (!promptDialog) return;
-    if (!pending || showingPrompts() || ignoredPrompt(pending.candidate.key)) closeModal(promptDialog);
-    else if (!promptDialog.open) openModal(promptDialog);
-  });
-
-  const pendingPromptNumber = () => systemPrompts().find(version => version.candidateKey === pendingPrompt()?.candidate.key)?.number;
-  async function choosePrompt(choice: string) {
-    const pending = pendingPrompt();
-    if (!pending) return;
-    closeModal(promptDialog);
-    if (await send(pending.message, pending.leafId, choice)) {
-      setPendingPrompt(undefined);
-      conversation?.setDraft('');
-    } else if (pendingPrompt()) setPendingPrompt({ ...pendingPrompt()! });
   }
 
   function openOptions() {
@@ -316,7 +302,7 @@ export default function App(props: ParentProps) {
     });
   }
 
-  async function send(message: string, leafId: string, promptChoice?: string): Promise<boolean> {
+  async function send(message: string, leafId: string): Promise<boolean> {
     if (!message.trim() || busy()) return false;
     if (!snapshot().connected) await start();
     if (!snapshot().connected) return false;
@@ -331,20 +317,11 @@ export default function App(props: ParentProps) {
 
     await act(async () => {
       try {
-        const systemPrompt = { choice: promptChoice, ignored: Object.keys(ignoredPrompts()).filter(key => key.startsWith(`${sessionId()}:`) && ignoredPrompts()[key]).map(key => key.slice(sessionId().length + 1)) };
-        let response: Wire;
-        if (message.trim().startsWith('/')) response = await post('command', { type: 'prompt', message, systemPrompt });
-        else if (draft) response = await post('branch', { entryId: draft.sourceId, message, systemPrompt });
-        else if (target) response = await post('continue', { entryId: target, message, systemPrompt });
-        else response = await post('command', { type: 'prompt', message, systemPrompt, ...(snapshot().running ? { streamingBehavior: 'steer' } : {}) });
-        if (response.disposition === 'approval_required' && response.candidate) {
-          const candidate = response.candidate;
-          setPromptCandidates(previous => ({ ...previous, [sessionId()]: [...(previous[sessionId()] || []).filter(item => item.key !== candidate.key), candidate] }));
-          if (draft) setDraftBranches(previous => ({ ...previous, [key]: previous[key].map(item => item.id === draft.id ? { ...item, sentAt: undefined } : item) }));
-          setPendingPrompt({ candidate, message, leafId, sessionId: sessionId() });
-          return;
-        }
-        setPendingPrompt(undefined);
+        const systemPrompt = { choice: 'current', ...(draft?.prompt ? { selected: draft.prompt } : {}) };
+        if (message.trim().startsWith('/')) await post('command', { type: 'prompt', message, systemPrompt });
+        else if (draft) await post('branch', { entryId: draft.sourceId, message, systemPrompt });
+        else if (target) await post('continue', { entryId: target, message, systemPrompt });
+        else await post('command', { type: 'prompt', message, systemPrompt, ...(snapshot().running ? { streamingBehavior: 'steer' } : {}) });
         accepted = true;
       } catch (failure) {
         if (draft) batch(() => {
@@ -439,13 +416,19 @@ export default function App(props: ParentProps) {
           if (!token) throw new Error('Could not connect to the local bridge');
           if (!snapshot().connected) await start();
           const promptSnapshot = await post('command', { type: 'get_system_prompt_document' }) as PromptDocumentSnapshot;
-          return { ...promptSnapshot, sources: [
+          const current = createSystemPromptCatalog([{ id: 'editor-source', parentId: null, type: 'message',
+            message: { role: 'system', ...promptSnapshot.current } }], promptNumbers()).versions[0];
+          const sources = [
             ...systemPrompts().filter(version => !version.title).map(version => ({ id: version.key, label: `System Prompt ${version.number}`, document: systemPromptDocumentFromState({ content: version.full?.message?.content || '', sections: version.full?.message?.sections || {} }), toolsAdded: version.full?.message?.toolsAdded || [] })),
-            ...(createdPrompts()[sessionId()] || []).map(prompt => ({ ...prompt, label: prompt.title })),
-          ] };
+            ...(createdPrompts()[sessionId()] || []).map(prompt => ({ ...prompt, label: `System Prompt ${promptNumbers().get(prompt.id)} — ${prompt.title}` })),
+          ].filter(source => source.id !== current.key);
+          sources.unshift({ id: current.key, label: `System Prompt ${current.number}`, document: promptSnapshot.document, toolsAdded: promptSnapshot.current.toolsAdded || [] });
+          return { ...promptSnapshot, sources, currentSourceId: current.key };
         },
+        reserveNumber: requested => reservePromptNumber(promptNumbers(), requested),
         save: value => {
           const prompt = { ...value, id: `created-prompt-${crypto.randomUUID()}` };
+          if (prompt.number) promptNumbers().set(prompt.id, prompt.number);
           const next = { ...createdPrompts(), [sessionId()]: [...(createdPrompts()[sessionId()] || []), prompt] };
           localStorage.setItem('spicy.created-system-prompts', JSON.stringify(next));
           setCreatedPrompts(next);
@@ -454,32 +437,21 @@ export default function App(props: ParentProps) {
           navigate(`/system-prompts/${number || 1}`);
         },
       }}>
-      <SystemPromptPolicyContext.Provider value={{ ignored: ignoredPrompt, setIgnored: ignorePrompt }}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <Handoffs sessionKey={branchKey()}>
         <Show when={branchKey() || 'empty'} keyed>{_sessionKey => (
           <Conversation graph={graph()} active={!showingPrompts()}
             running={snapshot().running} busy={busy()} focusRequest={focusRequest()} notification={notification()}
-            onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch}
+            onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
+            prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}
             onOptions={openOptions} />
         )}</Show>
         {props.children}
         </Handoffs>
       </SystemPromptContext.Provider>
-      </SystemPromptPolicyContext.Provider>
       </SystemPromptCreatorContext.Provider>
       </ToolbarActionsContext.Provider>
-      <dialog ref={promptDialog} class="chat-dialog" aria-label="New system prompts available">
-        <h2>New system prompts available</h2>
-        <p>The current branch keeps its accepted prompt unless you choose the new version.</p>
-        <button disabled={busy()} onClick={() => void choosePrompt(pendingPrompt()?.candidate.key || '')}>
-          Use System Prompt {pendingPromptNumber()}
-        </button>
-        <button disabled={busy()} onClick={() => void choosePrompt('current')}>Use current System Prompt</button>
-        <button onClick={() => closeModal(promptDialog)}>Cancel</button>
-        <button onClick={() => { closeModal(promptDialog); openSystemPrompt(pendingPromptNumber() || 1); }}>View system prompts</button>
-      </dialog>
       <dialog ref={optionsDialog} class="chat-dialog options-dialog" aria-label="Options">
         <div class="chat-dialog-heading"><span>Options</span><button onClick={() => optionsDialog.close()}>Close</button></div>
         <For each={['focused', 'side'] as const}>{mode =>

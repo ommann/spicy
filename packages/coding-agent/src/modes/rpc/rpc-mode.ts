@@ -399,6 +399,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 						source: "rpc",
 						systemPromptPolicy: command.systemPrompt
 							? {
+									selected: command.systemPrompt.selected,
 									decide: (candidate) => {
 										if (command.systemPrompt?.choice === candidate.key) return "accept";
 										if (

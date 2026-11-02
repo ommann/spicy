@@ -12,7 +12,7 @@ import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
-import type { SystemPromptCandidate } from "../../core/system-prompt-policy.ts";
+import type { SelectedSystemPrompt, SystemPromptCandidate } from "../../core/system-prompt-policy.ts";
 
 // ============================================================================
 // RPC Commands (stdin)
@@ -26,7 +26,7 @@ export type RpcCommand =
 			message: string;
 			images?: ImageContent[];
 			streamingBehavior?: "steer" | "followUp";
-			systemPrompt?: { choice?: string; ignored?: string[] };
+			systemPrompt?: { choice?: string; ignored?: string[]; selected?: SelectedSystemPrompt };
 	  }
 	| { id?: string; type: "steer"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "follow_up"; message: string; images?: ImageContent[] }

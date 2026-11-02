@@ -1,7 +1,6 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { type AgentMessage, getCurrentSystemMessage } from "@earendil-works/pi-agent-core";
 import {
 	type AssistantMessage,
-	getCurrentSystemMessage,
 	type ImageContent,
 	type Message,
 	type SystemMessage,

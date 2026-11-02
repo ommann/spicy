@@ -67,8 +67,12 @@
 }
 
 .scroll-area-content.diff-view {
-  width: var(--code-content-width, max-content);
+  width: 100%;
   min-width: 100%;
+}
+
+.scroll-area-content.diff-view.code-diff {
+  width: var(--code-content-width, max-content);
 }
 
 .scroll-area-horizontal {
@@ -117,10 +121,17 @@
   display: contents;
 }
 
-.tool-body pre,
 .trace-text,
 .codemode-preview,
-.diff-view .diff-source,
+.tool-body pre,
+.diff-view .diff-source {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tool-body pre.syntax-highlighted:not([data-language='markdown']),
+.codemode-code,
+.diff-view.code-diff .diff-source,
 .source-code {
   white-space: var(--code-white-space, pre-wrap);
   overflow-wrap: var(--code-overflow-wrap, anywhere);
@@ -319,12 +330,23 @@
   opacity: 1;
 }
 
+.branch-dismiss {
+  position: absolute;
+  top: 1lh;
+  right: 1ch;
+  z-index: 2;
+}
+
 .empty-placeholder {
   display: flex;
   align-items: center;
   padding-inline: 1ch;
+  background: transparent;
   color: inherit;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .branch-draft {
@@ -367,6 +389,7 @@
 }
 
 .chat-dialog button,
+.chat-dialog input,
 .chat-dialog select,
 .chat-dialog textarea {
   background: transparent;
@@ -412,6 +435,17 @@
 
 .select-options > .scroll-area-viewport {
   max-height: 60dvh;
+}
+
+.chat-dialog form {
+  display: grid;
+  gap: 1lh;
+}
+
+.chat-dialog input {
+  min-width: 0;
+  border: 1px solid var(--dialog-border);
+  padding: 0 1ch;
 }
 
 .chat-dialog select {
@@ -571,7 +605,7 @@
 .creator-columns > .custom-scroll-area { min-width: 0; min-height: 0; }
 .creator-columns > .custom-scroll-area > .scroll-area-viewport > .scroll-area-content {
   padding: 1lh 2ch;
-  width: var(--code-content-width, max-content);
+  width: 100%;
   min-width: 100%;
   box-sizing: border-box;
 }
@@ -580,7 +614,7 @@
 .creator-switchboard li > label { display: inline-flex; margin-right: 2ch; }
 .creator-switchboard textarea { display: block; width: 100%; box-sizing: border-box; margin-block: 8px; font: inherit; }
 .creator-switchboard select { max-width: 100%; margin: 8px; }
-.creator-switchboard label { display: flex; align-items: baseline; gap: 1ch; white-space: var(--code-white-space, pre); overflow-wrap: var(--code-overflow-wrap, normal); }
+.creator-switchboard label { display: flex; align-items: baseline; gap: 1ch; white-space: pre-wrap; overflow-wrap: anywhere; }
 .creator-preview .system-prompt-detail { margin-top: 16px; }
 
 .notification-error {

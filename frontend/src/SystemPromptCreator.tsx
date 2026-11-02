@@ -81,15 +81,17 @@ export default function SystemPromptCreator() {
     setTools(toolChoices().filter(tool => names.has(tool.name)));
   }
   let optionsDialog!: HTMLDialogElement;
+  let saveDialog!: HTMLDialogElement;
+  const [promptName, setPromptName] = createSignal('');
+  const [shorthand, setShorthand] = createSignal('');
+  const [reservedNumber, setReservedNumber] = createSignal(0);
+  const [saveError, setSaveError] = createSignal('');
   const [separateRules, setSeparateRules] = createSignal(false);
   const [error, setError] = createSignal('');
   const [showDiff, setShowDiff] = createSignal(false);
   const [comparison, setComparison] = createSignal('');
   const [startingSource, setStartingSource] = createSignal('');
-  const promptOptions = createMemo(() => [
-    { value: '', label: 'Current prompt' },
-    ...(snapshot()?.sources || []).map(source => ({ value: source.id, label: source.label })),
-  ]);
+  const promptOptions = createMemo(() => (snapshot()?.sources || []).map(source => ({ value: source.id, label: source.label })));
   const comparisonState = createMemo(() => {
     const source = snapshot()?.sources?.find(source => source.id === comparison());
     return source ? { ...renderSystemPromptDocument(source.document, source.excludedIds), toolsAdded: source.toolsAdded }
@@ -109,6 +111,8 @@ export default function SystemPromptCreator() {
   onMount(() => {
     void api?.load().then(value => {
       setSnapshot(value);
+      setStartingSource(value.currentSourceId || '');
+      setComparison(value.currentSourceId || '');
       loadDocument(value.document);
       loadTools(value.current.toolsAdded || []);
     }).catch(failure => setError(String(failure)));
@@ -135,19 +139,48 @@ export default function SystemPromptCreator() {
     return { message: { role: 'system' }, prefixPreview: true, unifiedDiff: true,
       prefixDiff: promptDocument(before, after) };
   });
-  function save() {
+  function openSave() {
+    if (!api) return;
+    try {
+      const number = api.reserveNumber();
+      setReservedNumber(number);
+      setShorthand(`System Prompt ${number}`);
+      setPromptName('');
+      setSaveError('');
+      saveDialog.showModal();
+    } catch (failure) { setError(String(failure)); }
+  }
+  function save(event: SubmitEvent) {
+    event.preventDefault();
     const value = composedDocument();
-    if (!value) return;
-    try { api?.save({ title: 'New prompt', document: value, excludedIds: [...excluded()], toolsAdded: tools() }); }
-    catch (failure) { setError(String(failure)); }
+    if (!value || !api) return;
+    if (!promptName().trim()) { setSaveError('Enter a name.'); return; }
+    const match = /^System Prompt ([1-9]\d*)$/.exec(shorthand());
+    if (!match) { setSaveError('Use System Prompt followed by a positive integer.'); return; }
+    try {
+      const requested = Number(match[1]);
+      const number = requested === reservedNumber() ? requested : api.reserveNumber(requested);
+      setReservedNumber(number);
+      api.save({ title: promptName().trim(), number, document: value, excludedIds: [...excluded()], toolsAdded: tools() });
+      saveDialog.close();
+    } catch (failure) { setSaveError(String(failure)); }
   }
   return <section class="system-prompt-creator" aria-label="System Prompt Creator">
     <ToolbarActions><div class="creator-toolbar">
       <button onClick={() => optionsDialog.showModal()}>Options</button>
     </div></ToolbarActions>
     <div class="creator-actions">
-      <button class="text-action" disabled={!document()} onClick={save}>Save to system prompts</button>
+      <button class="text-action" disabled={!document()} onClick={openSave}>Save as</button>
     </div>
+    <dialog ref={saveDialog} class="chat-dialog" aria-label="Save as">
+      <div class="chat-dialog-heading"><span>Save as</span><button onClick={() => saveDialog.close()}>Cancel</button></div>
+      <form onSubmit={save}>
+        <label>Name<input autofocus required value={promptName()} onInput={event => setPromptName(event.currentTarget.value)} /></label>
+        <label>Shorthand<input required pattern="System Prompt [1-9][0-9]*" value={shorthand()} onInput={event => setShorthand(event.currentTarget.value)} /></label>
+        <Show when={saveError()}><div role="alert">{saveError()}</div></Show>
+        <button type="submit">Save</button>
+      </form>
+    </dialog>
     <dialog ref={optionsDialog} class="chat-dialog" aria-label="Options">
       <div class="chat-dialog-heading"><span>Options</span><button onClick={() => optionsDialog.close()}>Close</button></div>
       <label><span><Checkbox checked={separateRules()} onChange={event => setSeparateRules(event.currentTarget.checked)} /> Separate rules with empty lines</span></label>

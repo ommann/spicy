@@ -16,6 +16,7 @@ import {
 	validateToolArguments,
 } from "@earendil-works/pi-ai";
 import { getDefaultStreamFn } from "./stream-fn.ts";
+import { projectSystemPromptSnapshots } from "./system-prompt.ts";
 import type {
 	AgentContext,
 	AgentEvent,
@@ -392,7 +393,7 @@ async function streamAssistantResponse(
 	}
 
 	// Convert to LLM-compatible messages (AgentMessage[] → Message[])
-	const llmMessages = await config.convertToLlm(messages);
+	const llmMessages = await config.convertToLlm(projectSystemPromptSnapshots(messages));
 
 	const llmContext = normalizeContext({ messages: llmMessages });
 

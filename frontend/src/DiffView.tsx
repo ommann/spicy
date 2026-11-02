@@ -62,7 +62,7 @@ export default function DiffView(props: { files: Wire[]; fullDocument?: boolean;
       file.name.startsWith('tools.') ? 'json' : languageFor(file.name, props.language)) })),
   })));
 
-  return <ScrollArea class="diff-scroll-area" contentClass="diff-view" contentClassList={{ 'diff-document-view': !!props.fullDocument }}
+  return <ScrollArea class="diff-scroll-area" contentClass="diff-view" contentClassList={{ 'diff-document-view': !!props.fullDocument, 'code-diff': props.language !== 'markdown' }}
     events={{ 'aria-label': 'Changes', onCopy: event => copySourceRows(event, event.currentTarget) }}>
     <For each={files()}>{file => <section class="diff-document" style={{
       '--line-number-width': `${file.hunks.reduce((width: number, hunk: Wire) => hunk.rows.reduce((digits: number, row: Wire) =>
