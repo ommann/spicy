@@ -34,6 +34,8 @@ export function createSystemPromptCatalog(entries) {
       key: text,
       number,
       previousNumber,
+      priorityReason: previous.captured && (entry.message?.toolsAdded?.length || entry.message?.toolsRemoved?.length)
+        ? 'Priority: tool definitions changed.' : undefined,
       full: systemEntryForState(entry, state),
       unified: {
         ...entry, message: { role: 'system' }, prefixPreview: true, unifiedDiff: true,

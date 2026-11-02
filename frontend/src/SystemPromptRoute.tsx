@@ -12,6 +12,7 @@ export interface PromptVersion {
   full?: Wire;
   unified?: Wire;
   candidateKey?: string;
+  priorityReason?: string;
 }
 
 export const SystemPromptContext = createContext<Accessor<PromptVersion[]>>(() => []);

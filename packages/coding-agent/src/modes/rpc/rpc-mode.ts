@@ -399,7 +399,6 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 						source: "rpc",
 						systemPromptPolicy: command.systemPrompt
 							? {
-									onPriorityChange: (reason) => output({ type: "system_prompt_priority", reason }),
 									decide: (candidate) => {
 										if (command.systemPrompt?.choice === candidate.key) return "accept";
 										if (

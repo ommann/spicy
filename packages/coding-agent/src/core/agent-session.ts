@@ -36,7 +36,9 @@ import {
 	getCurrentSystemMessage,
 	getCurrentTools,
 	getSystemMessageText,
+	getToolStateChanges,
 	retryDelayMs,
+	toToolDeclaration,
 } from "@earendil-works/pi-ai";
 import type {
 	AssistantMessage,
@@ -486,7 +488,6 @@ export class AgentSession {
 	/** Prompt options after before_agent_start mutations for the active run. */
 	private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions;
 	private _webPromptSections?: Record<string, string>;
-	private _webPriorityNotice?: (reason: string) => void;
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -1777,6 +1778,7 @@ export class AgentSession {
 		// The tool list and rules must match the declarations the request carries.
 		options.hiddenTools = [...this._hiddenDeclarations];
 		const proposed = buildSystemPromptSections(options);
+		const toolChanges = getToolStateChanges(getCurrentTools(messages), this.agent.state.tools.map(toToolDeclaration));
 		if (
 			this._webPromptSections &&
 			isDiscoveryOnlyChange(
@@ -1784,6 +1786,7 @@ export class AgentSession {
 				proposed,
 				buildSystemPromptSections({ ...options, selectedTools: getCurrentTools(messages).map((tool) => tool.name) })
 					.rules,
+				toolChanges.toolsAdded.length > 0 || toolChanges.toolsRemoved.length > 0,
 			)
 		) {
 			this._webPromptSections = proposed;
@@ -1792,11 +1795,6 @@ export class AgentSession {
 			getCurrentSystemMessage(messages)?.sections ?? {},
 			this._webPromptSections ?? proposed,
 		);
-		if (getCurrentSystemMessage(messages) && (sections?.tools !== undefined || sections?.mcp_servers !== undefined)) {
-			this._webPriorityNotice?.(
-				"Priority system prompt update: tool or MCP server discovery changed. The complete constructed prompt is preserved.",
-			);
-		}
 		return sections ? { role: "system", content: "", sections, timestamp: Date.now() } : undefined;
 	}
 
@@ -1907,7 +1905,6 @@ export class AgentSession {
 		policy?: SystemPromptPolicy,
 	): Promise<void> {
 		this._isAgentRunActive = true;
-		this._webPriorityNotice = policy?.onPriorityChange;
 		this._agentRunAbortRequested = false;
 		let messages: AgentMessage[] | undefined;
 		try {
@@ -2001,6 +1998,10 @@ export class AgentSession {
 			);
 			// Legacy free-form system text is retained separately by transcript replay.
 			const current = recorded ? accepted : proposed;
+			const toolChanges = getToolStateChanges(
+				getCurrentTools(this.agent.state.messages),
+				preview.declared.map(toToolDeclaration),
+			);
 			const discoveryOnly = isDiscoveryOnlyChange(
 				current,
 				proposed,
@@ -2009,6 +2010,7 @@ export class AgentSession {
 					selectedTools: getCurrentTools(this.agent.state.messages).map((tool) => tool.name),
 					hiddenTools: [...preview.hidden],
 				}).rules,
+				toolChanges.toolsAdded.length > 0 || toolChanges.toolsRemoved.length > 0,
 			);
 			const changed = diffSystemPromptSections(current, proposed);
 			const decision =

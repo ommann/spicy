@@ -363,7 +363,6 @@ export default function App(props: ParentProps) {
 
           return live === previous.live && running === previous.running ? previous : { ...previous, live, running };
         });
-        if (record.type === 'system_prompt_priority') setNotification({ message: record.reason, isError: false });
         if (record.type === "extension_ui_request") {
           if (["confirm", "select", "input", "editor"].includes(record.method))
             setExtensionDialogs((previous) => [...previous, record]);

@@ -96,13 +96,11 @@ describe("system prompt updates", () => {
 		const harness = await createHarness({ extensionFactories: [extension], initialActiveToolNames: ["first"] });
 		let calls = 0;
 		harness.session.setActiveToolsByName(["first"]);
-		const notices: string[] = [];
 		const policy: SystemPromptPolicy = {
 			decide: () => {
 				calls++;
 				return "current";
 			},
-			onPriorityChange: (reason) => notices.push(reason),
 		};
 		try {
 			harness.setResponses([
@@ -114,7 +112,9 @@ describe("system prompt updates", () => {
 			harness.session.setActiveToolsByName(["first", "second"]);
 			await harness.session.prompt("two", { systemPromptPolicy: policy });
 			expect(calls).toBe(0);
-			expect(notices).toHaveLength(1);
+			expect(getCurrentSystemMessage(harness.session.messages)?.toolsAdded?.map((tool) => tool.name)).toContain(
+				"second",
+			);
 			const accepted = getCurrentSystemPrompt(harness.session.messages);
 			harness.session.setActiveToolsByName(["second"]);
 			instruction = "Unapproved instructions.";
@@ -160,7 +160,7 @@ describe("system prompt updates", () => {
 		}
 	});
 
-	test("web MCP discovery keeps the complete original builder output, including mcp_servers", async () => {
+	test("a passive MCP description is a complete candidate, not a priority tool-definition change", async () => {
 		let description = "";
 		let expected: Record<string, string> = {};
 		const harness = await createHarness({
@@ -174,9 +174,11 @@ describe("system prompt updates", () => {
 			],
 		});
 		let approvals = 0;
+		let candidate: SystemPromptCandidate | undefined;
 		const policy: SystemPromptPolicy = {
-			decide: () => {
+			decide: (value) => {
 				approvals++;
+				candidate = value;
 				return "cancel";
 			},
 		};
@@ -184,9 +186,15 @@ describe("system prompt updates", () => {
 			harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 			await harness.session.prompt("one", { systemPromptPolicy: policy });
 			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(expected);
+			const entries = [...harness.sessionManager.getEntries()];
+			const accepted = getCurrentSystemPrompt(harness.session.messages);
 			description = ": REA provides reverse-engineering tools.";
 			await harness.session.prompt("two", { systemPromptPolicy: policy });
-			expect(approvals).toBe(0);
+			expect(approvals).toBe(1);
+			expect(candidate?.sections).toEqual(expected);
+			expect(harness.sessionManager.getEntries()).toEqual(entries);
+			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(accepted);
+			await harness.session.prompt("two", { systemPromptPolicy: { decide: () => "accept" } });
 			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(expected);
 			expect(getCurrentSystemPrompt(harness.session.messages)).toContain("<mcp_servers>\n");
 			expect(getCurrentSystemPrompt(harness.session.messages)).toContain(description);

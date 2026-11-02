@@ -11,7 +11,6 @@ export interface SystemPromptCandidate {
 export interface SystemPromptPolicy {
 	/** Web-only: preview the candidate before recording any starting messages. */
 	decide(candidate: SystemPromptCandidate): "accept" | "current" | "cancel";
-	onPriorityChange?(reason: string): void;
 }
 
 export function promptCandidateKey(sections: SystemPromptSections): string {
@@ -23,16 +22,14 @@ export function isDiscoveryOnlyChange(
 	accepted: SystemPromptSections,
 	proposed: SystemPromptSections,
 	rulesWithPreviousTools: string | undefined,
+	toolDefinitionsChanged: boolean,
 ): boolean {
 	const changed = [...new Set([...Object.keys(accepted), ...Object.keys(proposed)])].filter(
 		(key) => accepted[key] !== proposed[key],
 	);
 	return (
+		toolDefinitionsChanged &&
 		changed.length > 0 &&
-		changed.some((key) => key === "tools" || key === "mcp_servers") &&
-		changed.every(
-			(key) =>
-				key === "tools" || key === "mcp_servers" || (key === "rules" && accepted.rules === rulesWithPreviousTools),
-		)
+		changed.every((key) => key === "tools" || (key === "rules" && accepted.rules === rulesWithPreviousTools))
 	);
 }
