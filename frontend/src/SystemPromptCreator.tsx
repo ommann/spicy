@@ -4,6 +4,7 @@ import { renderSystemPromptDocument, type SystemPromptDocument, type SystemPromp
 import { SystemPromptCreatorContext, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import SystemPromptContent from './SystemPromptContent';
 import ScrollArea from './ScrollArea';
+import { createColumnInteraction } from './column-interaction';
 import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
 import Select from './Select';
@@ -15,18 +16,19 @@ function PartEditor(props: {
   excluded: ReadonlySet<string>;
   onToggle: (id: string, enabled: boolean) => void;
 }) {
+  const children = () => props.part.children || [];
   return <li>
     <label title={props.part.source}>
       <Checkbox checked={!props.excluded.has(props.part.id)}
         onChange={event => props.onToggle(props.part.id, event.currentTarget.checked)} />
       {props.part.label}
     </label>
-    <For each={props.part.children?.filter(part => part.inline)}>{part => <label class="creator-inline-choice">
+    <For each={children().filter(part => part.inline)}>{part => <label class="creator-inline-choice">
       <Checkbox checked={!props.excluded.has(part.id)}
         onChange={event => props.onToggle(part.id, event.currentTarget.checked)} />{part.label}
     </label>}</For>
-    <Show when={props.part.children?.some(part => !part.inline)}>
-      <ul><Index each={props.part.children?.filter(part => !part.inline)}>{part => <PartEditor part={part()} excluded={props.excluded}
+    <Show when={children().some(part => !part.inline)}>
+      <ul><Index each={children().filter(part => !part.inline)}>{part => <PartEditor part={part()} excluded={props.excluded}
         onToggle={props.onToggle} />}</Index></ul>
     </Show>
   </li>;
@@ -38,12 +40,13 @@ const promptState = (state: { content: string; sections?: Record<string, string>
   tools: new Map((state.toolsAdded || []).map(tool => [tool.name, tool])),
 });
 
-const textOf = (state: { content: string; sections?: Record<string, string> }) =>
-  [state.content, ...Object.values(state.sections || {})].filter(Boolean).join('\n\n');
-
 export default function SystemPromptCreator() {
   const api = useContext(SystemPromptCreatorContext);
   const navigate = useNavigate();
+  let switchboardViewport!: HTMLDivElement;
+  let previewViewport!: HTMLDivElement;
+  const switchboardInteraction = createColumnInteraction({ viewport: () => switchboardViewport, enabled: () => true });
+  const previewInteraction = createColumnInteraction({ viewport: () => previewViewport, enabled: () => true });
   const [snapshot, setSnapshot] = createSignal<PromptDocumentSnapshot>();
   const [document, setDocument] = createSignal<SystemPromptDocument>();
   const [excluded, setExcluded] = createSignal<ReadonlySet<string>>(new Set());
@@ -78,6 +81,8 @@ export default function SystemPromptCreator() {
     if (included) names.add(name); else names.delete(name);
     setTools(toolChoices().filter(tool => names.has(tool.name)));
   }
+  let optionsDialog!: HTMLDialogElement;
+  const [separateRules, setSeparateRules] = createSignal(false);
   const [error, setError] = createSignal('');
   const [showDiff, setShowDiff] = createSignal(false);
   const [comparison, setComparison] = createSignal('');
@@ -91,13 +96,8 @@ export default function SystemPromptCreator() {
     return source ? { ...renderSystemPromptDocument(source.document, source.excludedIds), toolsAdded: source.toolsAdded }
       : snapshot()?.current || { content: '' };
   });
-  const [wholeText, setWholeText] = createSignal('');
   function loadDocument(value: SystemPromptDocument, excludedIds?: string[]) {
-    // An unchanged full-text return is not a separate editable part.
-    const structured = { ...value, forced: undefined };
-    const identical = value.forced?.text === textOf(renderSystemPromptDocument(structured));
-    setWholeText(value.forced?.text || '');
-    setDocument(identical ? structured : value);
+    setDocument({ ...value, forced: undefined });
     const defaults: string[] = [];
     const collect = (part: SystemPromptPart) => {
       if (part.defaultIncluded === false) defaults.push(part.id);
@@ -115,15 +115,19 @@ export default function SystemPromptCreator() {
     }).catch(failure => setError(String(failure)));
   });
   function toggle(id: string, enabled: boolean) {
-    setDocument(previous => previous && ({ ...previous, forced: undefined }));
     setExcluded(previous => {
       const next = new Set(previous);
       if (enabled) next.delete(id); else next.add(id);
       return next;
     });
   }
-  const state = createMemo(() => {
+  const composedDocument = createMemo(() => {
     const value = document();
+    return value && { ...value, parts: value.parts.map(part => part.section === 'rules' && part.children
+      ? { ...part, separator: separateRules() ? '\n\n' : '\n' } : part) };
+  });
+  const state = createMemo(() => {
+    const value = composedDocument();
     return value ? renderSystemPromptDocument(value, [...excluded()]) : { content: '' };
   });
   const entry = createMemo(() => {
@@ -133,7 +137,7 @@ export default function SystemPromptCreator() {
       prefixDiff: promptDocument(before, after) };
   });
   function save() {
-    const value = document();
+    const value = composedDocument();
     if (!value) return;
     try { api?.save({ title: 'New prompt', document: value, excludedIds: [...excluded()], toolsAdded: tools() }); }
     catch (failure) { setError(String(failure)); }
@@ -141,12 +145,21 @@ export default function SystemPromptCreator() {
   return <section class="system-prompt-creator" aria-label="System Prompt Creator">
     <header class="creator-toolbar">
       <span>System Prompt Creator</span>
+      <button onClick={() => optionsDialog.showModal()}>Options</button>
       <button onClick={() => navigate('/system-prompts')}>Cancel</button>
       <button disabled={!document()} onClick={save}>Save to System Prompts</button>
     </header>
+    <dialog ref={optionsDialog} class="chat-dialog" aria-label="Options">
+      <div class="chat-dialog-heading"><span>Options</span><button onClick={() => optionsDialog.close()}>Close</button></div>
+      <label><span><Checkbox checked={separateRules()} onChange={event => setSeparateRules(event.currentTarget.checked)} /> Separate rules with empty lines</span></label>
+    </dialog>
     <Show when={error()}><p role="alert">{error()}</p></Show>
     <Show when={document()} fallback={<Show when={!error()}><p>Loading prompt parts…</p></Show>}>{value => <div class="creator-columns">
-      <ScrollArea class="system-prompts-scroll-area creator-switchboard" vertical>
+      <ScrollArea class="system-prompts-scroll-area creator-switchboard" vertical
+        viewportRef={element => { switchboardViewport = element; }}
+        events={{ ...switchboardInteraction.handlers, onKeyDown: switchboardInteraction.keydown,
+          onKeyUp: switchboardInteraction.keyup, onBlur: switchboardInteraction.blur }}
+        contentClassList={{ 'pan-ready': switchboardInteraction.space(), panning: switchboardInteraction.dragging() }}>
         <Show when={snapshot()?.sources?.length}><div>Start from{' '}
           <Select label="Start from" value={startingSource()} options={promptOptions()} onChange={id => {
             setStartingSource(id);
@@ -155,10 +168,6 @@ export default function SystemPromptCreator() {
             else if (snapshot()) { loadDocument(snapshot()!.document); loadTools(snapshot()!.current.toolsAdded || []); }
           }} />
         </div></Show>
-        <label><Checkbox checked={!!value().forced} onChange={event => {
-          const enabled = event.currentTarget.checked;
-          setDocument(previous => previous && ({ ...previous, forced: enabled ? { id: 'forced', label: 'Whole text', source: 'editor', text: wholeText() || textOf(state()) } : undefined }));
-        }} /> Use whole text instead of parts</label>
         <ul><Show when={value().content}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Show>
           <Index each={value().parts}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Index>
         </ul>
@@ -173,7 +182,11 @@ export default function SystemPromptCreator() {
           </li>}</For></ul>
         </Show>
       </ScrollArea>
-      <ScrollArea class="system-prompts-scroll-area creator-preview" vertical>
+      <ScrollArea class="system-prompts-scroll-area creator-preview" vertical
+        viewportRef={element => { previewViewport = element; }}
+        events={{ ...previewInteraction.handlers, onKeyDown: previewInteraction.keydown,
+          onKeyUp: previewInteraction.keyup, onBlur: previewInteraction.blur }}
+        contentClassList={{ 'pan-ready': previewInteraction.space(), panning: previewInteraction.dragging() }}>
         <div><label><Checkbox checked={showDiff()} onChange={event => setShowDiff(event.currentTarget.checked)} /> Compare with</label>{' '}
           <Select label="Compare with" value={comparison()} options={promptOptions()}
             onChange={id => { setComparison(id); setShowDiff(true); }} />

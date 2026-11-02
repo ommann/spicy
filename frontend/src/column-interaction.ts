@@ -3,9 +3,9 @@ import { createSignal } from 'solid-js';
 interface Options {
   viewport: () => HTMLElement;
   enabled: () => boolean;
-  columns: () => { inset: number; starts: number[]; width: number };
-  onColumn: (index: number) => void;
-  onScroll: () => void;
+  columns?: () => { inset: number; starts: number[]; width: number };
+  onColumn?: (index: number) => void;
+  onScroll?: () => void;
 }
 
 // Both trace views use viewport-relative pointer tracking. Scrolling under a
@@ -18,7 +18,7 @@ export function createColumnInteraction(options: Options) {
   let drag: { x: number; y: number; left: number; top: number } | undefined;
 
   function followPointer() {
-    if (!options.enabled() || pointerX === null || dragging() || jumping()) return;
+    if (!options.enabled() || !options.columns || !options.onColumn || pointerX === null || dragging() || jumping()) return;
     const { inset, starts, width } = options.columns();
     const x = options.viewport().scrollLeft + pointerX - inset;
     const lane = starts.findIndex(start => x < start + width + 24);
@@ -30,14 +30,14 @@ export function createColumnInteraction(options: Options) {
   function blur() { setSpace(false); release(); resetPointer(); }
 
   const handlers = {
-    onScroll: () => { options.onScroll(); followPointer(); },
+    onScroll: () => { options.onScroll?.(); followPointer(); },
     onScrollEnd: () => setJumping(false),
     onWheel: (event: WheelEvent) => {
       setJumping(false);
       if (event.shiftKey && event.deltaY && !event.deltaX) {
         event.preventDefault();
         options.viewport().scrollLeft += event.deltaY;
-        options.onScroll();
+        options.onScroll?.();
         followPointer();
       }
     },
@@ -55,7 +55,7 @@ export function createColumnInteraction(options: Options) {
       if (drag) {
         event.preventDefault();
         viewport.scrollTo({ left: drag.left - event.clientX + drag.x, top: drag.top - event.clientY + drag.y, behavior: 'instant' });
-        options.onScroll();
+        options.onScroll?.();
       } else if (event.pointerType === 'mouse' && !jumping()) {
         pointerX = event.clientX - viewport.getBoundingClientRect().left;
         followPointer();

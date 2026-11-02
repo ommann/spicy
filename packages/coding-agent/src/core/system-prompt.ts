@@ -100,7 +100,23 @@ function buildRules(
 		const normalized = rule.trim();
 		if (!normalized || seen.has(normalized)) return;
 		seen.add(normalized);
-		rules.push({ id: `rules/${encodeURIComponent(normalized)}`, label: normalized, source, text: `- ${normalized}` });
+		const previous = rules.at(-1);
+		if (previous?.source === source) {
+			previous.text += `\n- ${normalized}`;
+			return;
+		}
+		const occurrence = rules.filter((part) => part.source === source).length;
+		rules.push({
+			id: `rules/source/${encodeURIComponent(source)}/${occurrence}`,
+			label:
+				source === "core"
+					? "Pi core"
+					: source.startsWith("tool:")
+						? `${source.slice(5)} rules`
+						: "Additional rules",
+			source,
+			text: `- ${normalized}`,
+		});
 	};
 
 	const hasBash = selectedTools.includes("bash");
@@ -118,6 +134,11 @@ function buildRules(
 	for (const rule of promptGuidelines) addRule(rule, "configuration");
 	addRule("Be concise in your responses");
 	addRule("Show file paths clearly when working with files");
+	const core = rules.filter((part) => part.source === "core");
+	if (core.length > 1) {
+		core[0].label = "Pi core start";
+		core[core.length - 1].label = "Pi core end";
+	}
 	return rules;
 }
 
@@ -147,7 +168,13 @@ export function buildSystemPromptDocument(input: BuildSystemPromptOptions): Syst
 	const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
 	const promptParts: Record<string, SystemPromptPart> = {};
 	const section = (name: string, text: string, source = "core") => {
-		promptParts[name] = { id: name, label: name.replaceAll("_", " "), source, section: name, text };
+		promptParts[name] = {
+			id: name,
+			label: (name[0].toUpperCase() + name.slice(1)).replaceAll("_", " "),
+			source,
+			section: name,
+			text,
+		};
 	};
 	if (customPrompt) {
 		section("preamble", customPrompt, "configuration");
@@ -159,7 +186,7 @@ export function buildSystemPromptDocument(input: BuildSystemPromptOptions): Syst
 		const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
 		promptParts.tools = {
 			id: "tools",
-			label: "Tool descriptions (text only)",
+			label: "Tool descriptions",
 			source: "core",
 			section: "tools",
 			separator: "\n\n",
