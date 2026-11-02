@@ -182,7 +182,7 @@ const server = http.createServer(async (req, res) => {
           const target = source.message?.role === 'user' ? source.parentId : source.id;
           if (navigated.leafId !== target) throw new Error('Tree navigation did not reach the selected branch');
           await refresh();
-          return json(res, await rpc.command({ type: 'prompt', message: command.message }));
+          return json(res, await rpc.command({ type: 'prompt', message: command.message, systemPrompt: command.systemPrompt }));
         } finally { mutating = false; }
       }
       if (url.pathname === '/api/command') {

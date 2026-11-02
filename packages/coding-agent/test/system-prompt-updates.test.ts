@@ -21,10 +21,139 @@ import {
 	buildSystemPromptState,
 	diffSystemPromptSections,
 } from "../src/core/system-prompt.ts";
+import type { SystemPromptCandidate, SystemPromptPolicy } from "../src/core/system-prompt-policy.ts";
 import type { ExtensionFactory } from "../src/index.ts";
 import { createHarness } from "./suite/harness.ts";
 
 describe("system prompt updates", () => {
+	test("web candidates can be cancelled, retained for one submission, and explicitly adopted", async () => {
+		let instruction = "Accepted instructions.";
+		const extension: ExtensionFactory = (pi) => {
+			pi.on("before_agent_start", (event) => {
+				event.systemPromptOptions.sections.project = instruction;
+			});
+		};
+		const harness = await createHarness({ extensionFactories: [extension] });
+		let candidate: SystemPromptCandidate | undefined;
+		let decision: "accept" | "current" | "cancel" = "cancel";
+		const policy: SystemPromptPolicy = {
+			decide: (value) => {
+				candidate = value;
+				return decision;
+			},
+		};
+		try {
+			harness.setResponses([
+				fauxAssistantMessage("one"),
+				fauxAssistantMessage("two"),
+				fauxAssistantMessage("three"),
+				fauxAssistantMessage("four"),
+			]);
+			await harness.session.prompt("one", { systemPromptPolicy: policy });
+			expect(candidate).toBeUndefined();
+			const entries = [...harness.sessionManager.getEntries()];
+			const messages = [...harness.session.messages];
+			const tools = harness.session.agent.state.tools;
+			instruction = "Candidate instructions.";
+			await harness.session.prompt("cancel me", { systemPromptPolicy: policy });
+			expect(harness.sessionManager.getEntries()).toEqual(entries);
+			expect(harness.session.messages).toEqual(messages);
+			expect(harness.session.agent.state.tools).toBe(tools);
+			expect(candidate?.sections.project).toContain("Candidate instructions.");
+			const key = candidate!.key;
+			decision = "current";
+			await harness.session.prompt("two", { systemPromptPolicy: policy });
+			expect(getCurrentSystemPrompt(harness.session.messages)).toContain("Accepted instructions.");
+			expect(getCurrentSystemPrompt(harness.session.messages)).not.toContain("Candidate instructions.");
+			candidate = undefined;
+			await harness.session.prompt("three", { systemPromptPolicy: policy });
+			expect((candidate as SystemPromptCandidate | undefined)?.key).toBe(key); // Use-current does not ignore or accept the revision.
+			decision = "accept";
+			await harness.session.prompt("four", { systemPromptPolicy: policy });
+			expect(getCurrentSystemPrompt(harness.session.messages)).toContain("Candidate instructions.");
+		} finally {
+			harness.cleanup();
+		}
+	});
+
+	test("web tool activation is priority, without adopting unrelated instructions", async () => {
+		let instruction = "Accepted instructions.";
+		const extension: ExtensionFactory = (pi) => {
+			for (const name of ["first", "second"])
+				pi.registerTool({
+					name,
+					label: name,
+					description: name,
+					promptSnippet: `${name} snippet`,
+					promptGuidelines: [`Use ${name} carefully.`],
+					parameters: Type.Object({}),
+					execute: async () => ({ content: [{ type: "text", text: name }], details: {} }),
+				});
+			pi.on("before_agent_start", (event) => {
+				event.systemPromptOptions.sections.project = instruction;
+			});
+		};
+		const harness = await createHarness({ extensionFactories: [extension], initialActiveToolNames: ["first"] });
+		let calls = 0;
+		harness.session.setActiveToolsByName(["first"]);
+		const notices: string[] = [];
+		const policy: SystemPromptPolicy = {
+			decide: () => {
+				calls++;
+				return "current";
+			},
+			onPriorityChange: (reason) => notices.push(reason),
+		};
+		try {
+			harness.setResponses([
+				fauxAssistantMessage("one"),
+				fauxAssistantMessage("two"),
+				fauxAssistantMessage("three"),
+			]);
+			await harness.session.prompt("one", { systemPromptPolicy: policy });
+			harness.session.setActiveToolsByName(["first", "second"]);
+			await harness.session.prompt("two", { systemPromptPolicy: policy });
+			expect(calls).toBe(0);
+			expect(notices).toHaveLength(1);
+			harness.session.setActiveToolsByName(["second"]);
+			instruction = "Unapproved instructions.";
+			await harness.session.prompt("three", { systemPromptPolicy: policy });
+			expect(calls).toBe(1);
+			const current = getCurrentSystemPrompt(harness.session.messages);
+			expect(current).toContain("second snippet");
+			expect(current).not.toContain("first snippet");
+			expect(current).not.toContain("Unapproved instructions.");
+		} finally {
+			harness.cleanup();
+		}
+	});
+
+	test("web forced prompts are gated and their accepted text is recorded", async () => {
+		let forced: string | undefined;
+		const harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("before_agent_start", () => (forced === undefined ? undefined : { systemPrompt: forced }));
+				},
+			],
+		});
+		try {
+			harness.setResponses([
+				fauxAssistantMessage("one"),
+				fauxAssistantMessage("two"),
+				fauxAssistantMessage("three"),
+			]);
+			await harness.session.prompt("one", { systemPromptPolicy: { decide: () => "accept" } });
+			forced = "Exact replacement instructions.";
+			await harness.session.prompt("two", { systemPromptPolicy: { decide: () => "current" } });
+			expect(getCurrentSystemPrompt(harness.session.messages)).not.toContain(forced);
+			await harness.session.prompt("three", { systemPromptPolicy: { decide: () => "accept" } });
+			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(forced);
+		} finally {
+			harness.cleanup();
+		}
+	});
+
 	test("declares the prompt and tools once and reuses them across resume", async () => {
 		const harness = await createHarness();
 		try {

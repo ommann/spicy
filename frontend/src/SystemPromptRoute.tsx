@@ -11,16 +11,22 @@ export interface PromptVersion {
   detail: Wire;
   full?: Wire;
   unified?: Wire;
+  candidateKey?: string;
 }
 
 export const SystemPromptContext = createContext<Accessor<PromptVersion[]>>(() => []);
+export const SystemPromptPolicyContext = createContext({
+  ignored: (_key: string): boolean => false,
+  setIgnored: (_key: string, _ignored: boolean): void => {},
+});
 
 export default function SystemPromptRoute() {
   const versions = useContext(SystemPromptContext);
+  const policy = useContext(SystemPromptPolicyContext);
   const params = useParams();
   const navigate = useNavigate();
 
   return <SystemPrompts versions={versions()} selected={Number(params.number) || 1}
     onSelect={number => navigate(`/system-prompts/${number}`, { replace: true })}
-    onClose={() => navigate('/')} />;
+    onClose={() => navigate('/')} ignored={policy.ignored} onIgnore={policy.setIgnored} />;
 }

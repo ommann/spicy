@@ -397,6 +397,22 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 						images: command.images,
 						streamingBehavior: command.streamingBehavior,
 						source: "rpc",
+						systemPromptPolicy: command.systemPrompt
+							? {
+									onPriorityChange: (reason) => output({ type: "system_prompt_priority", reason }),
+									decide: (candidate) => {
+										if (command.systemPrompt?.choice === candidate.key) return "accept";
+										if (
+											command.systemPrompt?.choice === "current" ||
+											command.systemPrompt?.ignored?.includes(candidate.key)
+										)
+											return "current";
+										preflightSucceeded = true;
+										output(success(id, "prompt", { disposition: "approval_required", candidate }));
+										return "cancel";
+									},
+								}
+							: undefined,
 						preflightResult: (disposition) => {
 							preflightSucceeded = true;
 							output(success(id, "prompt", { disposition }));

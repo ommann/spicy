@@ -31,7 +31,13 @@ import {
 	runToolCall,
 	type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import { contentText, getCurrentSystemMessage, getCurrentTools, retryDelayMs } from "@earendil-works/pi-ai";
+import {
+	contentText,
+	getCurrentSystemMessage,
+	getCurrentTools,
+	getSystemMessageText,
+	retryDelayMs,
+} from "@earendil-works/pi-ai";
 import type {
 	AssistantMessage,
 	AuthResult,
@@ -140,6 +146,7 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
+import { promptCandidateKey, type SystemPromptPolicy, withPriorityToolSections } from "./system-prompt-policy.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
@@ -318,6 +325,8 @@ export interface PromptOptions {
 	source?: InputSource;
 	/** Internal hook used by RPC mode to observe how an accepted prompt was dispatched. Not called if the prompt is rejected. */
 	preflightResult?: (disposition: PromptDisposition) => void;
+	/** Opt-in approval policy; omitted by the TUI and ordinary SDK callers. */
+	systemPromptPolicy?: SystemPromptPolicy;
 }
 
 /** Options for model/thinking mutations. */
@@ -476,6 +485,8 @@ export class AgentSession {
 	private _baseSystemPromptOptions!: NormalizedBuildSystemPromptOptions;
 	/** Prompt options after before_agent_start mutations for the active run. */
 	private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions;
+	private _webPromptSections?: Record<string, string>;
+	private _webPriorityNotice?: (reason: string) => void;
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -1482,7 +1493,9 @@ export class AgentSession {
 
 	/** Current effective system prompt, including changes not yet sent to the model. */
 	get systemPrompt(): string {
-		return buildSystemPrompt(this._runSystemPromptOptions ?? this._baseSystemPromptOptions);
+		return this._webPromptSections
+			? getSystemMessageText({ role: "system", content: "", sections: this._webPromptSections, timestamp: 0 })
+			: buildSystemPrompt(this._runSystemPromptOptions ?? this._baseSystemPromptOptions);
 	}
 
 	/** Current retry attempt (0 if not retrying) */
@@ -1587,7 +1600,7 @@ export class AgentSession {
 	 * `prepareLoadout` hook can change the declared descriptions and hide declarations from
 	 * requests (see {@link _installHiddenDeclarationsProjection}).
 	 */
-	private _applyToolLoadout(toolNames: string[]): AgentTool[] {
+	private _resolveToolLoadout(toolNames: string[]): { declared: AgentTool[]; hidden: Set<string> } {
 		const tools = [...new Set(toolNames)].flatMap((name) => {
 			const tool = this._toolRegistry.get(name);
 			return tool && this._getToolExposure(name) !== "hidden" && this._isActivatable(name) ? [tool] : [];
@@ -1629,6 +1642,11 @@ export class AgentSession {
 				return description === undefined ? tool : { ...tool, description };
 			});
 		}
+		return { declared, hidden };
+	}
+
+	private _applyToolLoadout(toolNames: string[]): AgentTool[] {
+		const { declared, hidden } = this._resolveToolLoadout(toolNames);
 		this._hiddenDeclarations = hidden;
 		this.agent.state.tools = declared;
 		return declared;
@@ -1757,10 +1775,24 @@ export class AgentSession {
 		options.selectedTools = this._applyToolLoadout(options.selectedTools).map((tool) => tool.name);
 		// The tool list and rules must match the declarations the request carries.
 		options.hiddenTools = [...this._hiddenDeclarations];
+		const proposed = buildSystemPromptSections(options);
+		if (this._webPromptSections && Object.keys(this._webPromptSections).some((key) => key !== "preamble")) {
+			this._webPromptSections = withPriorityToolSections(
+				this._webPromptSections,
+				proposed,
+				options.selectedTools,
+				options.toolGuidelines,
+			);
+		}
 		const sections = diffSystemPromptSections(
 			getCurrentSystemMessage(messages)?.sections ?? {},
-			buildSystemPromptSections(options),
+			this._webPromptSections ?? proposed,
 		);
+		if (getCurrentSystemMessage(messages) && sections?.tools !== undefined) {
+			this._webPriorityNotice?.(
+				"Priority system prompt update: available tool declarations changed. Unrelated instructions still require approval.",
+			);
+		}
 		return sections ? { role: "system", content: "", sections, timestamp: Date.now() } : undefined;
 	}
 
@@ -1865,18 +1897,30 @@ export class AgentSession {
 	 * starting another, and an abort requested meanwhile aborts the run as soon as it exists.
 	 * @param onStarted Called once the run's messages are prepared, before the first request.
 	 */
-	private async _startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Promise<void> {
+	private async _startRun(
+		trigger: BeforeAgentStartTrigger,
+		onStarted?: () => void,
+		policy?: SystemPromptPolicy,
+	): Promise<void> {
 		this._isAgentRunActive = true;
+		this._webPriorityNotice = policy?.onPriorityChange;
 		this._agentRunAbortRequested = false;
-		let messages: AgentMessage[];
+		let messages: AgentMessage[] | undefined;
 		try {
-			messages = await this._prepareRun(trigger);
+			messages = await this._prepareRun(trigger, policy);
 		} catch (error) {
 			this._isAgentRunActive = false;
+			this._webPromptSections = undefined;
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
 			this._resolveIdleWaitIfIdle();
 			throw error;
+		}
+		if (!messages) {
+			this._isAgentRunActive = false;
+			this._webPromptSections = undefined;
+			this._resolveIdleWaitIfIdle();
+			return;
 		}
 		// Messages held while the run was starting go before its starting messages, as they would
 		// have while idle. No run exists yet, so they cannot split a tool call from its result.
@@ -1906,6 +1950,7 @@ export class AgentSession {
 			if (this._agentRunAbortRequested) this._finishCancelledRetry();
 			this._failedResponse = undefined;
 			this._runSystemPromptOptions = undefined;
+			this._webPromptSections = undefined;
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
 			await this._emitAgentSettled();
@@ -1918,14 +1963,14 @@ export class AgentSession {
 	 * message followed by pending nextTurn messages (consumed here) and handler messages, with a
 	 * system patch first when the prompt changed.
 	 */
-	private async _prepareRun(trigger: BeforeAgentStartTrigger): Promise<AgentMessage[]> {
-		// Check if we need to compact before sending (catches aborted responses).
-		// The starting message is sent below, so do not call agent.continue() here.
-		const lastAssistant = this._findLastAssistantMessage();
-		if (lastAssistant) {
-			await this._checkCompaction(lastAssistant, false);
+	private async _prepareRun(
+		trigger: BeforeAgentStartTrigger,
+		policy?: SystemPromptPolicy,
+	): Promise<AgentMessage[] | undefined> {
+		if (!policy) {
+			const lastAssistant = this._findLastAssistantMessage();
+			if (lastAssistant) await this._checkCompaction(lastAssistant, false);
 		}
-
 		const selectedToolsBefore = this._baseSystemPromptOptions.selectedTools;
 		const result = await this._extensionRunner.emitBeforeAgentStart(trigger, this._baseSystemPromptOptions);
 		// Handlers may edit event.systemPromptOptions.selectedTools or call setActiveTools(),
@@ -1936,6 +1981,57 @@ export class AgentSession {
 			result.systemPromptOptions.selectedTools.some((name, index) => name !== selectedToolsBefore[index]);
 		if (!handlerEditedTools) result.systemPromptOptions.selectedTools = this.getActiveToolNames();
 
+		if (policy) {
+			const options = result.systemPromptOptions;
+			const preview = this._resolveToolLoadout(options.selectedTools);
+			const proposed =
+				options.forceSystemPrompt !== undefined
+					? { preamble: options.forceSystemPrompt }
+					: buildSystemPromptSections({
+							...options,
+							selectedTools: preview.declared.map((tool) => tool.name),
+							hiddenTools: [...preview.hidden],
+						});
+			const recorded = getCurrentSystemMessage(this.agent.state.messages);
+			const accepted = Object.fromEntries(
+				Object.entries(recorded?.sections ?? {}).filter(
+					(entry): entry is [string, string] => typeof entry[1] === "string",
+				),
+			);
+			// Legacy free-form system text is retained separately by transcript replay.
+			const current = recorded
+				? withPriorityToolSections(
+						accepted,
+						buildSystemPromptSections({
+							...options,
+							selectedTools: preview.declared.map((tool) => tool.name),
+							hiddenTools: [...preview.hidden],
+						}),
+						preview.declared.map((tool) => tool.name),
+						options.toolGuidelines,
+					)
+				: proposed;
+			const changed = diffSystemPromptSections(current, proposed);
+			const decision =
+				recorded && changed
+					? policy.decide({
+							key: promptCandidateKey(proposed),
+							sections: proposed,
+							currentSections: current,
+							parentId: this.sessionManager.getLeafId(),
+						})
+					: "accept";
+			if (decision === "cancel") return undefined;
+			this._webPromptSections = decision === "current" ? current : proposed;
+			// Persist exact replacement text as a candidate section instead of silently projecting it.
+			options.forceSystemPrompt = undefined;
+		}
+
+		// Web approval precedes compaction, message consumption, and transcript writes.
+		if (policy) {
+			const lastAssistant = this._findLastAssistantMessage();
+			if (lastAssistant) await this._checkCompaction(lastAssistant, false);
+		}
 		const messages: AgentMessage[] = [];
 		if (trigger.messageType === "custom") {
 			messages.push(trigger.message);
@@ -2164,8 +2260,10 @@ export class AgentSession {
 			throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
 		}
 
-		await this._startRun({ messageType: "user", prompt: expandedText, images: currentImages }, () =>
-			preflightResult?.("started"),
+		await this._startRun(
+			{ messageType: "user", prompt: expandedText, images: currentImages },
+			() => preflightResult?.("started"),
+			options?.systemPromptPolicy,
 		);
 	}
 

@@ -18,7 +18,7 @@ import { createConversationGraph, continuationTarget } from './conversation-mode
 import { applyRecord } from "./stream.mjs";
 import { hasCommittedDraft } from "./branch-drafts.mjs";
 import { createSystemPromptCatalog } from "./lilim/system-prompts.js";
-import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
+import { SystemPromptContext, SystemPromptPolicyContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
@@ -71,6 +71,17 @@ export default function App(props: ParentProps) {
   const [extensionDialogs, setExtensionDialogs] = createSignal<Wire[]>([]);
   const [models, setModels] = createSignal<Wire[]>([]);
   const [previewImage, setPreviewImage] = createSignal<PreviewImage | null>(null);
+  const [promptCandidates, setPromptCandidates] = createSignal<Record<string, Wire[]>>({});
+  const [pendingPrompt, setPendingPrompt] = createSignal<{ candidate: Wire; message: string; leafId: string; sessionId: string }>();
+  const [ignoredPrompts, setIgnoredPrompts] = createSignal<Record<string, boolean>>((() => {
+    try { return JSON.parse(localStorage.getItem('spicy.ignored-system-prompts') || '{}') || {}; }
+    catch { return {}; }
+  })());
+  const ignoredPrompt = (key: string) => !!ignoredPrompts()[`${sessionId()}:${key}`];
+  function ignorePrompt(key: string, ignored: boolean) {
+    setIgnoredPrompts(previous => ({ ...previous, [`${sessionId()}:${key}`]: ignored }));
+    try { localStorage.setItem('spicy.ignored-system-prompts', JSON.stringify(ignoredPrompts())); } catch { /* Storage may be unavailable. */ }
+  }
 
   const [resumeSessions, setResumeSessions] = createSignal<Wire[]>([]);
   const [resumeSearch, setResumeSearch] = createSignal("");
@@ -82,8 +93,9 @@ export default function App(props: ParentProps) {
   let chatDialog!: HTMLDialogElement;
   let resumeDialog!: HTMLDialogElement;
   let optionsDialog!: HTMLDialogElement;
+  let promptDialog!: HTMLDialogElement;
   onMount(() => {
-    const dispose = [chatDialog, resumeDialog, optionsDialog].map(trackModal);
+    const dispose = [chatDialog, resumeDialog, optionsDialog, promptDialog].map(trackModal);
     onCleanup(() => dispose.forEach(cleanup => cleanup()));
   });
   const [viewOptions, setViewOptions] = createSignal<ViewOptions | null>(null);
@@ -182,16 +194,44 @@ export default function App(props: ParentProps) {
   }
 
   const systemPrompts = createMemo<PromptVersion[]>((previous = []) => {
-    const versions = createSystemPromptCatalog(live() ? sessionEntries() : []).versions;
+    const candidates = promptCandidates()[sessionId()] || [];
+    const entries = live() ? [...sessionEntries(), ...candidates.map(candidate => ({
+      type: 'message', id: `candidate-${candidate.key}`, parentId: candidate.parentId,
+      message: { role: 'system', content: '', sections: candidate.sections },
+    }))] : [];
+    const versions: PromptVersion[] = createSystemPromptCatalog(entries).versions.map((version: PromptVersion) => {
+      const sections = JSON.stringify(version.full?.message?.sections || {});
+      const candidate = candidates.find(item => JSON.stringify(item.sections) === sections);
+      return candidate ? { ...version, candidateKey: candidate.key } : version;
+    });
     const existing = new Map(previous.map(version => [version.key, version]));
 
     return versions.map(version => {
       const saved = existing.get(version.key);
-      return saved && saved.number === version.number && saved.previousKey === version.previousKey ? saved : version;
+      return saved && saved.number === version.number && saved.previousKey === version.previousKey && saved.candidateKey === version.candidateKey ? saved : version;
     });
   }, [], {
     equals: (previous, next) => previous.length === next.length && previous.every((version, index) => version === next[index]),
   });
+
+  createEffect(() => {
+    const pending = pendingPrompt();
+    if (pending && pending.sessionId !== sessionId()) { setPendingPrompt(undefined); return; }
+    if (!promptDialog) return;
+    if (!pending || showingPrompts() || ignoredPrompt(pending.candidate.key)) closeModal(promptDialog);
+    else if (!promptDialog.open) openModal(promptDialog);
+  });
+
+  const pendingPromptNumber = () => systemPrompts().find(version => version.candidateKey === pendingPrompt()?.candidate.key)?.number;
+  async function choosePrompt(choice: string) {
+    const pending = pendingPrompt();
+    if (!pending) return;
+    closeModal(promptDialog);
+    if (await send(pending.message, pending.leafId, choice)) {
+      setPendingPrompt(undefined);
+      conversation?.setDraft('');
+    } else if (pendingPrompt()) setPendingPrompt({ ...pendingPrompt()! });
+  }
 
   function openOptions() {
     if (!conversation) return;
@@ -253,7 +293,7 @@ export default function App(props: ParentProps) {
     });
   }
 
-  async function send(message: string, leafId: string): Promise<boolean> {
+  async function send(message: string, leafId: string, promptChoice?: string): Promise<boolean> {
     if (!message.trim() || busy()) return false;
     if (!snapshot().connected) await start();
     if (!snapshot().connected) return false;
@@ -268,10 +308,20 @@ export default function App(props: ParentProps) {
 
     await act(async () => {
       try {
-        if (message.trim().startsWith('/')) await post('command', { type: 'prompt', message });
-        else if (draft) await post('branch', { entryId: draft.sourceId, message });
-        else if (target) await post('continue', { entryId: target, message });
-        else await post('command', { type: 'prompt', message, ...(snapshot().running ? { streamingBehavior: 'steer' } : {}) });
+        const systemPrompt = { choice: promptChoice, ignored: Object.keys(ignoredPrompts()).filter(key => key.startsWith(`${sessionId()}:`) && ignoredPrompts()[key]).map(key => key.slice(sessionId().length + 1)) };
+        let response: Wire;
+        if (message.trim().startsWith('/')) response = await post('command', { type: 'prompt', message, systemPrompt });
+        else if (draft) response = await post('branch', { entryId: draft.sourceId, message, systemPrompt });
+        else if (target) response = await post('continue', { entryId: target, message, systemPrompt });
+        else response = await post('command', { type: 'prompt', message, systemPrompt, ...(snapshot().running ? { streamingBehavior: 'steer' } : {}) });
+        if (response.disposition === 'approval_required' && response.candidate) {
+          const candidate = response.candidate;
+          setPromptCandidates(previous => ({ ...previous, [sessionId()]: [...(previous[sessionId()] || []).filter(item => item.key !== candidate.key), candidate] }));
+          if (draft) setDraftBranches(previous => ({ ...previous, [key]: previous[key].map(item => item.id === draft.id ? { ...item, sentAt: undefined } : item) }));
+          setPendingPrompt({ candidate, message, leafId, sessionId: sessionId() });
+          return;
+        }
+        setPendingPrompt(undefined);
         accepted = true;
       } catch (failure) {
         if (draft) batch(() => {
@@ -313,6 +363,7 @@ export default function App(props: ParentProps) {
 
           return live === previous.live && running === previous.running ? previous : { ...previous, live, running };
         });
+        if (record.type === 'system_prompt_priority') setNotification({ message: record.reason, isError: false });
         if (record.type === "extension_ui_request") {
           if (["confirm", "select", "input", "editor"].includes(record.method))
             setExtensionDialogs((previous) => [...previous, record]);
@@ -349,6 +400,7 @@ export default function App(props: ParentProps) {
       '--code-overflow-wrap': codeLinewrap() ? 'anywhere' : 'normal',
       '--code-content-width': codeLinewrap() ? '100%' : 'max-content',
     }}>
+      <SystemPromptPolicyContext.Provider value={{ ignored: ignoredPrompt, setIgnored: ignorePrompt }}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <Handoffs sessionKey={branchKey()}>
         <Show when={branchKey() || 'empty'} keyed>{_sessionKey => (
@@ -361,6 +413,17 @@ export default function App(props: ParentProps) {
         {props.children}
         </Handoffs>
       </SystemPromptContext.Provider>
+      </SystemPromptPolicyContext.Provider>
+      <dialog ref={promptDialog} class="chat-dialog" aria-label="New system prompts available">
+        <h2>New system prompts available</h2>
+        <p>The current branch keeps its accepted prompt unless you choose the new version.</p>
+        <button disabled={busy()} onClick={() => void choosePrompt(pendingPrompt()?.candidate.key || '')}>
+          Use System Prompt {pendingPromptNumber()}
+        </button>
+        <button disabled={busy()} onClick={() => void choosePrompt('current')}>Use current System Prompt</button>
+        <button onClick={() => closeModal(promptDialog)}>Cancel</button>
+        <button onClick={() => { closeModal(promptDialog); openSystemPrompt(pendingPromptNumber() || 1); }}>View system prompts</button>
+      </dialog>
       <dialog ref={optionsDialog} class="chat-dialog options-dialog" aria-label="Options">
         <div class="chat-dialog-heading"><span>Options</span><button onClick={() => optionsDialog.close()}>Close</button></div>
         <For each={['focused', 'side'] as const}>{mode =>

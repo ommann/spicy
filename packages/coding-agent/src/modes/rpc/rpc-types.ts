@@ -12,6 +12,7 @@ import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
+import type { SystemPromptCandidate } from "../../core/system-prompt-policy.ts";
 
 // ============================================================================
 // RPC Commands (stdin)
@@ -19,7 +20,14 @@ import type { SourceInfo } from "../../core/source-info.ts";
 
 export type RpcCommand =
 	// Prompting
-	| { id?: string; type: "prompt"; message: string; images?: ImageContent[]; streamingBehavior?: "steer" | "followUp" }
+	| {
+			id?: string;
+			type: "prompt";
+			message: string;
+			images?: ImageContent[];
+			streamingBehavior?: "steer" | "followUp";
+			systemPrompt?: { choice?: string; ignored?: string[] };
+	  }
 	| { id?: string; type: "steer"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "follow_up"; message: string; images?: ImageContent[] }
 	| { id?: string; type: "abort" }
@@ -114,7 +122,13 @@ export interface RpcSessionState {
 // Success responses with data
 export type RpcResponse =
 	// Prompting
-	| { id?: string; type: "response"; command: "prompt"; success: true; data: { disposition: PromptDisposition } }
+	| {
+			id?: string;
+			type: "response";
+			command: "prompt";
+			success: true;
+			data: { disposition: PromptDisposition | "approval_required"; candidate?: SystemPromptCandidate };
+	  }
 	| { id?: string; type: "response"; command: "steer"; success: true; data: { disposition: QueuedInputDisposition } }
 	| {
 			id?: string;
