@@ -30,6 +30,9 @@
   --control-text: #a7b9c2;
   --control-active-text: #e1e6e4;
   --control-active-background: #233038;
+  --select-text: #e5b86c;
+  --select-active-text: #181a1a;
+  --select-active-background: #e5b86c;
   --toggle-state-off: #68777b;
   --toggle-state-on: #b6cbd3;
   --toggle-state-fill: #233038;

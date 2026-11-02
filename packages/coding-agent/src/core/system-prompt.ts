@@ -7,6 +7,7 @@ import { getDocsPath, getReadmePath } from "../config.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 import {
 	renderSystemPromptDocument,
+	renderSystemPromptPart,
 	renderSystemPromptSections,
 	type SystemPromptDocument,
 	type SystemPromptPart,
@@ -34,6 +35,10 @@ export interface BuildSystemPromptOptions {
 	appendSystemPrompt?: string;
 	/** Additional XML-wrapped prompt sections keyed by tag name. */
 	sections?: Record<string, string>;
+	/** Structured contributions supplied by their actual sources, not inferred from text. */
+	sectionParts?: Record<string, SystemPromptPart>;
+	/** Read-only live contributions for the composer, including not-yet-included parts. */
+	sectionPartSources?: Record<string, () => SystemPromptPart | undefined>;
 	/** Working directory. */
 	cwd: string;
 	/** Pre-loaded context files. */
@@ -76,6 +81,8 @@ export function normalizeBuildSystemPromptOptions(input: BuildSystemPromptOption
 		promptGuidelines: [...(input.promptGuidelines ?? [])],
 		appendSystemPrompt: input.appendSystemPrompt ?? "",
 		sections: { ...(input.sections ?? {}) },
+		sectionParts: { ...(input.sectionParts ?? {}) },
+		sectionPartSources: { ...(input.sectionPartSources ?? {}) },
 		cwd: input.cwd,
 		contextFiles: (input.contextFiles ?? []).map((file) => ({ ...file })),
 		skills: (input.skills ?? []).map((skill) => ({ ...skill })),
@@ -231,7 +238,11 @@ export function buildSystemPromptDocument(input: BuildSystemPromptOptions): Syst
 	}
 	section("cwd", cwd.replace(/\\/g, "/"));
 	for (const [name, content] of Object.entries(customSections)) {
-		if (content) section(name, content, "extension");
+		if (content) {
+			const part = options.sectionParts?.[name];
+			if (part && renderSystemPromptPart(part) === content) promptParts[name] = { ...part, id: name, section: name };
+			else section(name, content, "extension");
+		}
 	}
 	return {
 		version: 1,

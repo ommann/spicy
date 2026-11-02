@@ -11,6 +11,8 @@ export interface PromptSource {
 }
 
 export interface PromptDocumentSnapshot {
+  availableTools?: Wire[];
+  toolSources?: Record<string, string>;
   document: SystemPromptDocument;
   current: { content: string; sections: Record<string, string>; toolsAdded?: Wire[] };
   sources?: PromptSource[];

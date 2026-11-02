@@ -4,25 +4,30 @@
 @import "./lilim/markdown.css";
 @import "./utw/handoff.css";
 
-.tui-checkbox {
+.checkbox {
+  display: inline-block;
   position: relative;
+  flex: none;
+  width: 3ch;
   cursor: pointer;
 }
 
-.tui-checkbox input {
+.checkbox input {
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
 }
 
-.tui-checkbox-mark {
+.checkbox-mark {
+  display: block;
+  width: 3ch;
   font: inherit;
   white-space: pre;
   color: var(--toggle-state-on);
 }
 
-.tui-checkbox input:focus-visible + .tui-checkbox-mark {
+.checkbox input:focus-visible + .checkbox-mark {
   outline: 1px solid var(--toggle-state-on);
 }
 
@@ -113,6 +118,7 @@
 }
 
 .tool-body pre,
+.trace-text,
 .codemode-preview,
 .diff-view .diff-source,
 .source-code {
@@ -348,6 +354,33 @@
   cursor: default;
 }
 
+.select-choice,
+.chat-dialog .select-choice {
+  border: 0;
+  padding: 0;
+  outline: none;
+  background: transparent;
+  color: var(--select-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.select-choice:is(:hover, :focus-visible) {
+  color: var(--select-active-text);
+  background: var(--select-active-background);
+}
+
+.select-options .select-choice {
+  display: block;
+  width: 100%;
+}
+
+.select-options > .scroll-area-viewport {
+  max-height: 60dvh;
+}
+
 .chat-dialog select {
   max-width: 100%;
 }
@@ -494,7 +527,6 @@
   border-bottom: 1px solid var(--border);
 }
 
-.creator-notice { margin: 16px 24px; }
 
 .creator-columns {
   display: grid;
@@ -504,11 +536,12 @@
 
 .creator-columns > .custom-scroll-area { min-width: 0; min-height: 0; }
 .creator-columns .scroll-area-content { padding: 16px 24px; }
-.creator-switchboard ul { list-style: none; padding-left: 20px; }
-.creator-switchboard li { margin-block: 8px; }
+.creator-switchboard ul { list-style: none; margin: 0; padding: 0 0 0 2ch; }
+.creator-switchboard li { margin: 0; }
+.creator-switchboard li > label { display: inline-flex; margin-right: 2ch; }
 .creator-switchboard textarea { display: block; width: 100%; box-sizing: border-box; margin-block: 8px; font: inherit; }
 .creator-switchboard select { max-width: 100%; margin: 8px; }
-.creator-switchboard label { display: flex; align-items: baseline; gap: 8px; overflow-wrap: anywhere; }
+.creator-switchboard label { display: flex; align-items: baseline; gap: 1ch; white-space: var(--code-white-space, pre); overflow-wrap: var(--code-overflow-wrap, normal); }
 .creator-preview .system-prompt-detail { margin-top: 16px; }
 
 .notification-error {

@@ -39,6 +39,7 @@ import type {
 } from "../../core/extensions/types.ts";
 import { mcpNamespace } from "../../core/mcp-servers.ts";
 import type { ModelRegistry } from "../../core/model-registry.ts";
+import { renderSystemPromptPart, type SystemPromptPart } from "../../core/system-prompt-document.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import { CODEMODE_TOOL_NAME } from "../codemode/tool.ts";
 import { TOOL_SEARCH_TOOL_NAME } from "../tool-search/tool.ts";
@@ -193,6 +194,11 @@ function serverSummary(server: McpServerListing): string {
  * codemode nor tool_search lists them. Undefined when there are no such servers.
  */
 export function renderServersSection(servers: readonly McpServerListing[]): string | undefined {
+	const part = buildServersPromptPart(servers);
+	return part ? renderSystemPromptPart(part) : undefined;
+}
+
+export function buildServersPromptPart(servers: readonly McpServerListing[]): SystemPromptPart | undefined {
 	const listed = servers
 		.filter((server) => isEnabled(server) && hasIndirectTools(server.entry))
 		.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
@@ -213,11 +219,40 @@ export function renderServersSection(servers: readonly McpServerListing[]): stri
 		kept === 0
 			? 0
 			: Math.min(MAX_SERVER_DESCRIPTION_CHARS, Math.floor((MAX_SERVERS_SECTION_CHARS - size(kept)) / kept) - 2);
-	const lines = listed.slice(0, kept).map((server, index) => {
+	const children = listed.slice(0, kept).map((server, index): SystemPromptPart => {
 		const summary = perServer > 0 ? truncate(serverSummary(server), perServer) : "";
-		return summary ? `${heads[index]}: ${summary}` : heads[index];
+		const id = `${MCP_SERVERS_SECTION}/${encodeURIComponent(server.entry.name)}`;
+		return {
+			id,
+			label: server.entry.name,
+			source: `mcp:${server.entry.name}`,
+			text: heads[index],
+			defaultIncluded: !configuredExposures(server.entry).has("deferred") || hasDirectTools(server.entry),
+			children: [
+				{
+					id: `${id}/description`,
+					label: "Description",
+					source: `mcp:${server.entry.name}`,
+					inline: true,
+					defaultIncluded: hasDirectTools(server.entry) || !!server.entry.config.description?.trim(),
+					text: summary,
+					prefix: summary ? ": " : "",
+				},
+			],
+		};
 	});
-	return [intro, ...lines, ...omitted(listed.length - kept)].join("\n");
+	return {
+		id: MCP_SERVERS_SECTION,
+		section: MCP_SERVERS_SECTION,
+		label: MCP_SERVERS_SECTION,
+		source: "mcp",
+		text: intro + (children.length ? "\n" : ""),
+		children,
+		separator: "\n",
+		suffix: omitted(listed.length - kept)
+			.map((line) => `\n${line}`)
+			.join(""),
+	};
 }
 
 /**
@@ -1112,6 +1147,11 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
 		};
 
 		pi.on("session_start", (_event, ctx) => {
+			const promptOptions = ctx.getSystemPromptOptions?.();
+			if (promptOptions) {
+				promptOptions.sectionPartSources ??= {};
+				promptOptions.sectionPartSources[MCP_SERVERS_SECTION] = () => buildServersPromptPart(servers);
+			}
 			const loaded = (options.loadConfig ?? defaultLoadConfig)(ctx);
 			configErrors = loaded.errors;
 			projectConfig = loaded.projectConfig;
@@ -1178,9 +1218,17 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
 		pi.on("before_agent_start", async (event, ctx) => {
 			await waitForDirectServers(ctx);
 			const { sections } = event.systemPromptOptions;
-			const section = renderServersSection(servers);
-			if (section) sections[MCP_SERVERS_SECTION] = section;
-			else delete sections[MCP_SERVERS_SECTION];
+			const part = buildServersPromptPart(servers);
+			const section = part && renderSystemPromptPart(part);
+			event.systemPromptOptions.sectionParts ??= {};
+			const parts = event.systemPromptOptions.sectionParts;
+			if (section && part) {
+				sections[MCP_SERVERS_SECTION] = section;
+				parts[MCP_SERVERS_SECTION] = part;
+			} else {
+				delete sections[MCP_SERVERS_SECTION];
+				delete parts[MCP_SERVERS_SECTION];
+			}
 		});
 
 		// A tool that reaches other tools (`reachesTools`) waits for the servers it may reach, so their

@@ -360,6 +360,8 @@ export interface ExtensionContext {
 	compact(options?: CompactOptions): void;
 	/** Get the current effective system prompt. */
 	getSystemPrompt(): string;
+	/** Base prompt contributions, when provided by the session runtime. */
+	getSystemPromptOptions?(): BuildSystemPromptOptions;
 }
 
 /** Options for {@link ExtensionToolContext.executeTool}. */

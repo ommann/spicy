@@ -1,5 +1,5 @@
 :root {
-  --block-padding: 20px 8px;
+  --block-padding: 1lh 1ch;
   font-family: "Liberation Mono", "DejaVu Sans Mono", monospace;
   font-size: 14px;
   line-height: 20px;

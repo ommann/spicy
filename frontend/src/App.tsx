@@ -24,6 +24,7 @@ import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import Handoffs from './Handoffs';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
+import Checkbox from './Checkbox';
 import { renderSystemPromptDocument, systemPromptDocumentFromState } from '../../packages/coding-agent/src/core/system-prompt-document';
 
 const empty: Snapshot = {
@@ -478,10 +479,9 @@ export default function App(props: ParentProps) {
             </select>
           </label>
         }</For>
-        <label class="width-option tui-checkbox">
+        <label class="width-option">
           <span>Code linewrap</span>
-          <input type="checkbox" checked={codeLinewrap()} onChange={event => setCodeLinewrap(event.currentTarget.checked)} />
-          <span class="tui-checkbox-mark" aria-hidden="true">{codeLinewrap() ? '[x]' : '[ ]'}</span>
+          <Checkbox checked={codeLinewrap()} onChange={event => setCodeLinewrap(event.currentTarget.checked)} />
         </label>
       </dialog>
       <dialog

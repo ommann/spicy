@@ -4,6 +4,7 @@ import SystemPromptContent from './SystemPromptContent';
 import Card from './Card';
 import ColumnToolbar from './ColumnToolbar';
 import CollapseToggle from './CollapseToggle';
+import Checkbox from './Checkbox';
 import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
 import { createColumnShortcuts } from './column-shortcuts';
@@ -98,7 +99,7 @@ export default function SystemPrompts(props: Props) {
               <div class="system-prompt-heading">
                 <div><Show when={version.title}><span>{version.title}</span></Show><Show when={version.priorityReason}><span>{version.priorityReason}</span></Show></div>
                 <div><Show when={version.candidateKey}>{key => <label>
-                  <input type="checkbox" checked={props.ignored?.(key()) ?? false}
+                  <Checkbox checked={props.ignored?.(key()) ?? false}
                     onChange={event => props.onIgnore?.(key(), event.currentTarget.checked)} />
                   Ignore this system prompt
                 </label>}</Show></div>

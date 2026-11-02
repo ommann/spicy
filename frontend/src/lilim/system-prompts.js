@@ -9,7 +9,7 @@ export function systemPromptText(state) {
   return [content, ...state.sections.values(), tools].filter(text => text !== null && text.length > 0).join('\n\n');
 }
 
-function promptDocument(before, after) {
+export function promptDocument(before, after) {
   const rows = diffLines(systemPromptText(before), systemPromptText(after));
   return [{ name: 'content', hunks: [{ rows }] }];
 }

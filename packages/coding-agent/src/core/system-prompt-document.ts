@@ -8,6 +8,10 @@ export interface SystemPromptPart {
 	/** Historical sections may already contain their exact serialized wrapper. */
 	verbatim?: boolean;
 	text?: string;
+	/** Composer defaults only; ordinary prompt rendering is unchanged. */
+	defaultIncluded?: boolean;
+	/** Render this choice on its parent's row, without another tree level. */
+	inline?: boolean;
 	children?: SystemPromptPart[];
 	separator?: string;
 	prefix?: string;
@@ -29,10 +33,14 @@ function renderPart(part: SystemPromptPart, excluded: ReadonlySet<string>): stri
 		const children = part.children
 			.map((child) => renderPart(child, excluded))
 			.filter((text): text is string => text !== undefined);
-		if (part.children.length && !children.length) return undefined;
-		content = children.join(part.separator ?? "");
+		if (part.children.length && !children.length && part.text === undefined) return undefined;
+		content += children.join(part.separator ?? "");
 	}
 	return `${part.prefix ?? ""}${content}${part.suffix ?? ""}`;
+}
+
+export function renderSystemPromptPart(part: SystemPromptPart): string | undefined {
+	return renderPart(part, new Set());
 }
 
 export function renderSystemPromptSections(

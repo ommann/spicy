@@ -958,6 +958,10 @@ export class ExtensionRunner {
 				runner.assertActive();
 				return runner.getSystemPromptFn();
 			},
+			getSystemPromptOptions: () => {
+				runner.assertActive();
+				return runner.getSystemPromptOptionsFn();
+			},
 		};
 	}
 

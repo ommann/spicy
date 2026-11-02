@@ -1508,12 +1508,33 @@ export class AgentSession {
 			(current
 				? systemPromptDocumentFromState({ content: contentText(current.content), sections })
 				: buildSystemPromptDocument(this._baseSystemPromptOptions));
+		const parts = new Map(document.parts.map((part) => [part.id, part]));
+		for (const source of Object.values(this._baseSystemPromptOptions.sectionPartSources ?? {})) {
+			const part = source();
+			if (part) parts.set(part.id, part);
+		}
 		return {
-			document,
+			document: { ...document, parts: [...parts.values()] },
+			toolSources: Object.fromEntries(
+				this.getAllTools().map(({ name, sourceInfo, namespace }) => [
+					name,
+					namespace?.aliases?.[0] ??
+						namespace?.name ??
+						(this._baseToolDefinitions.has(name) ? "Built-in tools" : sourceInfo.path.replace(/^builtin:/, "")),
+				]),
+			),
+			availableTools: this.getAllTools().map(({ name, description, parameters, namespace }) => ({
+				name,
+				description,
+				parameters,
+				...(namespace ? { namespace } : {}),
+			})),
 			current: {
 				content: current ? contentText(current.content) : "",
 				sections,
-				toolsAdded: getCurrentTools(this.agent.state.messages),
+				toolsAdded: current
+					? getCurrentTools(this.agent.state.messages)
+					: this.agent.state.tools.map(toToolDeclaration),
 			},
 		};
 	}
@@ -1774,6 +1795,7 @@ export class AgentSession {
 		const loadedContextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;
 
 		this._baseSystemPromptOptions = normalizeBuildSystemPromptOptions({
+			sectionPartSources: this._baseSystemPromptOptions?.sectionPartSources,
 			cwd: this._cwd,
 			skills: loadedSkills,
 			contextFiles: loadedContextFiles,
