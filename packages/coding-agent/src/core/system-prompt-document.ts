@@ -1,0 +1,93 @@
+/** Serializable prompt content only. These selections never control tools or permissions. */
+export interface SystemPromptPart {
+	id: string;
+	label: string;
+	source: string;
+	/** Top-level transcript section; omitted on nested parts. */
+	section?: string;
+	/** Historical sections may already contain their exact serialized wrapper. */
+	verbatim?: boolean;
+	text?: string;
+	children?: SystemPromptPart[];
+	separator?: string;
+	prefix?: string;
+	suffix?: string;
+}
+
+export interface SystemPromptDocument {
+	version: 1;
+	parts: SystemPromptPart[];
+	content?: SystemPromptPart;
+	/** Opaque exact replacement; kept separate from structured transcript sections. */
+	forced?: SystemPromptPart;
+}
+
+function renderPart(part: SystemPromptPart, excluded: ReadonlySet<string>): string | undefined {
+	if (excluded.has(part.id)) return undefined;
+	let content = part.text ?? "";
+	if (part.children) {
+		const children = part.children
+			.map((child) => renderPart(child, excluded))
+			.filter((text): text is string => text !== undefined);
+		if (part.children.length && !children.length) return undefined;
+		content = children.join(part.separator ?? "");
+	}
+	return `${part.prefix ?? ""}${content}${part.suffix ?? ""}`;
+}
+
+export function renderSystemPromptSections(
+	document: SystemPromptDocument,
+	excludedIds: readonly string[] = [],
+): Record<string, string> {
+	const excluded = new Set(excludedIds);
+	const sections: Record<string, string> = {};
+	for (const part of document.parts) {
+		if (!part.section) throw new Error(`Missing section on prompt part ${part.id}`);
+		const text = renderPart(part, excluded);
+		if (text !== undefined)
+			sections[part.section] =
+				part.section === "preamble" || part.verbatim ? text : `<${part.section}>\n${text}\n</${part.section}>`;
+	}
+	return sections;
+}
+
+export function renderSystemPromptDocument(
+	document: SystemPromptDocument,
+	excludedIds: readonly string[] = [],
+): { content: string; sections?: Record<string, string> } {
+	if (document.forced) return { content: renderPart(document.forced, new Set(excludedIds)) ?? "" };
+	return {
+		content: document.content ? (renderPart(document.content, new Set(excludedIds)) ?? "") : "",
+		sections: renderSystemPromptSections(document, excludedIds),
+	};
+}
+
+/** Old recordings remain exact opaque sections, without guessing structure from text. */
+export function systemPromptDocumentFromState(state: {
+	content: string;
+	sections?: Record<string, string | null>;
+}): SystemPromptDocument {
+	return {
+		version: 1,
+		...(state.content
+			? {
+					content: {
+						id: "recorded-content",
+						label: "Recorded leading instructions",
+						source: "recorded",
+						text: state.content,
+					},
+				}
+			: {}),
+		parts: Object.entries(state.sections ?? {})
+			.filter((entry): entry is [string, string] => typeof entry[1] === "string")
+			.map(([name, text]) => ({
+				id: name,
+				label: name.replaceAll("_", " "),
+				source: "recorded",
+				section: name,
+				verbatim: true,
+				text,
+			})),
+	};
+}

@@ -5,6 +5,12 @@
 import { getSystemMessageText } from "@earendil-works/pi-ai";
 import { getDocsPath, getReadmePath } from "../config.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
+import {
+	renderSystemPromptDocument,
+	renderSystemPromptSections,
+	type SystemPromptDocument,
+	type SystemPromptPart,
+} from "./system-prompt-document.ts";
 
 export interface BuildSystemPromptOptions {
 	/** Custom system prompt (replaces the default prefix). */
@@ -76,27 +82,18 @@ export function normalizeBuildSystemPromptOptions(input: BuildSystemPromptOption
 	};
 }
 
-function renderProjectContext(contextFiles: Array<{ path: string; content: string }>): string {
-	return [
-		"Project-specific instructions and guidelines:",
-		...contextFiles.map(
-			({ path, content }) => `<project_instructions path="${path}">\n${content}\n</project_instructions>`,
-		),
-	].join("\n\n");
-}
-
 function buildRules(
 	selectedTools: string[],
 	toolGuidelines: Record<string, string[]>,
 	promptGuidelines: string[],
-): string {
-	const rules: string[] = [];
+): SystemPromptPart[] {
+	const rules: SystemPromptPart[] = [];
 	const seen = new Set<string>();
-	const addRule = (rule: string): void => {
+	const addRule = (rule: string, source = "core"): void => {
 		const normalized = rule.trim();
 		if (!normalized || seen.has(normalized)) return;
 		seen.add(normalized);
-		rules.push(normalized);
+		rules.push({ id: `rules/${encodeURIComponent(normalized)}`, label: normalized, source, text: `- ${normalized}` });
 	};
 
 	const hasBash = selectedTools.includes("bash");
@@ -109,16 +106,16 @@ function buildRules(
 	}
 
 	for (const name of selectedTools) {
-		for (const rule of toolGuidelines[name] ?? []) addRule(rule);
+		for (const rule of toolGuidelines[name] ?? []) addRule(rule, `tool:${name}`);
 	}
-	for (const rule of promptGuidelines) addRule(rule);
+	for (const rule of promptGuidelines) addRule(rule, "configuration");
 	addRule("Be concise in your responses");
 	addRule("Show file paths clearly when working with files");
-	return rules.map((rule) => `- ${rule}`).join("\n");
+	return rules;
 }
 
-/** Build the ordered, independently replaceable sections of the structured system prompt. */
-export function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromptSections {
+/** Construct the content tree before rendering; text comparisons are presentation only. */
+export function buildSystemPromptDocument(input: BuildSystemPromptOptions): SystemPromptDocument {
 	const options = normalizeBuildSystemPromptOptions(input);
 	const {
 		customPrompt,
@@ -141,24 +138,88 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 	}
 
 	const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
-	const promptSections: Record<string, string> = {};
+	const promptParts: Record<string, SystemPromptPart> = {};
+	const section = (name: string, text: string, source = "core") => {
+		promptParts[name] = { id: name, label: name.replaceAll("_", " "), source, section: name, text };
+	};
 	if (customPrompt) {
-		promptSections.preamble = customPrompt;
+		section("preamble", customPrompt, "configuration");
 	} else {
-		promptSections.preamble =
-			"You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
+		section(
+			"preamble",
+			"You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.",
+		);
 		const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
-		const tools =
-			visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
-		promptSections.tools = `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
-		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
-		promptSections.docs = `Spicy reference:
+		promptParts.tools = {
+			id: "tools",
+			label: "Tool descriptions (text only)",
+			source: "core",
+			section: "tools",
+			separator: "\n\n",
+			children: [
+				visibleTools.length
+					? {
+							id: "tools/list",
+							label: "Descriptions",
+							source: "tools",
+							separator: "\n",
+							children: visibleTools.map((name) => ({
+								id: `tools/${name}`,
+								label: name,
+								source: `tool:${name}`,
+								text: `- ${name}: ${toolSnippets[name]}`,
+							})),
+						}
+					: { id: "tools/list", label: "No descriptions", source: "tools", text: "(none)" },
+				{
+					id: "tools/note",
+					label: "Additional tools note",
+					source: "core",
+					text: "In addition to the tools above, you may have access to other custom tools depending on the project.",
+				},
+			],
+		};
+		promptParts.rules = {
+			id: "rules",
+			label: "Rules",
+			source: "core",
+			section: "rules",
+			separator: "\n",
+			children: buildRules(declaredTools, toolGuidelines, promptGuidelines),
+		};
+		section(
+			"docs",
+			`Spicy reference:
 - Project setup: ${getReadmePath()}
-- For codemode scripts and non-LLM models such as classifiers and image models, read ${getDocsPath()}/codemode.md.`;
+- For codemode scripts and non-LLM models such as classifiers and image models, read ${getDocsPath()}/codemode.md.`,
+		);
 	}
 
-	if (appendSystemPrompt) promptSections.addendum = appendSystemPrompt;
-	if (contextFiles.length > 0) promptSections.project_context = renderProjectContext(contextFiles);
+	if (appendSystemPrompt) section("addendum", appendSystemPrompt, "configuration");
+	if (contextFiles.length > 0)
+		promptParts.project_context = {
+			id: "project_context",
+			label: "Project context",
+			source: "context",
+			section: "project_context",
+			separator: "\n\n",
+			children: [
+				{
+					id: "project_context/heading",
+					label: "Context heading",
+					source: "core",
+					text: "Project-specific instructions and guidelines:",
+				},
+				...contextFiles.map(({ path, content }, index) => ({
+					id: `project_context/${encodeURIComponent(path)}/${contextFiles.slice(0, index).filter((file) => file.path === path).length}`,
+					label: path,
+					source: path,
+					text: content,
+					prefix: `<project_instructions path="${path}">\n`,
+					suffix: "\n</project_instructions>",
+				})),
+			],
+		};
 	// A hidden reader is still reachable through another tool, so skills stay but the hint names no tool.
 	const readers = ["read", "bash"] as const;
 	const skillFileReadTool =
@@ -166,18 +227,31 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 		(readers.some((tool) => selectedTools.includes(tool)) ? "indirect" : undefined);
 	if (skillFileReadTool && skills.length > 0) {
 		const skillsPrompt = formatSkillsForPrompt(skills, skillFileReadTool).trim();
-		if (skillsPrompt) promptSections.skills = skillsPrompt;
+		if (skillsPrompt) section("skills", skillsPrompt, "skills");
 	}
-	promptSections.cwd = cwd.replace(/\\/g, "/");
+	section("cwd", cwd.replace(/\\/g, "/"));
 	for (const [name, content] of Object.entries(customSections)) {
-		if (content) promptSections[name] = content;
+		if (content) section(name, content, "extension");
 	}
+	return {
+		version: 1,
+		parts: Object.values(promptParts),
+		...(options.forceSystemPrompt !== undefined
+			? {
+					forced: {
+						id: "forced",
+						label: "Exact prompt replacement",
+						source: "extension",
+						text: options.forceSystemPrompt,
+					},
+				}
+			: {}),
+	};
+}
 
-	const sections: SystemPromptSections = { preamble: promptSections.preamble };
-	for (const [name, content] of Object.entries(promptSections)) {
-		if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
-	}
-	return sections;
+/** Render the same ordered transcript sections used before structured composition. */
+export function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromptSections {
+	return renderSystemPromptSections(buildSystemPromptDocument(input));
 }
 
 /**
@@ -188,8 +262,18 @@ export function buildSystemPromptState(input: BuildSystemPromptOptions): {
 	content: string;
 	sections?: SystemPromptSections;
 } {
-	if (input.forceSystemPrompt !== undefined) return { content: input.forceSystemPrompt };
-	return { content: "", sections: buildSystemPromptSections(input) };
+	if (input.forceSystemPrompt !== undefined)
+		return renderSystemPromptDocument({
+			version: 1,
+			parts: [],
+			forced: {
+				id: "forced",
+				label: "Exact prompt replacement",
+				source: "extension",
+				text: input.forceSystemPrompt,
+			},
+		});
+	return renderSystemPromptDocument(buildSystemPromptDocument(input));
 }
 
 /** Build the system prompt text, rendered exactly as the transcript's system message replays it. */

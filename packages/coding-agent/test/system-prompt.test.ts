@@ -1,7 +1,18 @@
 import { describe, expect, test } from "vitest";
+import { getDocsPath, getReadmePath } from "../src/config.ts";
 import type { Skill } from "../src/core/skills.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
-import { buildSystemPrompt } from "../src/core/system-prompt.ts";
+import {
+	type BuildSystemPromptOptions,
+	buildSystemPrompt,
+	buildSystemPromptDocument,
+	buildSystemPromptSections,
+} from "../src/core/system-prompt.ts";
+import {
+	renderSystemPromptDocument,
+	renderSystemPromptSections,
+	systemPromptDocumentFromState,
+} from "../src/core/system-prompt-document.ts";
 
 const testSkill: Skill = {
 	name: "test-skill",
@@ -13,6 +24,72 @@ const testSkill: Skill = {
 };
 
 describe("buildSystemPrompt", () => {
+	test("nested selections change only rendered content without mutating source inputs", () => {
+		const options = {
+			cwd: "/project",
+			selectedTools: ["read", "bash"],
+			toolSnippets: { read: "Read files", bash: "Run commands" },
+			contextFiles: [{ path: "/project/AGENTS.md", content: "Rules." }],
+		};
+		const before = JSON.stringify(options);
+		const document = buildSystemPromptDocument(options);
+		const serialized = JSON.stringify(document);
+		const full = renderSystemPromptSections(document);
+		expect(full).toEqual(buildSystemPromptSections(options));
+		const selected = renderSystemPromptSections(document, ["tools/read", "project_context"]);
+		expect(selected.tools).not.toContain("Read files");
+		expect(selected.tools).toContain("Run commands");
+		expect(selected.project_context).toBeUndefined();
+		expect(renderSystemPromptSections(document, ["tools"]).tools).toBeUndefined();
+		expect(renderSystemPromptSections(document)).toEqual(full);
+		expect(JSON.stringify(document)).toBe(serialized);
+		expect(JSON.stringify(options)).toBe(before);
+		expect(
+			renderSystemPromptDocument(
+				systemPromptDocumentFromState({
+					content: "Legacy text.\n",
+					sections: { custom: "Raw custom section", removed: null },
+				}),
+			),
+		).toEqual({ content: "Legacy text.\n", sections: { custom: "Raw custom section" } });
+	});
+	test("preserves the pre-structured renderer output character for character", () => {
+		const cases: Record<string, BuildSystemPromptOptions> = {
+			default: { cwd: "/project" },
+			empty: { cwd: "/project", selectedTools: [] },
+			complete: {
+				cwd: "/project",
+				selectedTools: ["read", "bash", "hidden"],
+				hiddenTools: ["hidden"],
+				toolSnippets: { read: "Read\nfiles", bash: "Run commands", hidden: "Invisible" },
+				toolGuidelines: { read: [" Read carefully. ", "Read carefully."] },
+				promptGuidelines: ["Keep Unicode: ä λ 🌶️.", ""],
+				appendSystemPrompt: "  Extra instructions.\n",
+				contextFiles: [
+					{ path: "/project/AGENTS.md", content: "\nProject rules.\n" },
+					{ path: "/project/sub/AGENTS.md", content: "Nested rules." },
+				],
+				skills: [testSkill],
+				sections: { mcp_servers: "- rea: REA description", custom: "\nUntrimmed.\n", empty: "" },
+			},
+			custom: {
+				cwd: "/project",
+				customPrompt: " Exact custom.\n",
+				appendSystemPrompt: "Append.",
+				sections: { cwd: "override", mcp_servers: "REA" },
+			},
+			forced: { cwd: "/project", forceSystemPrompt: "\n Exact forced text.  \n", sections: { mcp_servers: "REA" } },
+		};
+		const normalizePaths = (text: string) =>
+			text.replaceAll(getReadmePath(), "<readme-path>").replaceAll(getDocsPath(), "<docs-path>");
+		for (const [name, options] of Object.entries(cases)) {
+			expect(
+				normalizePaths(
+					JSON.stringify({ text: buildSystemPrompt(options), sections: buildSystemPromptSections(options) }),
+				),
+			).toMatchSnapshot(name);
+		}
+	});
 	describe("empty tools", () => {
 		test("shows (none) for empty tools list", () => {
 			const prompt = buildSystemPrompt({
