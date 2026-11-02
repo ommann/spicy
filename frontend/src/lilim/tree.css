@@ -64,6 +64,7 @@
   margin-right: auto;
 }
 .tree-toolbar button,
+.text-action,
 .branch-heading {
   background: transparent;
   border: 0;
@@ -71,6 +72,13 @@
   font: inherit;
   cursor: pointer;
   padding: 3px 6px;
+}
+.text-action {
+  padding: 0;
+}
+.text-action:disabled {
+  color: var(--toggle-state-off);
+  cursor: default;
 }
 .fork-nav {
   display: inline-flex;
@@ -87,11 +95,13 @@
   stroke-linejoin: round;
 }
 .tree-toolbar button:hover,
+.text-action:enabled:hover,
 .branch-heading:hover {
   color: var(--control-active-text);
   background: var(--control-active-background);
 }
 .tree-toolbar button:focus-visible,
+.text-action:focus-visible,
 .branch-heading:focus-visible {
   outline: 1px solid var(--focus-border);
 }

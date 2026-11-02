@@ -30,6 +30,5 @@ export default function SystemPromptRoute() {
 
   return <SystemPrompts versions={versions()} selected={Number(params.number) || 1}
     onSelect={number => navigate(`/system-prompts/${number}`, { replace: true })}
-    onClose={() => navigate('/')} onCreate={() => navigate('/system-prompt-creator')}
     ignored={policy.ignored} onIgnore={policy.setIgnored} />;
 }

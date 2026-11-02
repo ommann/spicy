@@ -1,8 +1,10 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount, on, untrack } from 'solid-js';
 import type { PromptVersion } from './SystemPromptRoute';
 import SystemPromptContent from './SystemPromptContent';
+import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import Card from './Card';
 import ColumnToolbar from './ColumnToolbar';
+import { viewMode as mode, setViewMode as setMode } from './view-mode';
 import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
 import ScrollArea from './ScrollArea';
@@ -13,15 +15,12 @@ interface Props {
   versions: PromptVersion[];
   selected: number;
   onSelect?: (number: number) => void;
-  onClose: () => void;
-  onCreate?: () => void;
   ignored?: (key: string) => boolean;
   onIgnore?: (key: string, ignored: boolean) => void;
 }
 
 export default function SystemPrompts(props: Props) {
   const [expanded, setExpanded] = createSignal(true);
-  const [mode, setMode] = createSignal<'focused' | 'side'>('side');
   const [selection, setSelection] = createSignal(untrack(() => props.selected));
   const sections = new Map<number, HTMLElement>();
   let viewport!: HTMLElement;
@@ -49,7 +48,7 @@ export default function SystemPrompts(props: Props) {
     if (version) select(version.number);
   }
 
-  createEffect(on([navigation, mode], ([number]) => {
+  createEffect(on([navigation, mode, () => props.versions], ([number]) => {
     const section = sections.get(number);
     section?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }));
@@ -82,14 +81,12 @@ export default function SystemPrompts(props: Props) {
         onMode={changeMode} onNavigate={adjacent} previousLabel="Previous system prompt" nextLabel="Next system prompt"
         previousDisabled={selected() === props.versions[0]} nextDisabled={selected() === props.versions.at(-1)}
         actions={<CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />}>
-        <span class="tree-title">System prompts</span>
-        <Show when={props.onCreate}><button onClick={() => props.onCreate?.()}>System Prompt Creator</button></Show>
-        <button onClick={() => props.onClose()}>Back to chat</button>
+        {null}
       </ColumnToolbar>
       <ScrollArea class="system-prompts-scroll-area" vertical viewportRef={element => { viewport = element; }}
         events={{ ...interaction.handlers, role: 'main' }} contentClass="system-prompts-content"
         contentClassList={{ 'focused-columns': mode() === 'focused', 'pan-ready': interaction.space(), panning: interaction.dragging() }}>
-        <Show when={props.versions.length} fallback={<p class="message">No captured system prompts in this session.</p>}>
+        <Show when={props.versions.length} fallback={<Card class="system-prompt-version" ref={element => sections.set(1, element)}><SystemPromptPlaceholder /></Card>}>
           <For each={props.versions}>{version => {
             const focused = () => selected()?.number === version.number;
             onCleanup(() => sections.delete(version.number));

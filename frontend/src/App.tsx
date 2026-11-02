@@ -25,6 +25,7 @@ import ImagePreview, { type PreviewImage } from './ImagePreview';
 import Handoffs from './Handoffs';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import Checkbox from './Checkbox';
+import { ToolbarActionsContext } from './ToolbarActions';
 import { renderSystemPromptDocument, systemPromptDocumentFromState } from '../../packages/coding-agent/src/core/system-prompt-document';
 
 const empty: Snapshot = {
@@ -53,6 +54,7 @@ interface DraftBranch {
 
 export default function App(props: ParentProps) {
   const location = useLocation();
+  const [toolbarActions, setToolbarActions] = createSignal<HTMLElement>();
   const navigate = useNavigate();
   const showingPrompts = () => location.pathname.startsWith('/system-prompt');
   const openSystemPrompt = (number: number) => navigate(`/system-prompts/${number}`);
@@ -420,6 +422,17 @@ export default function App(props: ParentProps) {
       '--code-overflow-wrap': codeLinewrap() ? 'anywhere' : 'normal',
       '--code-content-width': codeLinewrap() ? '100%' : 'max-content',
     }}>
+      <header class="tree-toolbar app-toolbar" aria-label="Application navigation">
+        <button class="tree-title" onClick={() => chatDialog.showModal()}>{sessionCwd()}</button>
+        <button onClick={openResume}>Sessions</button>
+        <div class="view-switch" role="group" aria-label="Views">
+          <button class="state-toggle" aria-pressed={location.pathname === '/'} onClick={() => navigate('/')}>Chat</button>
+          <button class="state-toggle" aria-pressed={location.pathname.startsWith('/system-prompts')} onClick={() => navigate('/system-prompts')}>System prompts</button>
+          <button class="state-toggle" aria-pressed={location.pathname === '/system-prompt-creator'} onClick={() => navigate('/system-prompt-creator')}>Editor</button>
+        </div>
+        <div class="app-toolbar-actions" ref={setToolbarActions} />
+      </header>
+      <ToolbarActionsContext.Provider value={toolbarActions}>
       <SystemPromptCreatorContext.Provider value={{
         load: async () => {
           await bridgeReady;
@@ -445,17 +458,18 @@ export default function App(props: ParentProps) {
       <SystemPromptContext.Provider value={systemPrompts}>
         <Handoffs sessionKey={branchKey()}>
         <Show when={branchKey() || 'empty'} keyed>{_sessionKey => (
-          <Conversation graph={graph()} path={sessionCwd()} active={!showingPrompts()}
+          <Conversation graph={graph()} active={!showingPrompts()}
             running={snapshot().running} busy={busy()} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}
-            onResume={openResume} onOptions={openOptions} onChatControls={() => chatDialog.showModal()} />
+            onOptions={openOptions} />
         )}</Show>
         {props.children}
         </Handoffs>
       </SystemPromptContext.Provider>
       </SystemPromptPolicyContext.Provider>
       </SystemPromptCreatorContext.Provider>
+      </ToolbarActionsContext.Provider>
       <dialog ref={promptDialog} class="chat-dialog" aria-label="New system prompts available">
         <h2>New system prompts available</h2>
         <p>The current branch keeps its accepted prompt unless you choose the new version.</p>

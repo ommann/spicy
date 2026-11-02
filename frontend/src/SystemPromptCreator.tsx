@@ -1,5 +1,4 @@
 import { For, Index, Show, createMemo, createSignal, onMount, useContext } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
 import { renderSystemPromptDocument, type SystemPromptDocument, type SystemPromptPart } from '../../packages/coding-agent/src/core/system-prompt-document';
 import { SystemPromptCreatorContext, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import SystemPromptContent from './SystemPromptContent';
@@ -8,6 +7,7 @@ import { createColumnInteraction } from './column-interaction';
 import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
 import Select from './Select';
+import ToolbarActions from './ToolbarActions';
 import type { Wire } from './types';
 import { promptDocument } from './lilim/system-prompts.js';
 
@@ -42,7 +42,6 @@ const promptState = (state: { content: string; sections?: Record<string, string>
 
 export default function SystemPromptCreator() {
   const api = useContext(SystemPromptCreatorContext);
-  const navigate = useNavigate();
   let switchboardViewport!: HTMLDivElement;
   let previewViewport!: HTMLDivElement;
   const switchboardInteraction = createColumnInteraction({ viewport: () => switchboardViewport, enabled: () => true });
@@ -143,12 +142,12 @@ export default function SystemPromptCreator() {
     catch (failure) { setError(String(failure)); }
   }
   return <section class="system-prompt-creator" aria-label="System Prompt Creator">
-    <header class="creator-toolbar">
-      <span>System Prompt Creator</span>
+    <ToolbarActions><div class="creator-toolbar">
       <button onClick={() => optionsDialog.showModal()}>Options</button>
-      <button onClick={() => navigate('/system-prompts')}>Cancel</button>
-      <button disabled={!document()} onClick={save}>Save to System Prompts</button>
-    </header>
+    </div></ToolbarActions>
+    <div class="creator-actions">
+      <button class="text-action" disabled={!document()} onClick={save}>Save to system prompts</button>
+    </div>
     <dialog ref={optionsDialog} class="chat-dialog" aria-label="Options">
       <div class="chat-dialog-heading"><span>Options</span><button onClick={() => optionsDialog.close()}>Close</button></div>
       <label><span><Checkbox checked={separateRules()} onChange={event => setSeparateRules(event.currentTarget.checked)} /> Separate rules with empty lines</span></label>

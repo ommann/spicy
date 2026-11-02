@@ -2,6 +2,7 @@
 :root {
   color-scheme: dark;
   --background: #181a1a;
+  --app-toolbar-height: 2lh;
   --utw-background: #191a1b;
   --utw-text: #ccc;
   --utw-tool-background: #254131;

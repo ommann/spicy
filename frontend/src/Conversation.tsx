@@ -7,10 +7,12 @@ import { ImageContext, SectionContext } from './conversation-dom';
 import type { PreviewImage } from './ImagePreview';
 import { modalOpen } from './modal-state';
 import ChatToolbar from './ChatToolbar';
+import { viewMode as mode, setViewMode as setMode } from './view-mode';
 import { ChatEntryPart } from './ChatContent';
 import MessageComposer from './MessageComposer';
 import ScrollBar from './ScrollBar';
 import SystemPromptReference from './SystemPromptReference';
+import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createColumnShortcuts } from './column-shortcuts';
 import { CHAT_BLOCK_GAP, layoutConversation, matchConversationLanes } from './conversation-model.mjs';
 import type { Wire } from './types';
@@ -29,7 +31,6 @@ export interface ConversationController {
 
 interface Props {
   graph: Wire;
-  path: string;
   active: boolean;
   running: boolean;
   busy: boolean;
@@ -41,9 +42,7 @@ interface Props {
   onOpenSystemPrompt: (number: number) => void;
   onImage: (image: PreviewImage) => void;
   onAbort: () => void;
-  onResume: () => void;
   onOptions: () => void;
-  onChatControls: () => void;
 }
 
 function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?: number;
@@ -57,6 +56,7 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?
   return <SectionContext.Provider value={element => { const dispose = props.registerSection(props.id, element); onCleanup(dispose); }}><article class="tree-node" classList={{ 'prefix-preview': props.node.isPrefixDelta }} data-entry-id={props.id}
     hidden={props.position.hidden} style={{ left: `${props.position.left}px`, top: `${props.position.top}px`, width: `${props.position.span}px` }}>
     <Card ref={element} anchors={props.node.anchors} style={{ left: `${props.position.cardLeft}px`, width: `${props.width}px` }}>
+      <Show when={props.id === 'empty-chat-draft'}><SystemPromptPlaceholder /></Show>
       <Show when={props.node.entry.message?.role === 'system'} fallback={
         <Index each={props.node.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch} />}</Index>
       }>
@@ -67,7 +67,6 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?
 }
 
 export default function Conversation(props: Props) {
-  const [mode, setMode] = createSignal<'focused' | 'side'>('side');
   const [widths, setWidths] = createStore({ focused: 720, side: 720 });
   const [focusedFitsWindow, setFocusedFitsWindow] = createSignal(true);
   const [selectedLane, setSelectedLane] = createSignal(0);
@@ -107,7 +106,7 @@ export default function Conversation(props: Props) {
   let jumpUp!: HTMLButtonElement;
   let jumpLatest!: HTMLButtonElement;
   let readingAnchor: { id: string; offset: number } | undefined;
-  let centerAfterLayout = false;
+  let centerAfterLayout = true;
 
   function measure(element: Element) {
     const record = observed.get(element);
@@ -253,6 +252,7 @@ export default function Conversation(props: Props) {
     const release = interaction.keyup;
     const blur = interaction.blur;
   onMount(() => {
+    updateViewport();
     window.addEventListener('resize', updateViewport);
     onCleanup(() => {
       window.removeEventListener('resize', updateViewport);
@@ -263,7 +263,6 @@ export default function Conversation(props: Props) {
 
   createEffect(on(() => props.focusRequest, request => {
     if (!request || !props.graph.nodes.has(request.id)) return;
-    setMode('side');
     focus(request.id, false, false);
     const lane = lanes().find(item => item.leafId === request.id);
     if (lane) inputElements.get(lane.key)?.focus({ preventScroll: true });
@@ -354,8 +353,8 @@ export default function Conversation(props: Props) {
     onKeyDown={keydown} onKeyUp={release} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) blur();
     }}>
-    <ChatToolbar path={props.path} mode={mode()} notification={props.notification}
-      onChatControls={props.onChatControls} onResume={props.onResume} onOptions={props.onOptions} onMode={changeMode} onFork={adjacentFork} />
+    <ChatToolbar active={props.active} mode={mode()} notification={props.notification}
+      onOptions={props.onOptions} onMode={changeMode} onFork={adjacentFork} />
     {canvas}
     {bottom}
     <For each={laneKeys()}>{key => {
