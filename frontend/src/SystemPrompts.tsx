@@ -93,12 +93,14 @@ export default function SystemPrompts(props: Props) {
             return <Card class="system-prompt-version" data-active-column={focused()}
               hidden={mode() === 'focused' && !focused()} data-system-prompt-version={version.number}
               ref={element => sections.set(version.number, element)}>
-              <Show when={version.priorityReason}><p>{version.priorityReason}</p></Show>
-              <Show when={version.candidateKey}>{key => <label>
-                <input type="checkbox" checked={props.ignored?.(key()) ?? false}
-                  onChange={event => props.onIgnore?.(key(), event.currentTarget.checked)} />
-                Ignore this system prompt
-              </label>}</Show>
+              <div class="system-prompt-heading">
+                <div><Show when={version.priorityReason}><span>{version.priorityReason}</span></Show></div>
+                <div><Show when={version.candidateKey}>{key => <label>
+                  <input type="checkbox" checked={props.ignored?.(key()) ?? false}
+                    onChange={event => props.onIgnore?.(key(), event.currentTarget.checked)} />
+                  Ignore this system prompt
+                </label>}</Show></div>
+              </div>
               <SystemPromptContent entry={version.unified || version.full || version.detail}
                 full expandAll={expanded()} onExpandChange={setExpanded} />
             </Card>;

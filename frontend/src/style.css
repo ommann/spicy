@@ -464,6 +464,18 @@
   display: none;
 }
 
+.system-prompt-heading {
+  display: grid;
+  grid-template-rows: 24px 24px;
+  margin-bottom: 16px;
+}
+
+.system-prompt-heading label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .notification-error {
   color: var(--status-error);
 }
