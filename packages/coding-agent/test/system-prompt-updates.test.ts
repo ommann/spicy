@@ -115,20 +115,21 @@ describe("system prompt updates", () => {
 			await harness.session.prompt("two", { systemPromptPolicy: policy });
 			expect(calls).toBe(0);
 			expect(notices).toHaveLength(1);
+			const accepted = getCurrentSystemPrompt(harness.session.messages);
 			harness.session.setActiveToolsByName(["second"]);
 			instruction = "Unapproved instructions.";
 			await harness.session.prompt("three", { systemPromptPolicy: policy });
 			expect(calls).toBe(1);
 			const current = getCurrentSystemPrompt(harness.session.messages);
+			expect(current).toBe(accepted); // Retain the complete accepted revision, not a synthetic hybrid.
 			expect(current).toContain("second snippet");
-			expect(current).not.toContain("first snippet");
 			expect(current).not.toContain("Unapproved instructions.");
 		} finally {
 			harness.cleanup();
 		}
 	});
 
-	test("web forced prompts are gated and their accepted text is recorded", async () => {
+	test("web preserves the original forced-prompt projection and structured history", async () => {
 		let forced: string | undefined;
 		const harness = await createHarness({
 			extensionFactories: [
@@ -138,17 +139,57 @@ describe("system prompt updates", () => {
 			],
 		});
 		try {
-			harness.setResponses([
-				fauxAssistantMessage("one"),
-				fauxAssistantMessage("two"),
-				fauxAssistantMessage("three"),
-			]);
+			const requests: TranscriptContext[] = [];
+			harness.setResponses(
+				["one", "two", "three"].map((text) => (context: TranscriptContext) => {
+					requests.push(context);
+					return fauxAssistantMessage(text);
+				}),
+			);
 			await harness.session.prompt("one", { systemPromptPolicy: { decide: () => "accept" } });
+			const originalSections = getCurrentSystemMessage(harness.session.messages)?.sections;
 			forced = "Exact replacement instructions.";
 			await harness.session.prompt("two", { systemPromptPolicy: { decide: () => "current" } });
 			expect(getCurrentSystemPrompt(harness.session.messages)).not.toContain(forced);
 			await harness.session.prompt("three", { systemPromptPolicy: { decide: () => "accept" } });
-			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(forced);
+			expect(getCurrentSystemPrompt(requests[1]!.messages)).toBe(forced);
+			expect(getCurrentSystemPrompt(requests[2]!.messages)).toBe(forced);
+			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(originalSections);
+		} finally {
+			harness.cleanup();
+		}
+	});
+
+	test("web MCP discovery keeps the complete original builder output, including mcp_servers", async () => {
+		let description = "";
+		let expected: Record<string, string> = {};
+		const harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.on("before_agent_start", (event) => {
+						event.systemPromptOptions.sections.mcp_servers = `MCP servers whose tools are not declared to you.\n- mcp__rea (tool_search)${description}`;
+						expected = buildSystemPromptSections(event.systemPromptOptions);
+					});
+				},
+			],
+		});
+		let approvals = 0;
+		const policy: SystemPromptPolicy = {
+			decide: () => {
+				approvals++;
+				return "cancel";
+			},
+		};
+		try {
+			harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+			await harness.session.prompt("one", { systemPromptPolicy: policy });
+			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(expected);
+			description = ": REA provides reverse-engineering tools.";
+			await harness.session.prompt("two", { systemPromptPolicy: policy });
+			expect(approvals).toBe(0);
+			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(expected);
+			expect(getCurrentSystemPrompt(harness.session.messages)).toContain("<mcp_servers>\n");
+			expect(getCurrentSystemPrompt(harness.session.messages)).toContain(description);
 		} finally {
 			harness.cleanup();
 		}

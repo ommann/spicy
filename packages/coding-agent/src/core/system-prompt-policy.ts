@@ -18,42 +18,21 @@ export function promptCandidateKey(sections: SystemPromptSections): string {
 	return createHash("sha256").update(JSON.stringify(sections)).digest("hex");
 }
 
-/** Tool declarations must be usable immediately. Do not adopt unrelated prompt sections with them. */
-export function withPriorityToolSections(
+/** Classify a complete revision; never rewrite or merge the builder's output. */
+export function isDiscoveryOnlyChange(
 	accepted: SystemPromptSections,
 	proposed: SystemPromptSections,
-	toolNames: readonly string[],
-	toolGuidelines: Record<string, string[]>,
-): SystemPromptSections {
-	const result = { ...accepted };
-	// An accepted exact replacement has no independently editable tool sections.
-	if (Object.keys(accepted).every((key) => key === "preamble")) return result;
-	if (proposed.tools !== undefined) result.tools = proposed.tools;
-	else delete result.tools;
-	const ruleLines = (section = "") =>
-		section.split("\n").filter((line) => line && line !== "<rules>" && line !== "</rules>");
-	const rules = ruleLines(accepted.rules);
-	const bashRule = "- Use bash for file operations like ls, rg, find";
-	const needsBashRule = toolNames.includes("bash") && !toolNames.some((name) => ["grep", "find", "ls"].includes(name));
-	const inactiveRules = new Set(
-		Object.entries(toolGuidelines)
-			.filter(([name]) => !toolNames.includes(name))
-			.flatMap(([, guidelines]) => guidelines.map((guideline) => `- ${guideline.trim()}`)),
+	rulesWithPreviousTools: string | undefined,
+): boolean {
+	const changed = [...new Set([...Object.keys(accepted), ...Object.keys(proposed)])].filter(
+		(key) => accepted[key] !== proposed[key],
 	);
-	const nextRules = rules.filter((rule) => !inactiveRules.has(rule) && (rule !== bashRule || needsBashRule));
-	if (needsBashRule && !nextRules.includes(bashRule)) nextRules.unshift(bashRule);
-	for (const name of toolNames) {
-		for (const guideline of toolGuidelines[name] ?? []) {
-			const rule = `- ${guideline.trim()}`;
-			if (guideline.trim() && !nextRules.includes(rule)) nextRules.push(rule);
-		}
-	}
-	if (accepted.rules !== undefined || proposed.rules !== undefined) {
-		const proposedRules = ruleLines(proposed.rules);
-		result.rules =
-			proposedRules.length === nextRules.length && proposedRules.every((rule) => nextRules.includes(rule))
-				? (proposed.rules ?? "")
-				: `<rules>\n${nextRules.join("\n")}\n</rules>`;
-	}
-	return result;
+	return (
+		changed.length > 0 &&
+		changed.some((key) => key === "tools" || key === "mcp_servers") &&
+		changed.every(
+			(key) =>
+				key === "tools" || key === "mcp_servers" || (key === "rules" && accepted.rules === rulesWithPreviousTools),
+		)
+	);
 }

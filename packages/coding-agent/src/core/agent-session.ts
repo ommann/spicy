@@ -146,7 +146,7 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
-import { promptCandidateKey, type SystemPromptPolicy, withPriorityToolSections } from "./system-prompt-policy.ts";
+import { isDiscoveryOnlyChange, promptCandidateKey, type SystemPromptPolicy } from "./system-prompt-policy.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
@@ -1493,9 +1493,10 @@ export class AgentSession {
 
 	/** Current effective system prompt, including changes not yet sent to the model. */
 	get systemPrompt(): string {
-		return this._webPromptSections
+		const options = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
+		return this._webPromptSections && options.forceSystemPrompt === undefined
 			? getSystemMessageText({ role: "system", content: "", sections: this._webPromptSections, timestamp: 0 })
-			: buildSystemPrompt(this._runSystemPromptOptions ?? this._baseSystemPromptOptions);
+			: buildSystemPrompt(options);
 	}
 
 	/** Current retry attempt (0 if not retrying) */
@@ -1776,21 +1777,24 @@ export class AgentSession {
 		// The tool list and rules must match the declarations the request carries.
 		options.hiddenTools = [...this._hiddenDeclarations];
 		const proposed = buildSystemPromptSections(options);
-		if (this._webPromptSections && Object.keys(this._webPromptSections).some((key) => key !== "preamble")) {
-			this._webPromptSections = withPriorityToolSections(
+		if (
+			this._webPromptSections &&
+			isDiscoveryOnlyChange(
 				this._webPromptSections,
 				proposed,
-				options.selectedTools,
-				options.toolGuidelines,
-			);
+				buildSystemPromptSections({ ...options, selectedTools: getCurrentTools(messages).map((tool) => tool.name) })
+					.rules,
+			)
+		) {
+			this._webPromptSections = proposed;
 		}
 		const sections = diffSystemPromptSections(
 			getCurrentSystemMessage(messages)?.sections ?? {},
 			this._webPromptSections ?? proposed,
 		);
-		if (getCurrentSystemMessage(messages) && sections?.tools !== undefined) {
+		if (getCurrentSystemMessage(messages) && (sections?.tools !== undefined || sections?.mcp_servers !== undefined)) {
 			this._webPriorityNotice?.(
-				"Priority system prompt update: available tool declarations changed. Unrelated instructions still require approval.",
+				"Priority system prompt update: tool or MCP server discovery changed. The complete constructed prompt is preserved.",
 			);
 		}
 		return sections ? { role: "system", content: "", sections, timestamp: Date.now() } : undefined;
@@ -1984,14 +1988,11 @@ export class AgentSession {
 		if (policy) {
 			const options = result.systemPromptOptions;
 			const preview = this._resolveToolLoadout(options.selectedTools);
-			const proposed =
-				options.forceSystemPrompt !== undefined
-					? { preamble: options.forceSystemPrompt }
-					: buildSystemPromptSections({
-							...options,
-							selectedTools: preview.declared.map((tool) => tool.name),
-							hiddenTools: [...preview.hidden],
-						});
+			const proposed = buildSystemPromptSections({
+				...options,
+				selectedTools: preview.declared.map((tool) => tool.name),
+				hiddenTools: [...preview.hidden],
+			});
 			const recorded = getCurrentSystemMessage(this.agent.state.messages);
 			const accepted = Object.fromEntries(
 				Object.entries(recorded?.sections ?? {}).filter(
@@ -1999,21 +2000,19 @@ export class AgentSession {
 				),
 			);
 			// Legacy free-form system text is retained separately by transcript replay.
-			const current = recorded
-				? withPriorityToolSections(
-						accepted,
-						buildSystemPromptSections({
-							...options,
-							selectedTools: preview.declared.map((tool) => tool.name),
-							hiddenTools: [...preview.hidden],
-						}),
-						preview.declared.map((tool) => tool.name),
-						options.toolGuidelines,
-					)
-				: proposed;
+			const current = recorded ? accepted : proposed;
+			const discoveryOnly = isDiscoveryOnlyChange(
+				current,
+				proposed,
+				buildSystemPromptSections({
+					...options,
+					selectedTools: getCurrentTools(this.agent.state.messages).map((tool) => tool.name),
+					hiddenTools: [...preview.hidden],
+				}).rules,
+			);
 			const changed = diffSystemPromptSections(current, proposed);
 			const decision =
-				recorded && changed
+				recorded && changed && !discoveryOnly
 					? policy.decide({
 							key: promptCandidateKey(proposed),
 							sections: proposed,
@@ -2023,8 +2022,8 @@ export class AgentSession {
 					: "accept";
 			if (decision === "cancel") return undefined;
 			this._webPromptSections = decision === "current" ? current : proposed;
-			// Persist exact replacement text as a candidate section instead of silently projecting it.
-			options.forceSystemPrompt = undefined;
+			// Forced-prompt projection remains the original extension mechanism; do not
+			// convert its opaque text into synthetic structured prompt sections.
 		}
 
 		// Web approval precedes compaction, message consumption, and transcript writes.
