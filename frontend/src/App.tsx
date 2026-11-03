@@ -1,4 +1,5 @@
 import ScrollableTextarea from './ScrollableTextarea';
+import { ChatRouteContext } from './ChatRoute';
 import {
   For,
   Show,
@@ -60,7 +61,6 @@ interface DraftBranch {
 export default function App(props: ParentProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const showingPrompts = () => location.pathname.startsWith('/system-prompt');
   const openSystemPrompt = (id: string) => navigate(`/system-prompts/${encodeURIComponent(id)}`);
 
   const [snapshot, setSnapshot] = createSignal<Snapshot>(empty);
@@ -428,15 +428,19 @@ export default function App(props: ParentProps) {
       }}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <Handoffs sessionKey={branchKey()}>
-        <Show when={branchKey() || 'empty'} keyed>{_sessionKey => (
-          <Conversation graph={graph()} active={!showingPrompts()}
+        <ChatRouteContext.Provider value={() => {
+          onCleanup(() => { conversation = undefined; });
+          return <Show when={branchKey() || 'empty'} keyed>{_sessionKey => (
+          <Conversation graph={graph()} active
             running={snapshot().running} busy={busy()} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}
             onOptions={openOptions} />
-        )}</Show>
-        {props.children}
+        )}</Show>;
+        }}>
+          {props.children}
+        </ChatRouteContext.Provider>
         </Handoffs>
       </SystemPromptContext.Provider>
       </SystemPromptCreatorContext.Provider>
