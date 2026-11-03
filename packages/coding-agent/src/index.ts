@@ -85,7 +85,6 @@ export type {
 	CustomMessageEntryDraft,
 	CustomToolCallEvent,
 	EditToolCallEvent,
-	EntryRenderOptions,
 	ExecOptions,
 	ExecResult,
 	ExecuteToolOptions,
@@ -102,7 +101,6 @@ export type {
 	ExtensionFlag,
 	ExtensionHandler,
 	ExtensionRuntime,
-	ExtensionShortcut,
 	ExtensionToolContext,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
@@ -116,12 +114,9 @@ export type {
 	InputSource,
 	LoadExtensionsResult,
 	LsToolCallEvent,
-	MarkdownTransformContext,
-	MarkdownTransformer,
 	McpServersChangeEvent,
 	MessageEndEvent,
 	MessageEndEventResult,
-	MessageRenderOptions,
 	MessageStartEvent,
 	MessageUpdateEvent,
 	ModelSelectEvent,
@@ -202,8 +197,6 @@ export {
 	wrapRegisteredTool,
 	wrapRegisteredTools,
 } from "./core/extensions/index.ts";
-// Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
-export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
 export type { RegisteredMcpServer } from "./core/mcp-servers.ts";
 export { convertToLlm } from "./core/messages.ts";
 export { ModelRegistry } from "./core/model-registry.ts";
@@ -297,14 +290,11 @@ export {
 	type CompactionModelOverride,
 	type CompactionSettings,
 	type DefaultProjectTrust,
-	type FullscreenExitOutput,
 	type ImageSettings,
 	type PackageSource,
-	type QuietStartup,
 	type RetrySettings,
 	SettingsManager,
 	type SettingsManagerCreateOptions,
-	type TuiMode,
 } from "./core/settings-manager.ts";
 // Skills
 export {

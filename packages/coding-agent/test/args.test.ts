@@ -309,18 +309,6 @@ describe("parseArgs", () => {
 		});
 	});
 
-	describe("--theme flag", () => {
-		test("parses single --theme", () => {
-			const result = parseArgs(["--theme", "./theme.json"]);
-			expect(result.themes).toEqual(["./theme.json"]);
-		});
-
-		test("parses multiple --theme flags", () => {
-			const result = parseArgs(["--theme", "./dark.json", "--theme", "./light.json"]);
-			expect(result.themes).toEqual(["./dark.json", "./light.json"]);
-		});
-	});
-
 	describe("--no-skills flag", () => {
 		test("parses --no-skills flag", () => {
 			const result = parseArgs(["--no-skills"]);
@@ -332,13 +320,6 @@ describe("parseArgs", () => {
 		test("parses --no-prompt-templates flag", () => {
 			const result = parseArgs(["--no-prompt-templates"]);
 			expect(result.noPromptTemplates).toBe(true);
-		});
-	});
-
-	describe("--no-themes flag", () => {
-		test("parses --no-themes flag", () => {
-			const result = parseArgs(["--no-themes"]);
-			expect(result.noThemes).toBe(true);
 		});
 	});
 

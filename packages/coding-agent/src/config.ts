@@ -82,10 +82,6 @@ export function getAgentDir(): string {
 	return envDir ? expandTildePath(envDir) : join(homedir(), CONFIG_DIR_NAME, "agent");
 }
 
-export function getCustomThemesDir(): string {
-	return join(getAgentDir(), "themes");
-}
-
 export function getModelsPath(): string {
 	return join(getAgentDir(), "models.json");
 }

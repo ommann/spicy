@@ -687,7 +687,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
 		};
 
 		// ---------------------------------------------------------------------------------------
-		// Subcommands and plain status (no TUI)
+		// Subcommands and plain status
 		// ---------------------------------------------------------------------------------------
 
 		const formatStatus = (): string => {

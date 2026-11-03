@@ -32,7 +32,7 @@ describe("SettingsManager", () => {
 			writeFileSync(
 				settingsPath,
 				JSON.stringify({
-					theme: "dark",
+					defaultProvider: "initial-provider",
 					defaultModel: "claude-sonnet",
 				}),
 			);
@@ -53,11 +53,11 @@ describe("SettingsManager", () => {
 			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 			expect(savedSettings.enabledModels).toEqual(["claude-opus-4-5", "gpt-5.2-codex"]);
 			expect(savedSettings.defaultThinkingLevel).toBe("high");
-			expect(savedSettings.theme).toBe("dark");
+			expect(savedSettings.defaultProvider).toBe("initial-provider");
 			expect(savedSettings.defaultModel).toBe("claude-sonnet");
 		});
 
-		it("should preserve custom settings when changing theme", async () => {
+		it("should preserve custom settings when changing provider", async () => {
 			const settingsPath = join(agentDir, "settings.json");
 			writeFileSync(
 				settingsPath,
@@ -74,15 +74,15 @@ describe("SettingsManager", () => {
 			currentSettings.extensions = ["/path/to/extension.ts"];
 			writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
 
-			// User changes theme
-			manager.setTheme("light");
+			// User changes provider
+			manager.setDefaultProvider("updated-provider");
 			await manager.flush();
 
 			// Verify all settings preserved
 			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 			expect(savedSettings.shellPath).toBe("/bin/zsh");
 			expect(savedSettings.extensions).toEqual(["/path/to/extension.ts"]);
-			expect(savedSettings.theme).toBe("light");
+			expect(savedSettings.defaultProvider).toBe("updated-provider");
 		});
 
 		it("should let in-memory changes override file changes for same key", async () => {
@@ -90,7 +90,7 @@ describe("SettingsManager", () => {
 			writeFileSync(
 				settingsPath,
 				JSON.stringify({
-					theme: "dark",
+					defaultProvider: "initial-provider",
 				}),
 			);
 
@@ -114,7 +114,7 @@ describe("SettingsManager", () => {
 	describe("deviceId", () => {
 		it("creates one global device ID and reuses it in later processes", async () => {
 			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
+			writeFileSync(settingsPath, JSON.stringify({ defaultProvider: "initial-provider" }));
 			writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({ deviceId: "project-device" }));
 			const first = SettingsManager.create(projectDir, agentDir);
 
@@ -124,7 +124,7 @@ describe("SettingsManager", () => {
 			expect(deviceId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 			expect(first.getOrCreateDeviceId()).toBe(deviceId);
 			expect(SettingsManager.create(projectDir, agentDir).getOrCreateDeviceId()).toBe(deviceId);
-			expect(JSON.parse(readFileSync(settingsPath, "utf-8"))).toEqual({ theme: "dark", deviceId });
+			expect(JSON.parse(readFileSync(settingsPath, "utf-8"))).toEqual({ defaultProvider: "initial-provider", deviceId });
 		});
 	});
 
@@ -179,7 +179,7 @@ describe("SettingsManager", () => {
 			writeFileSync(
 				settingsPath,
 				JSON.stringify({
-					theme: "dark",
+					defaultProvider: "initial-provider",
 					extensions: ["/before.ts"],
 				}),
 			);
@@ -189,7 +189,7 @@ describe("SettingsManager", () => {
 			writeFileSync(
 				settingsPath,
 				JSON.stringify({
-					theme: "light",
+					defaultProvider: "updated-provider",
 					extensions: ["/after.ts"],
 					defaultModel: "claude-sonnet",
 				}),
@@ -197,40 +197,22 @@ describe("SettingsManager", () => {
 
 			await manager.reload();
 
-			expect(manager.getTheme()).toBe("light");
+			expect(manager.getDefaultProvider()).toBe("updated-provider");
 			expect(manager.getExtensionPaths()).toEqual(["/after.ts"]);
 			expect(manager.getDefaultModel()).toBe("claude-sonnet");
 		});
 
 		it("should keep previous settings and report the file path when the file is invalid", async () => {
 			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
+			writeFileSync(settingsPath, JSON.stringify({ defaultProvider: "initial-provider" }));
 
 			const manager = SettingsManager.create(projectDir, agentDir);
 
 			writeFileSync(settingsPath, "{ invalid json");
 			await manager.reload();
 
-			expect(manager.getTheme()).toBe("dark");
+			expect(manager.getDefaultProvider()).toBe("initial-provider");
 			expect(manager.drainErrors()).toMatchObject([{ scope: "global", path: settingsPath }]);
-		});
-	});
-
-	describe("theme setting", () => {
-		it("stores slash-separated automatic theme settings separately from fixed theme names", async () => {
-			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "light/dark" }));
-
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getTheme()).toBeUndefined();
-			expect(manager.getThemeSetting()).toBe("light/dark");
-
-			manager.setTheme("solarized-light/tokyo-night");
-			await manager.flush();
-
-			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-			expect(savedSettings.theme).toBe("solarized-light/tokyo-night");
 		});
 	});
 
@@ -255,25 +237,25 @@ describe("SettingsManager", () => {
 
 	describe("project trust", () => {
 		it("should skip project settings when project is not trusted", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "global" }));
-			writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({ theme: "project" }));
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultProvider: "global" }));
+			writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({ defaultProvider: "project" }));
 
 			const manager = SettingsManager.create(projectDir, agentDir, { projectTrusted: false });
 
 			expect(manager.isProjectTrusted()).toBe(false);
-			expect(manager.getTheme()).toBe("global");
+			expect(manager.getDefaultProvider()).toBe("global");
 			expect(manager.getProjectSettings()).toEqual({});
 		});
 
 		it("should reload project settings after trust changes to true", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "global" }));
-			writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({ theme: "project" }));
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultProvider: "global" }));
+			writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({ defaultProvider: "project" }));
 			const manager = SettingsManager.create(projectDir, agentDir, { projectTrusted: false });
 
 			manager.setProjectTrusted(true);
 
 			expect(manager.isProjectTrusted()).toBe(true);
-			expect(manager.getTheme()).toBe("project");
+			expect(manager.getDefaultProvider()).toBe("project");
 		});
 
 		it("should fail project settings writes when project is not trusted", async () => {
@@ -312,7 +294,7 @@ describe("SettingsManager", () => {
 		it("should not create .pi folder when only reading project settings", () => {
 			// Create agent dir with global settings, but NO .pi folder in project
 			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
+			writeFileSync(settingsPath, JSON.stringify({ defaultProvider: "initial-provider" }));
 
 			// Delete the .pi folder that beforeEach created
 			rmSync(join(projectDir, ".pi"), { recursive: true });
@@ -324,13 +306,13 @@ describe("SettingsManager", () => {
 			expect(existsSync(join(projectDir, ".pi"))).toBe(false);
 
 			// Settings should still be loaded from global
-			expect(manager.getTheme()).toBe("dark");
+			expect(manager.getDefaultProvider()).toBe("initial-provider");
 		});
 
 		it("should create .pi folder when writing project settings", async () => {
 			// Create agent dir with global settings, but NO .pi folder in project
 			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
+			writeFileSync(settingsPath, JSON.stringify({ defaultProvider: "initial-provider" }));
 
 			// Delete the .pi folder that beforeEach created
 			rmSync(join(projectDir, ".pi"), { recursive: true });
@@ -349,25 +331,6 @@ describe("SettingsManager", () => {
 
 			// And settings file should be created
 			expect(existsSync(join(projectDir, ".pi", "settings.json"))).toBe(true);
-		});
-	});
-
-	describe("terminal capability overrides", () => {
-		it("maps explicit values and omits auto values", () => {
-			const getOverrides = (terminal: NonNullable<Settings["terminal"]>) =>
-				SettingsManager.inMemory({ terminal }).getTerminalCapabilityOverrides();
-
-			expect(getOverrides({ images: false, trueColor: false, hyperlinks: false })).toEqual({
-				images: null,
-				trueColor: false,
-				hyperlinks: false,
-			});
-			expect(getOverrides({ images: "kitty", trueColor: true, hyperlinks: true })).toEqual({
-				images: "kitty",
-				trueColor: true,
-				hyperlinks: true,
-			});
-			expect(getOverrides({ images: "auto", trueColor: "auto", hyperlinks: "auto" })).toEqual({});
 		});
 	});
 
@@ -434,138 +397,6 @@ describe("SettingsManager", () => {
 		});
 	});
 
-	describe("externalEditor", () => {
-		const originalVisual = process.env.VISUAL;
-		const originalEditor = process.env.EDITOR;
-
-		function setEditorEnv(visual?: string, editor?: string): void {
-			if (visual === undefined) delete process.env.VISUAL;
-			else process.env.VISUAL = visual;
-			if (editor === undefined) delete process.env.EDITOR;
-			else process.env.EDITOR = editor;
-		}
-
-		afterEach(() => {
-			setEditorEnv(originalVisual, originalEditor);
-		});
-
-		it("should resolve editor commands by precedence", () => {
-			setEditorEnv("vim", "nano");
-			expect(SettingsManager.inMemory({ externalEditor: "code --wait" }).getExternalEditorCommand()).toBe(
-				"code --wait",
-			);
-			expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("vim");
-
-			setEditorEnv(undefined, "emacs");
-			expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("emacs");
-		});
-
-		it("should fall back to nano", () => {
-			setEditorEnv();
-			expect(SettingsManager.inMemory().getExternalEditorCommand()).toBe("nano");
-		});
-	});
-
-	describe("TUI mode", () => {
-		it("defaults to fullscreen and persists regular mode", async () => {
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getTuiMode()).toBe("fullscreen");
-
-			manager.setTuiMode("regular");
-			await manager.flush();
-
-			expect(manager.getTuiMode()).toBe("regular");
-			const savedSettings = JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8"));
-			expect(savedSettings.tuiMode).toBe("regular");
-		});
-
-		it("falls back to fullscreen for unsupported values", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ tuiMode: "other" }));
-
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getTuiMode()).toBe("fullscreen");
-		});
-
-		it("does not recognize the old uiMode setting", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ uiMode: "regular" }));
-
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getTuiMode()).toBe("fullscreen");
-		});
-	});
-
-	it("validates and persists fullscreen settings", async () => {
-		const manager = SettingsManager.create(projectDir, agentDir);
-		expect(manager.getFullscreenExitOutput()).toBe("transcript");
-		expect(manager.getFullscreenScrollbar()).toBe("auto");
-		expect(manager.getFullscreenCopyOnSelect()).toBe(true);
-
-		manager.setFullscreenExitOutput("resume-hint");
-		manager.setFullscreenScrollbar("hidden");
-		manager.setFullscreenCopyOnSelect(false);
-		await manager.flush();
-		const savedSettings = JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8"));
-		expect(savedSettings.fullscreenExitOutput).toBe("resume-hint");
-		expect(savedSettings.fullscreenScrollbar).toBe("hidden");
-		expect(savedSettings.fullscreenCopyOnSelect).toBe(false);
-
-		writeFileSync(
-			join(agentDir, "settings.json"),
-			JSON.stringify({ fullscreenExitOutput: "nothing", fullscreenScrollbar: "sometimes" }),
-		);
-		const reloadedManager = SettingsManager.create(projectDir, agentDir);
-		expect(reloadedManager.getFullscreenExitOutput()).toBe("transcript");
-		expect(reloadedManager.getFullscreenScrollbar()).toBe("auto");
-		expect(reloadedManager.getFullscreenCopyOnSelect()).toBe(true);
-	});
-
-	// #9758: wheel scrolling defaults to auto, persists line counts, and ignores invalid values.
-	it("persists fullscreen wheel scroll lines", async () => {
-		const manager = SettingsManager.create(projectDir, agentDir);
-		expect(manager.getFullscreenWheelScrollLines()).toBe("auto");
-
-		manager.setFullscreenWheelScrollLines(3);
-		await manager.flush();
-		expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8")).fullscreenWheelScrollLines).toBe(3);
-
-		for (const [value, expected] of [
-			[7.9, 7],
-			[0, 1],
-			[1000, 100],
-			["fast", "auto"],
-			[null, "auto"],
-		] as const) {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ fullscreenWheelScrollLines: value }));
-			expect(SettingsManager.create(projectDir, agentDir).getFullscreenWheelScrollLines()).toBe(expected);
-		}
-	});
-
-	describe("outputPad", () => {
-		it("should default to 1 and persist binary values", async () => {
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getOutputPad()).toBe(1);
-
-			manager.setOutputPad(0);
-			await manager.flush();
-
-			expect(manager.getOutputPad()).toBe(0);
-			const savedSettings = JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8"));
-			expect(savedSettings.outputPad).toBe(0);
-		});
-
-		it("should treat unsupported outputPad values as default padding", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ outputPad: 2 }));
-
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getOutputPad()).toBe(1);
-		});
-	});
-
 	describe("shellCommandPrefix", () => {
 		it("should load shellCommandPrefix from settings", () => {
 			const settingsPath = join(agentDir, "settings.json");
@@ -578,7 +409,7 @@ describe("SettingsManager", () => {
 
 		it("should return undefined when shellCommandPrefix is not set", () => {
 			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
+			writeFileSync(settingsPath, JSON.stringify({ defaultProvider: "initial-provider" }));
 
 			const manager = SettingsManager.create(projectDir, agentDir);
 
@@ -590,12 +421,12 @@ describe("SettingsManager", () => {
 			writeFileSync(settingsPath, JSON.stringify({ shellCommandPrefix: "shopt -s expand_aliases" }));
 
 			const manager = SettingsManager.create(projectDir, agentDir);
-			manager.setTheme("light");
+			manager.setDefaultProvider("updated-provider");
 			await manager.flush();
 
 			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 			expect(savedSettings.shellCommandPrefix).toBe("shopt -s expand_aliases");
-			expect(savedSettings.theme).toBe("light");
+			expect(savedSettings.defaultProvider).toBe("updated-provider");
 		});
 	});
 
@@ -660,7 +491,7 @@ describe("SettingsManager", () => {
 
 	describe("getSessionDir", () => {
 		it("should return undefined when not set", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "dark" }));
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultProvider: "initial-provider" }));
 			const manager = SettingsManager.create(projectDir, agentDir);
 			expect(manager.getSessionDir()).toBeUndefined();
 		});
@@ -687,7 +518,7 @@ describe("SettingsManager", () => {
 
 	describe("getShellPath", () => {
 		it("should return undefined when not set", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "dark" }));
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultProvider: "initial-provider" }));
 			const manager = SettingsManager.create(projectDir, agentDir);
 			expect(manager.getShellPath()).toBeUndefined();
 		});

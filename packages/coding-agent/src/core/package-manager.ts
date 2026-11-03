@@ -83,7 +83,6 @@ export interface ResolvedPaths {
 	extensions: ResolvedResource[];
 	skills: ResolvedResource[];
 	prompts: ResolvedResource[];
-	themes: ResolvedResource[];
 }
 
 export type MissingSourceAction = "install" | "skip" | "error";
@@ -174,7 +173,6 @@ interface ResourceAccumulator {
 	extensions: Map<string, { metadata: PathMetadata; enabled: boolean }>;
 	skills: Map<string, { metadata: PathMetadata; enabled: boolean }>;
 	prompts: Map<string, { metadata: PathMetadata; enabled: boolean }>;
-	themes: Map<string, { metadata: PathMetadata; enabled: boolean }>;
 }
 
 /**
@@ -202,18 +200,16 @@ interface PackageFilter {
 	extensions?: string[];
 	skills?: string[];
 	prompts?: string[];
-	themes?: string[];
 }
 
-type ResourceType = "extensions" | "skills" | "prompts" | "themes";
+type ResourceType = "extensions" | "skills" | "prompts";
 
-const RESOURCE_TYPES: ResourceType[] = ["extensions", "skills", "prompts", "themes"];
+const RESOURCE_TYPES: ResourceType[] = ["extensions", "skills", "prompts"];
 
 const FILE_PATTERNS: Record<ResourceType, RegExp> = {
 	extensions: /\.(ts|js)$/,
 	skills: /\.md$/,
 	prompts: /\.md$/,
-	themes: /\.json$/,
 };
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
@@ -513,43 +509,6 @@ function collectAutoPromptEntries(dir: string): string[] {
 			if (ig.ignores(relPath)) continue;
 
 			if (isFile && entry.name.endsWith(".md")) {
-				entries.push(fullPath);
-			}
-		}
-	} catch {
-		// Ignore errors
-	}
-
-	return entries;
-}
-
-function collectAutoThemeEntries(dir: string): string[] {
-	const entries: string[] = [];
-	if (!existsSync(dir)) return entries;
-
-	const ig = ignore();
-	addIgnoreRules(ig, dir, dir);
-
-	try {
-		const dirEntries = readdirSync(dir, { withFileTypes: true });
-		for (const entry of dirEntries) {
-			if (entry.name.startsWith(".")) continue;
-			if (entry.name === "node_modules") continue;
-
-			const fullPath = join(dir, entry.name);
-			let isFile = entry.isFile();
-			if (entry.isSymbolicLink()) {
-				try {
-					isFile = statSync(fullPath).isFile();
-				} catch {
-					continue;
-				}
-			}
-
-			const relPath = toPosixPath(relative(dir, fullPath));
-			if (ig.ignores(relPath)) continue;
-
-			if (isFile && entry.name.endsWith(".json")) {
 				entries.push(fullPath);
 			}
 		}
@@ -2379,26 +2338,22 @@ export class DefaultPackageManager implements PackageManager {
 			extensions: (globalSettings.extensions ?? []) as string[],
 			skills: (globalSettings.skills ?? []) as string[],
 			prompts: (globalSettings.prompts ?? []) as string[],
-			themes: (globalSettings.themes ?? []) as string[],
 		};
 		const projectOverrides = {
 			extensions: (projectSettings.extensions ?? []) as string[],
 			skills: (projectSettings.skills ?? []) as string[],
 			prompts: (projectSettings.prompts ?? []) as string[],
-			themes: (projectSettings.themes ?? []) as string[],
 		};
 
 		const userDirs = {
 			extensions: join(globalBaseDir, "extensions"),
 			skills: join(globalBaseDir, "skills"),
 			prompts: join(globalBaseDir, "prompts"),
-			themes: join(globalBaseDir, "themes"),
 		};
 		const projectDirs = {
 			extensions: join(projectBaseDir, "extensions"),
 			skills: join(projectBaseDir, "skills"),
 			prompts: join(projectBaseDir, "prompts"),
-			themes: join(projectBaseDir, "themes"),
 		};
 		const userAgentsSkillsDir = join(getHomeDir(), ".agents", "skills");
 		const projectTrusted = this.settingsManager.isProjectTrusted();
@@ -2464,13 +2419,6 @@ export class DefaultPackageManager implements PackageManager {
 				projectOverrides.prompts,
 				projectBaseDir,
 			);
-			addResources(
-				"themes",
-				collectAutoThemeEntries(projectDirs.themes),
-				projectMetadata,
-				projectOverrides.themes,
-				projectBaseDir,
-			);
 		}
 
 		// User extensions from ~/.pi/agent/
@@ -2512,13 +2460,6 @@ export class DefaultPackageManager implements PackageManager {
 			userOverrides.prompts,
 			globalBaseDir,
 		);
-		addResources(
-			"themes",
-			collectAutoThemeEntries(userDirs.themes),
-			userMetadata,
-			userOverrides.themes,
-			globalBaseDir,
-		);
 	}
 
 	private collectFilesFromPaths(paths: string[], resourceType: ResourceType): string[] {
@@ -2551,8 +2492,6 @@ export class DefaultPackageManager implements PackageManager {
 				return accumulator.skills;
 			case "prompts":
 				return accumulator.prompts;
-			case "themes":
-				return accumulator.themes;
 			default:
 				throw new Error(`Unknown resource type: ${resourceType}`);
 		}
@@ -2575,7 +2514,6 @@ export class DefaultPackageManager implements PackageManager {
 			extensions: new Map(),
 			skills: new Map(),
 			prompts: new Map(),
-			themes: new Map(),
 		};
 	}
 
@@ -2603,7 +2541,6 @@ export class DefaultPackageManager implements PackageManager {
 			extensions: mapToResolved(accumulator.extensions),
 			skills: mapToResolved(accumulator.skills),
 			prompts: mapToResolved(accumulator.prompts),
-			themes: mapToResolved(accumulator.themes),
 		};
 	}
 

@@ -51,9 +51,7 @@ describe("generated configuration schemas", () => {
 
 		const settings = JSON.parse(renderConfigSchemas().get("schemas/settings.schema.json") ?? "");
 		expect(settings.properties).toMatchObject({
-			quietStartup: { description: expect.stringContaining("hide all startup output") },
 			defaultTools: { description: expect.stringContaining("+name and -name") },
-			fullscreenWheelScrollLines: { description: expect.stringContaining("1 to 100") },
 		});
 	});
 
@@ -86,7 +84,7 @@ describe("generated configuration schemas", () => {
 			name: "settings.json",
 			artifact: "schemas/settings.schema.json",
 			valid: {
-				theme: "dark",
+				defaultProvider: "test-provider",
 				cacheWarming: "idle",
 				extensionSetting: { enabled: true },
 				queueMode: "all",
@@ -220,11 +218,11 @@ describe("generated configuration schemas", () => {
 		const directory = createTemporaryDirectory();
 		writeFileSync(
 			join(directory, "settings.json"),
-			JSON.stringify({ $schema: schemaUrl("settings"), theme: "light", extensionSetting: { enabled: true } }),
+			JSON.stringify({ $schema: schemaUrl("settings"), defaultProvider: "test-provider", extensionSetting: { enabled: true } }),
 		);
 
 		const manager = SettingsManager.create(directory, directory);
-		expect(manager.getTheme()).toBe("light");
+		expect(manager.getDefaultProvider()).toBe("test-provider");
 		expect(manager.getGlobalSettings()).toMatchObject({
 			$schema: schemaUrl("settings"),
 			extensionSetting: { enabled: true },

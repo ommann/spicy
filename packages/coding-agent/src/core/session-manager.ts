@@ -152,7 +152,7 @@ export interface SessionInfoEntry extends SessionEntryBase {
  * The content is converted to a user message in buildSessionContext().
  * Use details for extension-specific metadata (not sent to LLM).
  *
- * display controls TUI rendering:
+ * display controls client visibility:
  * - false: hidden entirely
  * - true: rendered with distinct styling (different from user messages)
  */
@@ -1319,8 +1319,8 @@ export class SessionManager {
 	/** Get the current session name from the latest session_info entry, if any. */
 	getSessionName(): string | undefined {
 		// Walk entries in reverse to find the latest session_info entry.
-		// Empty names explicitly clear the session title. Reads fileEntries directly: the footer
-		// calls this on every frame, and getEntries() copies the whole session.
+		// Empty names explicitly clear the session title. Read fileEntries directly to avoid
+		// copying the whole session through getEntries().
 		for (let i = this.fileEntries.length - 1; i >= 0; i--) {
 			const entry = this.fileEntries[i];
 			if (entry.type === "session_info") {
@@ -1334,7 +1334,7 @@ export class SessionManager {
 	 * Append a custom message entry (for extensions) that participates in LLM context.
 	 * @param customType Extension identifier for filtering on reload
 	 * @param content Message content (string or TextContent/ImageContent array)
-	 * @param display Whether to show in TUI (true = styled display, false = hidden)
+	 * @param display Whether clients should display the message (false = hidden)
 	 * @param details Optional extension-specific metadata (not sent to LLM)
 	 * @returns Entry id
 	 */

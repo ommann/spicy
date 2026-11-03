@@ -85,7 +85,7 @@ export interface GenerateBranchSummaryOptions {
 	streamFn?: StreamFn;
 	/** Retry policy for transient summarization errors. Reuses coding-agent's `settings.retry`. */
 	retry?: RetryPolicy;
-	/** Optional callbacks for retry reporting (e.g. TUI retry indicators). */
+	/** Optional callbacks for retry reporting. */
 	callbacks?: RetryCallbacks;
 }
 

@@ -31,7 +31,6 @@ export type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	AppendEntryHandler,
-	// App keybindings (for custom editors)
 	// Events - Tool (ToolCallEvent types)
 	BashToolCallEvent,
 	BashToolResultEvent,
@@ -65,7 +64,6 @@ export type {
 	EditToolCallEvent,
 	EditToolResultEvent,
 	// Message and Entry Rendering
-	EntryRenderOptions,
 	ExecOptions,
 	ExecResult,
 	ExecuteToolOptions,
@@ -86,7 +84,6 @@ export type {
 	ExtensionMode,
 	// Runtime
 	ExtensionRuntime,
-	ExtensionShortcut,
 	ExtensionToolContext,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
@@ -108,13 +105,10 @@ export type {
 	LoadExtensionsResult,
 	LsToolCallEvent,
 	LsToolResultEvent,
-	MarkdownTransformContext,
-	MarkdownTransformer,
 	McpServersChangeEvent,
 	// Events - Message
 	MessageEndEvent,
 	MessageEndEventResult,
-	MessageRenderOptions,
 	MessageStartEvent,
 	MessageUpdateEvent,
 	ModelSelectEvent,

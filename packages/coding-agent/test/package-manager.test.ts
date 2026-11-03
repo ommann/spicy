@@ -107,7 +107,6 @@ describe("DefaultPackageManager", () => {
 			const result = await packageManager.resolve();
 			expect(result.extensions).toEqual([]);
 			expect(result.prompts).toEqual([]);
-			expect(result.themes).toEqual([]);
 			expect(result.skills.every((r) => r.metadata.source === "auto" && r.metadata.origin === "top-level")).toBe(
 				true,
 			);
@@ -222,11 +221,9 @@ Content`,
 				const sharedExtensionsDir = join(sharedDir, "extensions");
 				const sharedSkillsDir = join(sharedDir, "skills");
 				const sharedPromptsDir = join(sharedDir, "prompts");
-				const sharedThemesDir = join(sharedDir, "themes");
 				mkdirSync(sharedExtensionsDir, { recursive: true });
 				mkdirSync(sharedSkillsDir, { recursive: true });
 				mkdirSync(sharedPromptsDir, { recursive: true });
-				mkdirSync(sharedThemesDir, { recursive: true });
 
 				writeFileSync(join(sharedExtensionsDir, "shared.ts"), "export default function() {}");
 				mkdirSync(join(sharedSkillsDir, "shared-skill"), { recursive: true });
@@ -239,18 +236,15 @@ description: Shared skill
 Content`,
 				);
 				writeFileSync(join(sharedPromptsDir, "shared.md"), "Shared prompt");
-				writeFileSync(join(sharedThemesDir, "shared.json"), JSON.stringify({ name: "shared-theme" }));
 
 				mkdirSync(join(agentDir), { recursive: true });
 				mkdirSync(join(tempDir, ".pi"), { recursive: true });
 				symlinkSync(sharedExtensionsDir, join(agentDir, "extensions"), "dir");
 				symlinkSync(sharedSkillsDir, join(agentDir, "skills"), "dir");
 				symlinkSync(sharedPromptsDir, join(agentDir, "prompts"), "dir");
-				symlinkSync(sharedThemesDir, join(agentDir, "themes"), "dir");
 				symlinkSync(sharedExtensionsDir, join(tempDir, ".pi", "extensions"), "dir");
 				symlinkSync(sharedSkillsDir, join(tempDir, ".pi", "skills"), "dir");
 				symlinkSync(sharedPromptsDir, join(tempDir, ".pi", "prompts"), "dir");
-				symlinkSync(sharedThemesDir, join(tempDir, ".pi", "themes"), "dir");
 
 				const result = await packageManager.resolve();
 
@@ -258,12 +252,10 @@ Content`,
 					extensions: result.extensions.length,
 					skills: result.skills.length,
 					prompts: result.prompts.length,
-					themes: result.themes.length,
 				}).toEqual({
 					extensions: 1,
 					skills: 1,
 					prompts: 1,
-					themes: 1,
 				});
 
 				// Project auto-discovered has higher precedence than user auto-discovered,
@@ -271,7 +263,6 @@ Content`,
 				expect(result.extensions[0].metadata.scope).toBe("project");
 				expect(result.skills[0].metadata.scope).toBe("project");
 				expect(result.prompts[0].metadata.scope).toBe("project");
-				expect(result.themes[0].metadata.scope).toBe("project");
 			} finally {
 				if (previousHome === undefined) {
 					delete process.env.HOME;
@@ -673,13 +664,10 @@ Content`,
 		it("should handle directories with auto-discovery layout", async () => {
 			const pkgDir = join(tempDir, "auto-pkg");
 			mkdirSync(join(pkgDir, "extensions"), { recursive: true });
-			mkdirSync(join(pkgDir, "themes"), { recursive: true });
 			writeFileSync(join(pkgDir, "extensions", "main.ts"), "export default function() {}");
-			writeFileSync(join(pkgDir, "themes", "dark.json"), "{}");
 
 			const result = await packageManager.resolveExtensionSources([pkgDir]);
 			expect(result.extensions.some((r) => pathEndsWith(r.path, "main.ts") && r.enabled)).toBe(true);
-			expect(result.themes.some((r) => pathEndsWith(r.path, "dark.json") && r.enabled)).toBe(true);
 		});
 
 		it("should stop recursing when a package skill directory contains SKILL.md", async () => {
@@ -1336,7 +1324,6 @@ Content`,
 					extensions: ["extensions/main.ts"],
 					skills: [],
 					prompts: ["prompts/review.md"],
-					themes: ["themes/dark.json"],
 				},
 			]);
 
@@ -1348,7 +1335,6 @@ Content`,
 					extensions: ["extensions/main.ts"],
 					skills: [],
 					prompts: ["prompts/review.md"],
-					themes: ["themes/dark.json"],
 				},
 			]);
 		});
@@ -1509,21 +1495,6 @@ Content`,
 			const result = await packageManager.resolve();
 			expect(result.extensions.some((r) => isEnabled(r, "keep.ts"))).toBe(true);
 			expect(result.extensions.some((r) => isDisabled(r, "remove.ts"))).toBe(true);
-		});
-
-		it("should filter themes with glob patterns", async () => {
-			const themesDir = join(agentDir, "themes");
-			mkdirSync(themesDir, { recursive: true });
-			writeFileSync(join(themesDir, "dark.json"), "{}");
-			writeFileSync(join(themesDir, "light.json"), "{}");
-			writeFileSync(join(themesDir, "funky.json"), "{}");
-
-			settingsManager.setThemePaths(["themes", "!funky.json"]);
-
-			const result = await packageManager.resolve();
-			expect(result.themes.some((r) => isEnabled(r, "dark.json"))).toBe(true);
-			expect(result.themes.some((r) => isEnabled(r, "light.json"))).toBe(true);
-			expect(result.themes.some((r) => isDisabled(r, "funky.json"))).toBe(true);
 		});
 
 		it("should filter prompts with exclusion pattern", async () => {
@@ -1727,7 +1698,6 @@ Content`,
 					extensions: ["!**/bar.ts"],
 					skills: [],
 					prompts: [],
-					themes: [],
 				},
 			]);
 
@@ -1753,7 +1723,6 @@ Content`,
 					extensions: ["!**/baz.ts"],
 					skills: [],
 					prompts: [],
-					themes: [],
 				},
 			]);
 
@@ -1761,27 +1730,6 @@ Content`,
 			expect(result.extensions.some((r) => isEnabled(r, "foo.ts"))).toBe(true);
 			expect(result.extensions.some((r) => isEnabled(r, "bar.ts"))).toBe(true);
 			expect(result.extensions.some((r) => isDisabled(r, "baz.ts"))).toBe(true);
-		});
-
-		it("should filter themes from package", async () => {
-			const pkgDir = join(tempDir, "theme-pkg");
-			mkdirSync(join(pkgDir, "themes"), { recursive: true });
-			writeFileSync(join(pkgDir, "themes", "nice.json"), "{}");
-			writeFileSync(join(pkgDir, "themes", "ugly.json"), "{}");
-
-			settingsManager.setPackages([
-				{
-					source: pkgDir,
-					extensions: [],
-					skills: [],
-					prompts: [],
-					themes: ["!ugly.json"],
-				},
-			]);
-
-			const result = await packageManager.resolve();
-			expect(result.themes.some((r) => isEnabled(r, "nice.json"))).toBe(true);
-			expect(result.themes.some((r) => isDisabled(r, "ugly.json"))).toBe(true);
 		});
 
 		it("should combine include and exclude patterns", async () => {
@@ -1797,7 +1745,6 @@ Content`,
 					extensions: ["**/alpha.ts", "**/beta.ts", "!**/beta.ts"],
 					skills: [],
 					prompts: [],
-					themes: [],
 				},
 			]);
 
@@ -1819,7 +1766,6 @@ Content`,
 					extensions: ["extensions/one.ts"],
 					skills: [],
 					prompts: [],
-					themes: [],
 				},
 			]);
 
@@ -1903,7 +1849,6 @@ Content`,
 					extensions: ["!**/*.ts", "+extensions/beta.ts"],
 					skills: [],
 					prompts: [],
-					themes: [],
 				},
 			]);
 
@@ -1928,7 +1873,6 @@ Content`,
 					extensions: [],
 					skills: ["!**/*", "+skills/skill-a", "+skills/skill-c"],
 					prompts: [],
-					themes: [],
 				},
 			]);
 
@@ -1974,21 +1918,6 @@ Content`,
 			expect(result.extensions.some((r) => isEnabled(r, "three.ts"))).toBe(true);
 		});
 
-		it("should force-include themes", async () => {
-			const themesDir = join(agentDir, "themes");
-			mkdirSync(themesDir, { recursive: true });
-			writeFileSync(join(themesDir, "dark.json"), "{}");
-			writeFileSync(join(themesDir, "light.json"), "{}");
-			writeFileSync(join(themesDir, "special.json"), "{}");
-
-			settingsManager.setThemePaths(["themes", "!themes/*.json", "+themes/special.json"]);
-
-			const result = await packageManager.resolve();
-			expect(result.themes.some((r) => isDisabled(r, "dark.json"))).toBe(true);
-			expect(result.themes.some((r) => isDisabled(r, "light.json"))).toBe(true);
-			expect(result.themes.some((r) => isEnabled(r, "special.json"))).toBe(true);
-		});
-
 		it("should force-include prompts", async () => {
 			const promptsDir = join(agentDir, "prompts");
 			mkdirSync(promptsDir, { recursive: true });
@@ -2031,7 +1960,6 @@ Content`,
 					extensions: ["extensions/*.ts", "+extensions/alpha.ts", "-extensions/alpha.ts"],
 					skills: [],
 					prompts: [],
-					themes: [],
 				},
 			]);
 
@@ -2467,7 +2395,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
 			const installParsedSourceSpy = vi.spyOn(packageManager as any, "installParsedSource");
 
 			const result = await packageManager.resolve();
-			const allResources = [...result.extensions, ...result.skills, ...result.prompts, ...result.themes];
+			const allResources = [...result.extensions, ...result.skills, ...result.prompts];
 			expect(allResources.some((r) => r.metadata.origin === "package")).toBe(false);
 			expect(installParsedSourceSpy).not.toHaveBeenCalled();
 		});

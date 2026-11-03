@@ -4,7 +4,7 @@
  * Extensions are TypeScript modules that can:
  * - Subscribe to agent lifecycle events
  * - Register LLM-callable tools
- * - Register commands, keyboard shortcuts, and CLI flags
+ * - Register commands and CLI flags
  * - Interact with the user via UI primitives
  */
 
@@ -93,7 +93,6 @@ export interface AutocompleteItem {
 	description?: string;
 }
 
-export type KeyId = string;
 
 // ============================================================================
 // UI Context
@@ -182,7 +181,7 @@ export interface ExtensionContext {
 	ui: ExtensionUIContext;
 	/** Current run mode. */
 	mode: ExtensionMode;
-	/** Whether dialog-capable UI is available (true in TUI and RPC modes) */
+	/** Whether dialog-capable UI is available (true in RPC mode) */
 	hasUI: boolean;
 	/** Current working directory */
 	cwd: string;
@@ -287,7 +286,7 @@ export interface ExtensionCommandContext extends ExtensionContext {
 		options?: { withSession?: (ctx: ReplacedSessionContext) => Promise<void> },
 	): Promise<{ cancelled: boolean }>;
 
-	/** Reload extensions, skills, prompts, themes, and context files. */
+	/** Reload extensions, skills, prompts, and context files. */
 	reload(): Promise<void>;
 }
 
@@ -522,7 +521,6 @@ export interface ResourcesDiscoverEvent {
 export interface ResourcesDiscoverResult {
 	skillPaths?: string[];
 	promptPaths?: string[];
-	themePaths?: string[];
 }
 
 /**
@@ -1303,28 +1301,6 @@ export interface SessionBeforeTreeResult {
 }
 
 // ============================================================================
-// Message and Entry Rendering
-// ============================================================================
-
-export interface MessageRenderOptions {
-	expanded: boolean;
-	/** Horizontal padding configured by the outputPad setting. */
-	outputPad: number;
-}
-
-export interface MarkdownTransformContext {
-	messageType: "user" | "assistant" | "assistant-thinking";
-	isStreaming: boolean;
-	availableWidth: number;
-}
-
-export type MarkdownTransformer = (markdown: string, context: MarkdownTransformContext) => string;
-
-export interface EntryRenderOptions {
-	expanded: boolean;
-}
-
-// ============================================================================
 // Command Registration
 // ============================================================================
 
@@ -1433,20 +1409,11 @@ export interface ExtensionAPI {
 	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void;
 
 	// =========================================================================
-	// Command, Shortcut, Flag Registration
+	// Command and Flag Registration
 	// =========================================================================
 
 	/** Register a custom command. */
 	registerCommand(name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">): void;
-
-	/** Register a keyboard shortcut. */
-	registerShortcut(
-		shortcut: KeyId,
-		options: {
-			description?: string;
-			handler: (ctx: ExtensionContext) => Promise<void> | void;
-		},
-	): void;
 
 	/** Register a CLI flag. */
 	registerFlag(
@@ -1466,19 +1433,6 @@ export interface ExtensionAPI {
 
 	/** Get the value of a registered CLI flag. */
 	getFlag(name: string): boolean | string | undefined;
-
-	// =========================================================================
-	// Message Rendering
-	// =========================================================================
-
-	/** Register a custom renderer for CustomMessageEntry. */
-
-	/** Register a transformer for user and assistant Markdown before Pi renders it in the interactive transcript. */
-	registerMarkdownTransformer(transformer: MarkdownTransformer): void;
-
-	/** Register a custom renderer for CustomEntry. Custom entries do not participate in LLM context. */
-
-	/** Choose how tool calls are drawn. Resolvers run in extension load order. */
 
 	// =========================================================================
 	// Actions
@@ -1847,13 +1801,6 @@ export interface ExtensionFlag {
 	extensionPath: string;
 }
 
-export interface ExtensionShortcut {
-	shortcut: KeyId;
-	description?: string;
-	handler: (ctx: ExtensionContext) => Promise<void> | void;
-	extensionPath: string;
-}
-
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
 export type SendMessageHandler = <T = unknown>(
@@ -2031,11 +1978,9 @@ export interface Extension {
 	handlers: Map<string, HandlerFn[]>;
 	tools: Map<string, RegisteredTool>;
 
-	markdownTransformer?: MarkdownTransformer;
 
 	commands: Map<string, RegisteredCommand>;
 	flags: Map<string, ExtensionFlag>;
-	shortcuts: Map<KeyId, ExtensionShortcut>;
 }
 
 /** Result of loading extensions. */

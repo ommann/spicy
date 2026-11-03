@@ -25,9 +25,7 @@ import type {
 	ExtensionFactory,
 	ExtensionRuntime,
 	ExtensionVirtualModel,
-	KeyId,
 	LoadExtensionsResult,
-	MarkdownTransformer,
 	ProviderConfig,
 	RegisteredCommand,
 	ToolDefinition,
@@ -307,17 +305,6 @@ function createExtensionAPI(
 			});
 		},
 
-		registerShortcut(
-			shortcut: KeyId,
-			options: {
-				description?: string;
-				handler: (ctx: import("./types.ts").ExtensionContext) => Promise<void> | void;
-			},
-		): void {
-			assertActive();
-			extension.shortcuts.set(shortcut, { shortcut, extensionPath: extension.path, ...options });
-		},
-
 		registerFlag(
 			name: string,
 			options: { description?: string; type: "boolean" | "string"; default?: boolean | string },
@@ -336,11 +323,6 @@ function createExtensionAPI(
 					runtime.flagValues.set(name, options.default);
 				}
 			}
-		},
-
-		registerMarkdownTransformer(transformer: MarkdownTransformer): void {
-			assertActive();
-			extension.markdownTransformer = transformer;
 		},
 
 		// Flag access - checks extension registered it, reads from runtime
@@ -574,7 +556,6 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		tools: new Map(),
 		commands: new Map(),
 		flags: new Map(),
-		shortcuts: new Map(),
 	};
 }
 
