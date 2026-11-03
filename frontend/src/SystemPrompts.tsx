@@ -7,6 +7,8 @@ import ColumnToolbar from './ColumnToolbar';
 import { viewMode as mode, setViewMode as setMode } from './view-mode';
 import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
+import Dialog from './Dialog';
+import CodeLinewrapOption from './CodeLinewrapOption';
 import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
 import { createColumnShortcuts } from './column-shortcuts';
@@ -24,6 +26,7 @@ export default function SystemPrompts(props: Props) {
   const [selection, setSelection] = createSignal(untrack(() => props.selected));
   const sections = new Map<number, HTMLElement>();
   let viewport!: HTMLElement;
+  let optionsDialog!: HTMLDialogElement;
   const interaction = createColumnInteraction({
     viewport: () => viewport, enabled: () => mode() === 'side',
     columns: () => ({ inset: viewport.clientWidth / 2, starts: props.versions.map((_, index) => index * 768), width: 720 }),
@@ -80,9 +83,13 @@ export default function SystemPrompts(props: Props) {
       <ColumnToolbar label="System prompt navigation" hasContent={props.versions.length > 0} mode={mode()}
         onMode={changeMode} onNavigate={adjacent} previousLabel="Previous system prompt" nextLabel="Next system prompt"
         previousDisabled={selected() === props.versions[0]} nextDisabled={selected() === props.versions.at(-1)}
-        actions={<CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />}>
+        actions={<CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />}
+        onOptions={() => optionsDialog.showModal()}>
         {null}
       </ColumnToolbar>
+      <Dialog ref={optionsDialog} title="Options">
+        <CodeLinewrapOption />
+      </Dialog>
       <ScrollArea class="system-prompts-scroll-area" vertical viewportRef={element => { viewport = element; }}
         events={{ ...interaction.handlers, role: 'main' }} contentClass="system-prompts-content"
         contentClassList={{ 'focused-columns': mode() === 'focused', 'pan-ready': interaction.space(), panning: interaction.dragging() }}>

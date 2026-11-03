@@ -1,6 +1,7 @@
 import { Show, createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
 import CollapseToggle from './CollapseToggle';
 import SourceText from './SourceText';
+import ScrollArea from './ScrollArea';
 import DiffView from './DiffView';
 import type { Wire } from './types';
 
@@ -20,12 +21,16 @@ function createExpansion(props: ExpansionProps) {
   return { expanded, toggle };
 }
 
+function PromptText(props: { text: string; language: string }) {
+  return <ScrollArea contentClass="prompt-source"><SourceText text={props.text} language={props.language} /></ScrollArea>;
+}
+
 function Disclosure(props: { text: string; preview: string; description: string; language: string } & ExpansionProps) {
   const { expanded, toggle } = createExpansion(props);
 
   return <div class="system-region">
-    <Show when={!expanded() && props.preview}><SourceText text={props.preview} language={props.language} /></Show>
-    <Show when={expanded()}><SourceText text={props.text} language={props.language} /></Show>
+    <Show when={!expanded() && props.preview}><PromptText text={props.preview} language={props.language} /></Show>
+    <Show when={expanded()}><PromptText text={props.text} language={props.language} /></Show>
     <CollapseToggle label={props.description} expanded={expanded()} onToggle={toggle} />
   </div>;
 }
@@ -100,7 +105,7 @@ export default function SystemPromptContent(props: { entry: Wire; full?: boolean
     <Show when={props.entry.prefixPreview} fallback={
       <section class="message real-message system-message">
         <Show when={text()}>
-          <Show when={!props.full && preview() !== text()} fallback={<SourceText text={text()} language="markdown" />}>
+          <Show when={!props.full && preview() !== text()} fallback={<PromptText text={text()} language="markdown" />}>
             <Disclosure text={text()} preview={preview()} description="system prompt" language="markdown" expandAll={props.expandAll} onExpandChange={props.onExpandChange} />
           </Show>
         </Show>

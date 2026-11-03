@@ -66,13 +66,10 @@
   width: calc(100% - 14px);
 }
 
+.scroll-area-content.prompt-source,
 .scroll-area-content.diff-view {
-  width: 100%;
-  min-width: 100%;
-}
-
-.scroll-area-content.diff-view.code-diff {
   width: var(--code-content-width, max-content);
+  min-width: 100%;
 }
 
 .scroll-area-horizontal {
@@ -131,7 +128,8 @@
 
 .tool-body pre.syntax-highlighted:not([data-language='markdown']),
 .codemode-code,
-.diff-view.code-diff .diff-source,
+.diff-view .diff-source,
+.system-prompt-detail .trace-text,
 .source-code {
   white-space: var(--code-white-space, pre-wrap);
   overflow-wrap: var(--code-overflow-wrap, anywhere);

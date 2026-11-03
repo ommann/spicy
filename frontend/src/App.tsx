@@ -26,8 +26,9 @@ import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import Handoffs from './Handoffs';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
-import Checkbox from './Checkbox';
-import { ToolbarActionsContext } from './ToolbarActions';
+import CodeLinewrapOption from './CodeLinewrapOption';
+import { codeLinewrap } from './code-linewrap';
+import { NavigationLinksContext } from './Navigation';
 import { renderSystemPromptDocument, systemPromptDocumentFromState } from '../../packages/coding-agent/src/core/system-prompt-document';
 
 const empty: Snapshot = {
@@ -58,7 +59,6 @@ interface DraftBranch {
 
 export default function App(props: ParentProps) {
   const location = useLocation();
-  const [toolbarActions, setToolbarActions] = createSignal<HTMLElement>();
   const navigate = useNavigate();
   const showingPrompts = () => location.pathname.startsWith('/system-prompt');
   const openSystemPrompt = (number: number) => navigate(`/system-prompts/${number}`);
@@ -100,7 +100,6 @@ export default function App(props: ParentProps) {
   let resumeDialog!: HTMLDialogElement;
   let optionsDialog!: HTMLDialogElement;
   const [viewOptions, setViewOptions] = createSignal<ViewOptions | null>(null);
-  const [codeLinewrap, setCodeLinewrap] = createSignal(false);
 
   const appLifecycle = new AbortController();
   let token = "";
@@ -396,7 +395,7 @@ export default function App(props: ParentProps) {
       '--code-overflow-wrap': codeLinewrap() ? 'anywhere' : 'normal',
       '--code-content-width': codeLinewrap() ? '100%' : 'max-content',
     }}>
-      <header class="tree-toolbar app-toolbar" aria-label="Application navigation">
+      <NavigationLinksContext.Provider value={() => <>
         <button class="tree-title" onClick={() => chatDialog.showModal()}>{sessionCwd()}</button>
         <button onClick={openResume}>Sessions</button>
         <div class="view-switch" role="group" aria-label="Views">
@@ -404,9 +403,7 @@ export default function App(props: ParentProps) {
           <button class="state-toggle" aria-pressed={location.pathname.startsWith('/system-prompts')} onClick={() => navigate('/system-prompts')}>System prompts</button>
           <button class="state-toggle" aria-pressed={location.pathname === '/system-prompt-creator'} onClick={() => navigate('/system-prompt-creator')}>Editor</button>
         </div>
-        <div class="app-toolbar-actions" ref={setToolbarActions} />
-      </header>
-      <ToolbarActionsContext.Provider value={toolbarActions}>
+      </>}>
       <SystemPromptCreatorContext.Provider value={{
         load: async () => {
           await bridgeReady;
@@ -448,7 +445,7 @@ export default function App(props: ParentProps) {
         </Handoffs>
       </SystemPromptContext.Provider>
       </SystemPromptCreatorContext.Provider>
-      </ToolbarActionsContext.Provider>
+      </NavigationLinksContext.Provider>
       <Dialog ref={optionsDialog} class="chat-dialog options-dialog" title="Options">
         <For each={['focused', 'side'] as const}>{mode =>
           <label class="width-option">
@@ -462,10 +459,7 @@ export default function App(props: ParentProps) {
               onChange={value => changeWidth(mode, value)} />
           </label>
         }</For>
-        <label class="width-option">
-          <span>Code linewrap</span>
-          <Checkbox checked={codeLinewrap()} onChange={event => setCodeLinewrap(event.currentTarget.checked)} />
-        </label>
+        <CodeLinewrapOption />
       </Dialog>
       <Dialog
         ref={resumeDialog}

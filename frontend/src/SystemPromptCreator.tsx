@@ -7,8 +7,9 @@ import { createColumnInteraction } from './column-interaction';
 import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
 import Dialog from './Dialog';
+import CodeLinewrapOption from './CodeLinewrapOption';
 import SelectWithDialog from './SelectWithDialog';
-import ToolbarActions from './ToolbarActions';
+import Navigation from './Navigation';
 import type { Wire } from './types';
 import { promptDocument } from './lilim/system-prompts.js';
 
@@ -167,9 +168,7 @@ export default function SystemPromptCreator() {
     } catch (failure) { setSaveError(String(failure)); }
   }
   return <section class="system-prompt-creator" aria-label="System Prompt Creator">
-    <ToolbarActions><div class="creator-toolbar">
-      <button onClick={() => optionsDialog.showModal()}>Options</button>
-    </div></ToolbarActions>
+    <Navigation options={<button onClick={() => optionsDialog.showModal()}>Options</button>} />
     <div class="creator-actions">
       <button class="text-action" disabled={!document()} onClick={openSave}>Save as</button>
     </div>
@@ -182,6 +181,7 @@ export default function SystemPromptCreator() {
       </form>
     </Dialog>
     <Dialog ref={optionsDialog} title="Options">
+      <CodeLinewrapOption />
       <label><span><Checkbox checked={separateRules()} onChange={event => setSeparateRules(event.currentTarget.checked)} /> Separate rules with empty lines</span></label>
     </Dialog>
     <Show when={error()}><p role="alert">{error()}</p></Show>
