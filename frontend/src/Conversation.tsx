@@ -14,7 +14,7 @@ import ScrollBar from './ScrollBar';
 import SystemPromptReference from './SystemPromptReference';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createColumnShortcuts } from './column-shortcuts';
-import { layoutConversation, matchConversationLanes } from './conversation-model.mjs';
+import { layoutConversation } from './conversation-model.mjs';
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
@@ -35,6 +35,9 @@ export interface ConversationController {
 
 interface Props {
   graph: Wire;
+  lanes: Wire[];
+  drafts: Record<string, string>;
+  onDraftChange: (key: string, text: string) => void;
   active: boolean;
   running: (leafId: string) => boolean;
   busy: (leafId: string) => boolean;
@@ -100,7 +103,7 @@ export default function Conversation(props: Props) {
   const [scroll, setScroll] = createSignal({ left: 0, top: 0, width: 0, height: 0 });
   const [heights, setHeights] = createStore<Record<string, number>>({});
   const [composerHeights, setComposerHeights] = createStore<Record<string, number>>({});
-  const [drafts, setDrafts] = createStore<Record<string, string>>({});
+  const setDrafts = (key: string, text: string) => props.onDraftChange(key, text);
   const [jumpSizes, setJumpSizes] = createSignal({ branch: 0, latest: 0 });
   const [scrollRequest, setScrollRequest] = createSignal<{ id: string; bottom: boolean; smooth: boolean }>();
   const interaction = createColumnInteraction({
@@ -110,7 +113,7 @@ export default function Conversation(props: Props) {
       if (layout().starts[lane] !== layout().starts[focused()]) selectLane(lane);
     }, onScroll: updateScroll,
   });
-  const lanes = createMemo<Wire[]>((previous = []) => matchConversationLanes(props.graph, previous), []);
+  const lanes = () => props.lanes;
   function inheritedVersion(id: string) {
     const state = props.graph.prefix.get(id);
     const key = state.promptKey ?? systemPromptText(state);
@@ -262,10 +265,11 @@ export default function Conversation(props: Props) {
   }
 
   async function submit(key: string, leafId: string) {
+    const drafts = props.drafts;
+    const update = props.onDraftChange;
     const text = drafts[key] || '';
     if (!text.trim() || props.busy(leafId)) return;
-    setDrafts(key, '');
-    if (!await props.onSubmit(text, leafId) && !drafts[key]) setDrafts(key, text);
+    if (await props.onSubmit(text, leafId) && drafts[key] === text) update(key, '');
   }
 
   const options = (): ViewOptions => ({ widths: { focused: focusedFitsWindow() ? maxWidth() : widths.focused, side: widths.side },
@@ -454,7 +458,7 @@ export default function Conversation(props: Props) {
 
       return <Portal mount={inline() ? stage : composerRow}>
         <MessageComposer ref={value => { element = value; }} inputRef={value => { input = value; }}
-          value={drafts[key] || ''} onChange={value => setDrafts(key, value)} leafId={lane()?.leafId}
+          value={props.drafts[key] || ''} onChange={value => setDrafts(key, value)} leafId={lane()?.leafId}
           label={index() ? `Message draft (not sent), branch ${index() + 1}` : 'Message draft (not sent)'}
           class={inline() ? 'inline-composer' : undefined} hidden={mode() === 'focused' && index() !== focused()}
           style={{ width: `${workingWidth()}px`, 'margin-left': '0',

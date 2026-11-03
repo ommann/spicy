@@ -28,7 +28,7 @@ export function mountApp(root: HTMLElement, path = '/') {
 
   const dispose = render(() => <MemoryRouter root={App} history={history}>
     <Route path="/" component={ChatRoute} />
-    <Route path="/system-prompts/:number?" component={SystemPromptRoute} />
+    <Route path="/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/system-prompt-creator" component={SystemPromptCreator} />
   </MemoryRouter>, root);
 

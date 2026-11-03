@@ -36,18 +36,18 @@ test('prompt references stay in their original columns when hovering later lanes
   const graph = createConversationGraph([
     { id: 's1', type: 'message', parentId: null, message: { role: 'system', content: 'Original' } },
     { id: 'u1', type: 'message', parentId: 's1', message: { role: 'user', content: 'Hello' } },
-    { id: 's2', type: 'message', parentId: 'u1', message: { role: 'system', content: 'Updated' } },
+    { id: 's2', type: 'message', parentId: 'u1', message: { role: 'system', content: 'Updated', toolsAdded: [{ name: 'read', description: 'Read files' }] } },
     { id: 'u2', type: 'message', parentId: 's2', message: { role: 'user', content: 'Continue' } },
   ]);
   assert.ok(graph.leaves.length > 1);
   const options = { mode: 'side', width: 720, viewportWidth: 1200, viewportHeight: 800 };
   const first = layoutConversation(graph, { ...options, lane: 0 });
   const later = layoutConversation(graph, { ...options, lane: graph.leaves.length - 1 });
-  for (const id of ['s1', 's2']) {
-    assert.equal(later.items.get(id).hidden, false);
-    assert.equal(later.items.get(id).column, first.items.get(id).column);
-    assert.equal(later.items.get(id).cardLeft, first.items.get(id).cardLeft);
-  }
+  // Prompt references are rendered once per leaf in the fixed prefix row,
+  // not as movable system-message cards in the conversation layout.
+  assert.deepEqual(later.starts, first.starts);
+  assert.deepEqual(graph.leaves.map(leaf => graph.prompts.numberFor(graph.prefix.get(leaf.id))), [1, 2]);
+  for (const id of ['s1', 's2']) assert.equal(later.items.get(id).hidden, true);
   assert.equal(graph.prompts.numberFor(graph.prefix.get('s1')), 1);
   assert.equal(graph.prompts.numberFor(graph.prefix.get('s2')), 2);
 });

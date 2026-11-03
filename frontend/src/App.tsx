@@ -13,10 +13,11 @@ import {
   type ParentProps,
 } from "solid-js";
 import { useLocation, useNavigate } from '@solidjs/router';
+import { createStore } from 'solid-js/store';
 import Dialog from './Dialog';
 import SelectWithDialog from './SelectWithDialog';
 import Conversation, { type ConversationController, type ViewOptions } from './Conversation';
-import { createConversationGraph, continuationTarget } from './conversation-model.mjs';
+import { createConversationGraph, continuationTarget, matchConversationLanes } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
 import { agentForEntry, agentForLeaf, mergeAgentEntries } from './agent-conversations.mjs';
 import { hasCommittedDraft } from "./branch-drafts.mjs";
@@ -150,6 +151,27 @@ export default function App(props: ParentProps) {
     const selected = agent && value.leaves.find((leaf: Wire) => agentForLeaf(value, [agent], leaf.id));
     if (selected) value.activeLeaf = selected;
     return value;
+  });
+
+  const composerStates = new Map<string, {
+    drafts: Record<string, string>; setDraft: (key: string, text: string) => void; lanes: Wire[];
+  }>();
+  const composerScope = createMemo(() => JSON.stringify([
+    branchKey(), agentSnapshots()[visibleAgentIds()[0]]?.state?.sessionId || '',
+  ]));
+  const composerState = createMemo(() => {
+    const scope = composerScope();
+    let state = composerStates.get(scope);
+    if (!state) {
+      const [drafts, setDraft] = createStore<Record<string, string>>({});
+      state = { drafts, setDraft, lanes: [] };
+      composerStates.set(scope, state);
+    }
+    return state;
+  });
+  const composerLanes = createMemo(() => {
+    const state = composerState();
+    return state.lanes = matchConversationLanes(graph(), state.lanes);
   });
 
   function createBranch(sourceId: string, anchorId?: string) {
@@ -527,8 +549,9 @@ export default function App(props: ParentProps) {
         <Handoffs sessionKey={branchKey()}>
         <ChatRouteContext.Provider value={() => {
           onCleanup(() => { conversation = undefined; });
-          return <Show when={branchKey() || 'empty'} keyed>{_sessionKey => (
-          <Conversation graph={graph()} active
+          return <Show when={composerScope()} keyed>{_sessionKey => (
+          <Conversation graph={graph()} active lanes={composerLanes()}
+            drafts={composerState().drafts} onDraftChange={composerState().setDraft}
             running={id => !!leafAgent(id)?.running} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt}

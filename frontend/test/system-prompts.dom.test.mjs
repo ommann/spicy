@@ -5,6 +5,7 @@ import { build } from 'vite';
 import solid from 'vite-plugin-solid';
 import { fileURLToPath } from 'node:url';
 import { createSystemPromptCatalog } from '../src/lilim/system-prompts.js';
+import { renderSystemPromptDocument, SAVED_SYSTEM_PROMPT_ENTRY } from '../../packages/coding-agent/src/core/system-prompt-document.ts';
 
 const original = {
   id: 'system1', parentId: null, type: 'message',
@@ -49,11 +50,11 @@ const root = window.document.getElementById('root');
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 const button = (parent, text) => [...parent.querySelectorAll('button')].find(element => element.textContent.trim() === text);
 
-test('creator edits parts and saves a prompt without sending a chat message', async () => {
+test('creator selects parts and saves a named prompt without sending a chat message', async () => {
   const selections = [];
   const dispose = components.mountCreator(root, {
     current: { content: 'Accepted instructions.', sections: {} },
-    document: { version: 1, forced: { id: 'forced', label: 'Whole text', source: 'extension', text: 'Whole prompt override.' }, parts: [
+    document: { version: 1, parts: [
       { id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Original instructions.' },
       { id: 'tools', section: 'tools', label: 'Descriptions', source: 'core', separator: '\n', children: [
         { id: 'tools/read', label: 'Read description', source: 'tool:read', text: '- read: Read files' },
@@ -63,28 +64,27 @@ test('creator edits parts and saves a prompt without sending a chat message', as
   }, value => selections.push(value));
   try {
     await flush();
-    assert.match(root.querySelector('.creator-preview').textContent, /Whole prompt override/);
-    assert.equal(root.querySelectorAll('.creator-switchboard textarea').length, 4);
+    assert.match(root.querySelector('.creator-preview').textContent, /Original instructions/);
+    assert.equal(root.querySelectorAll('.creator-switchboard input[type="checkbox"]').length, 4);
     const read = [...root.querySelectorAll('label')].find(label => label.textContent.includes('Read description')).querySelector('input');
     read.click();
     await flush();
     assert.doesNotMatch(root.querySelector('.creator-preview').textContent, /Read files/);
     assert.match(root.querySelector('.creator-preview').textContent, /Run commands/);
     assert.deepEqual(selections, []);
-    const editor = root.querySelector('textarea[aria-label="Edit Instructions"]');
-    editor.focus();
-    editor.value = 'Edited instructions.';
-    editor.dispatchEvent(new window.Event('input', { bubbles: true }));
+    button(root, 'Save as').click();
+    const dialog = root.querySelector('dialog[open]');
+    assert.ok(dialog);
+    assert.deepEqual(selections, [], 'Opening Save as does not save');
+    const name = dialog.querySelector('input');
+    name.value = 'Selected instructions';
+    name.dispatchEvent(new window.Event('input', { bubbles: true }));
+    dialog.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await flush();
-    assert.match(root.querySelector('.creator-preview').textContent, /Edited instructions/);
-    assert.equal(root.querySelector('textarea[aria-label="Edit Instructions"]'), editor);
-    assert.equal(document.activeElement, editor);
-    assert.deepEqual(selections, []);
-    button(root, 'Save to System Prompts').click();
     assert.equal(selections.length, 1);
-    assert.equal(selections[0].document.parts[0].text, 'Edited instructions.');
+    assert.equal(selections[0].document.parts[0].text, 'Original instructions.');
     assert.deepEqual(selections[0].excludedIds, ['tools/read']);
-    assert.equal(selections[0].title, 'New prompt');
+    assert.equal(selections[0].title, 'Selected instructions');
     assert.equal(selections[0].document.forced, undefined);
   } finally { dispose(); }
 });
@@ -162,10 +162,9 @@ test('Solid diffs show colored changes without patch preambles or signs', async 
   } finally { mounted.dispose(); }
 });
 
-test('Solid prompt view reuses canonical cards, focuses selected version and supports local disclosure controls and back', async () => {
-  let closed = 0;
+test('Solid prompt view reuses canonical cards, focuses selected version and supports local disclosure controls', async () => {
   const dispose = components.mountPrompts(root, {
-    versions: createSystemPromptCatalog(entries).versions, selected: 2, onClose: () => closed++,
+    versions: createSystemPromptCatalog(entries).versions, selected: createSystemPromptCatalog(entries).versions[1].key,
   });
   try {
     const dialog = root.querySelector('.system-prompts-view');
@@ -235,8 +234,7 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
     await flush();
     assert.equal(cards[1].querySelector('.system-delta'), null);
     assert.match(cards[1].textContent, /Original instructions/);
-    button(dialog, 'Back to chat').click();
-    assert.equal(closed, 1);
+
   } finally { dispose(); }
 });
 
@@ -246,10 +244,21 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
   const snapshot = { agentId: 'default', entries, leafId: 'user2', state: { sessionId: 'creator-test' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test', token: 'test' };
   const before = JSON.stringify(snapshot.entries);
+  const storageBefore = JSON.stringify(localStorage);
+  const promptDocument = { version: 1, parts: [
+    { id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Original instructions' },
+    { id: 'tools', section: 'tools', label: 'Tool rules', source: 'core', text: 'Optional tool rules' },
+  ] };
   globalThis.fetch = async (url, options) => {
-    requests.push({ url, body: options?.body && JSON.parse(options.body) });
+    const body = options?.body && JSON.parse(options.body);
+    requests.push({ url, body });
+    if (body?.type === 'save_system_prompt') {
+      const prompt = { ...body.prompt, id: 'saved-prompt', output: renderSystemPromptDocument(body.prompt.document, body.prompt.excludedIds) };
+      snapshot.entries = [...snapshot.entries, { id: prompt.id, type: 'custom', customType: SAVED_SYSTEM_PROMPT_ENTRY, parentId: snapshot.leafId, data: prompt }];
+      return { ok: true, json: async () => prompt };
+    }
     return { ok: true, json: async () => url.startsWith('/api/info') ? snapshot : url === '/api/agents' ? [snapshot] : {
-      document: { version: 1, parts: [{ id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Original instructions' }] },
+      document: promptDocument,
       current: { content: 'Original instructions', sections: {}, toolsAdded: [] },
     } };
   };
@@ -257,32 +266,43 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
   let dispose = components.mountApp(root, '/system-prompt-creator');
   try {
     for (let i = 0; i < 6; i++) await flush();
-    const editor = root.querySelector('textarea[aria-label="Edit Instructions"]');
-    assert.ok(editor);
-    editor.value = 'Saved unique instructions.';
-    editor.dispatchEvent(new window.Event('input', { bubbles: true }));
-    const name = root.querySelector('[aria-label="Prompt name"]');
+    const tools = [...root.querySelectorAll('.creator-switchboard label')].find(label => label.textContent.includes('Tool rules'));
+    assert.ok(tools);
+    tools.querySelector('input').click();
+    await flush();
+    button(root, 'Save as').click();
+    const dialog = root.querySelector('dialog[open]');
+    const name = dialog.querySelector('input');
     name.value = 'Saved example';
     name.dispatchEvent(new window.Event('input', { bubbles: true }));
-    button(root, 'Save to System Prompts').click();
-    await flush();
+    dialog.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    for (let i = 0; i < 6; i++) await flush();
     assert.ok(root.querySelector('.system-prompts-view'));
-    assert.match(root.textContent, /Saved unique instructions/);
+    assert.match(root.textContent, /Original instructions/);
     assert.match(root.textContent, /Saved example/);
-    assert.equal(JSON.stringify(snapshot.entries), before);
-    assert.deepEqual([...new Set(requests.filter(item => item.body).map(item => item.body.type))], ['get_system_prompt_document']);
+    const saved = snapshot.entries.find(entry => entry.customType === SAVED_SYSTEM_PROMPT_ENTRY);
+    assert.ok(saved, 'Saved prompt is persisted as session metadata');
+    assert.deepEqual(saved.data.excludedIds, ['tools']);
+    assert.doesNotMatch(saved.data.output.content, /Optional tool rules/);
+    assert.equal(JSON.stringify(snapshot.entries.filter(entry => entry !== saved)), before, 'Existing chat entries remain untouched');
+    assert.deepEqual([...new Set(requests.filter(item => item.body).map(item => item.body.type))], ['get_system_prompt_document', 'save_system_prompt']);
+    assert.equal(requests.filter(item => item.body?.type === 'save_system_prompt').length, 1);
+    assert.equal(JSON.stringify(localStorage), storageBefore, 'Saving does not use local storage');
     dispose();
     dispose = components.mountApp(root, '/system-prompts');
     for (let i = 0; i < 4; i++) await flush();
-    assert.match(root.textContent, /Saved unique instructions/);
-  } finally { dispose(); localStorage.removeItem('spicy.created-system-prompts'); }
+    assert.match(root.textContent, /Saved example/);
+    assert.match(root.textContent, /Original instructions/);
+  } finally { dispose(); }
 });
 
 test('chat references open the Solid view without creating a model request or modifying session entries', async () => {
   const before = JSON.stringify(entries);
   const requests = [];
   const imageSource = 'data:image/png;base64,aGVsbG8=';
-  const imageEntries = entries.map(entry => entry.id === user.id ? { ...entry, message: { ...entry.message,
+  const imageEntries = entries.map(entry => entry.id === delta.id
+    ? { ...entry, message: { ...entry.message, toolsAdded: [{ name: 'read', description: 'Read files' }] } }
+    : entry.id === user.id ? { ...entry, message: { ...entry.message,
     content: [{ type: 'text', text: 'Hello' }, { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
   } } : entry);
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
@@ -357,17 +377,16 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(root.querySelector('.editor textarea'), input, 'Run status does not rebuild the conversation');
     eventSource.emit('record', { type: 'extension_ui_request', method: 'set_editor_text', text: 'Keep this draft' });
     assert.equal(input.value, 'Keep this draft');
-    reference.click();
+    root.querySelector('[data-system-prompt="2"]').click();
     await flush();
     const dialog = root.querySelector('.system-prompts-view');
     assert.ok(dialog);
-    assert.equal(dispose.history.get(), '/system-prompts/2');
+    assert.equal(dispose.history.get(), '/system-prompts/system2');
     assert.match(dialog.textContent, /Original instructions/);
-    button(dialog, 'Back to chat').click();
+    button(root, 'Chat').click();
     await flush();
     assert.equal(root.querySelector('.system-prompts-view'), null);
-    assert.equal(root.querySelector('.editor textarea'), input, `Route navigation preserves the chat surface: connected=${input.isConnected}, old=${input.closest('.editor')?.dataset.leafId}, first=${root.querySelector('.editor')?.dataset.leafId}`);
-    assert.equal(input.value, 'Keep this draft');
+    assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft', 'Returning to Chat preserves the unsent draft');
     assert.equal(dispose.history.get(), '/');
     dispose.history.back();
     await flush();
@@ -375,7 +394,7 @@ test('chat references open the Solid view without creating a model request or mo
     dispose.history.forward();
     await flush();
     assert.equal(root.querySelector('.system-prompts-view'), null);
-    assert.equal(input.value, 'Keep this draft');
+    assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft');
     assert.equal(JSON.stringify(entries), before);
     assert.ok(requests.every(request => !request.options?.method || request.options.method === 'GET'));
   } finally { dispose(); }
@@ -448,7 +467,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
     assert.equal(root.querySelectorAll('.composer-stop').length, 1);
     assert.ok(root.querySelector('.editor[data-leaf-id="stream-right-1"] .composer-stop'));
     assert.match(root.textContent, /right streaming/);
-    const rightInput = root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea');
+    let rightInput = root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea');
     rightInput.value = 'Keep right draft';
     rightInput.dispatchEvent(new window.Event('input', { bubbles: true }));
     root.querySelector('[data-entry-id="left-user"] [aria-label="New branch"]').click();
@@ -469,6 +488,16 @@ test('side-by-side chats send and stop independently while both agents stream', 
     assert.equal(root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea'), rightInput);
     assert.equal(rightInput.value, 'Keep right draft');
     assert.equal(root.querySelectorAll('.tree-node[data-entry-id="user1"]').length, 1);
+    const forkDraft = root.querySelector('.editor[data-leaf-id="stream-fork-1"] textarea');
+    forkDraft.value = 'Keep fork draft';
+    forkDraft.dispatchEvent(new window.Event('input', { bubbles: true }));
+    button(root, 'System prompts').click();
+    await flush();
+    button(root, 'Chat').click();
+    await flush();
+    rightInput = root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea');
+    assert.equal(rightInput.value, 'Keep right draft', 'Streaming agent keeps its draft across routes');
+    assert.equal(root.querySelector('.editor[data-leaf-id="stream-fork-1"] textarea').value, 'Keep fork draft', 'Fork keeps a separate draft across routes');
     rightInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await flush();
     const steering = requests.filter(request => request.type === 'prompt').at(-1);
