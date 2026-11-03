@@ -19,7 +19,6 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import {
 	buildSystemPromptSections,
 	buildSystemPromptState,
-	diffSystemPromptSections,
 } from "../src/core/system-prompt.ts";
 import type { SystemPromptCandidate, SystemPromptPolicy } from "../src/core/system-prompt-policy.ts";
 import type { ExtensionFactory } from "../src/index.ts";
@@ -285,23 +284,11 @@ describe("system prompt updates", () => {
 		}
 	});
 
-	test("diffs sections into a patch", () => {
-		const previous = buildSystemPromptSections({ cwd: "/tmp", sections: { plan_mode: "Plan only." } });
-		const current = buildSystemPromptSections({ cwd: "/tmp", sections: { plan_mode: "Implementation allowed." } });
-		expect(diffSystemPromptSections(previous, current)).toEqual({
-			plan_mode: "<plan_mode>\nImplementation allowed.\n</plan_mode>",
-		});
-		expect(diffSystemPromptSections(previous, previous)).toBeUndefined();
-		expect(diffSystemPromptSections(previous, buildSystemPromptSections({ cwd: "/tmp" }))).toEqual({
-			plan_mode: null,
-		});
-	});
-
 	test("keeps the preamble untagged and replaces it like any section", () => {
 		const previous = buildSystemPromptSections({ customPrompt: "You are A.", cwd: "/tmp" });
 		const current = buildSystemPromptSections({ customPrompt: "You are B.", cwd: "/tmp" });
 		expect(previous.preamble).toBe("You are A.");
-		expect(diffSystemPromptSections(previous, current)).toEqual({ preamble: "You are B." });
+		expect(current.preamble).toBe("You are B.");
 
 		expect(buildSystemPromptState({ forceSystemPrompt: "Exact prompt.", cwd: "/tmp" })).toEqual({
 			content: "Exact prompt.",

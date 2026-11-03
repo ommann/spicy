@@ -356,18 +356,3 @@ function systemPromptTemplate({preamble, tools, rules, docs, addedInstructions, 
 
 		${extensionInstructions}`;
 }
-
-/** @deprecated Legacy comparison utility only. New runs never write prompt patches. */
-export function diffSystemPromptSections(
-	previous: Record<string, string | null>,
-	current: SystemPromptSections,
-): Record<string, string | null> | undefined {
-	const changes: Record<string, string | null> = {};
-	for (const [name, text] of Object.entries(current)) {
-		if (previous[name] !== text) changes[name] = text;
-	}
-	for (const name of Object.keys(previous)) {
-		if (current[name] === undefined) changes[name] = null;
-	}
-	return Object.keys(changes).length ? changes : undefined;
-}
