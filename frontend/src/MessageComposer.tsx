@@ -1,4 +1,4 @@
-import { createEffect, createSignal, on, onCleanup, onMount, type JSX } from 'solid-js';
+import { Show, createEffect, createSignal, on, onCleanup, onMount, type JSX } from 'solid-js';
 import ScrollableTextarea from './ScrollableTextarea';
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   onFocus?: () => void;
   label?: string;
   leafId?: string;
+  running?: boolean;
+  busy?: boolean;
   class?: string;
   hidden?: boolean;
   style?: JSX.CSSProperties;
@@ -60,6 +62,7 @@ export default function MessageComposer(props: Props) {
         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); props.onSubmit?.(); }
         if (event.key === 'Escape') { event.preventDefault(); props.onAbort?.(); }
       }} />
+    <Show when={props.running}><button class="composer-stop" type="button" disabled={props.busy} onClick={props.onAbort}>Stop this agent</button></Show>
     <div ref={measure} class="composer-measure" aria-hidden="true">{props.value + '\u200b'}</div>
   </div>;
 }

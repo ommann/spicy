@@ -1,3 +1,4 @@
+import { channel } from "node:diagnostics_channel";
 import { EventEmitter } from "node:events";
 import * as undici from "undici";
 
@@ -15,6 +16,7 @@ export const HTTP_IDLE_TIMEOUT_CHOICES = [
 
 const originalGlobalFetch = globalThis.fetch;
 let installedGlobalFetch: typeof globalThis.fetch | undefined;
+let connectionDiagnosticsInstalled = false;
 
 export function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
 	if (typeof value === "string") {
@@ -79,6 +81,17 @@ function createUndiciOriginDispatcher(origin: string | URL, options: object): un
 }
 
 export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void {
+	if (!connectionDiagnosticsInstalled) {
+		connectionDiagnosticsInstalled = true;
+		channel("undici:client:connectError").subscribe((message) => {
+			const { connectParams, error } = message as {
+				connectParams: { hostname: string };
+				error: NodeJS.ErrnoException;
+			};
+			// Log only connection details, never request headers, credentials or bodies.
+			console.error(`[network] ${connectParams.hostname}: ${error.code || error.name}: ${error.message}`);
+		});
+	}
 	const normalizedTimeoutMs = parseHttpIdleTimeoutMs(timeoutMs);
 	if (normalizedTimeoutMs === undefined) {
 		throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);

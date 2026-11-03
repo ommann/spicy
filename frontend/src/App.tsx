@@ -18,6 +18,7 @@ import SelectWithDialog from './SelectWithDialog';
 import Conversation, { type ConversationController, type ViewOptions } from './Conversation';
 import { createConversationGraph, continuationTarget } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
+import { agentForEntry, agentForLeaf, mergeAgentEntries } from './agent-conversations.mjs';
 import { hasCommittedDraft } from "./branch-drafts.mjs";
 import { createSystemPromptCatalog } from "./lilim/system-prompts.js";
 import { promptLabel } from './prompt-numbers';
@@ -63,21 +64,29 @@ export default function App(props: ParentProps) {
   const navigate = useNavigate();
   const openSystemPrompt = (id: string) => navigate(`/system-prompts/${encodeURIComponent(id)}`);
 
-  const [snapshot, setSnapshot] = createSignal<Snapshot>(empty);
-  const sessionEntries = createMemo(() => snapshot().entries);
-  const streamedMessages = createMemo(() => snapshot().live);
-  const sessionId = createMemo(() => snapshot().state?.sessionId || '');
+  let saved: { agents?: string[]; selected?: string } = {};
+  try { saved = JSON.parse(window.sessionStorage.getItem('pi-agent-view') || '{}'); } catch { /* Start with an empty selection. */ }
+  const [visibleAgentIds, setVisibleAgentIds] = createSignal<string[]>(Array.isArray(saved.agents) ? saved.agents.filter(id => typeof id === 'string') : []);
+  const [selectedAgentId, setSelectedAgentId] = createSignal(typeof saved.selected === 'string' ? saved.selected : '');
+  const [agentSnapshots, setAgentSnapshots] = createSignal<Record<string, Snapshot>>({});
+  const [bridgeCwd, setBridgeCwd] = createSignal('');
+  const [availableAgents, setAvailableAgents] = createSignal<Wire[]>([]);
+  const [projectCwd, setProjectCwd] = createSignal('');
+  const [sending, setSending] = createSignal<string[]>([]);
+  const visibleAgents = createMemo(() => visibleAgentIds().map(id => agentSnapshots()[id]).filter((value): value is Snapshot => !!value));
+  const snapshot = createMemo(() => agentSnapshots()[selectedAgentId()] ?? { ...empty, cwd: bridgeCwd() });
+  const sessionEntries = createMemo(() => mergeAgentEntries(visibleAgents().map(agent => ({ ...agent, live: [] }))));
   const sessionCwd = createMemo(() => snapshot().cwd);
-  const sessionLeafId = createMemo(() => snapshot().leafId);
 
   const [live, setLive] = createSignal(false);
   const [draftBranches, setDraftBranches] = createSignal<Record<string, DraftBranch[]>>({});
-  const branchKey = createMemo(() => live() ? `live:${sessionId()}` : '');
+  const [laneOrigins, setLaneOrigins] = createSignal<Record<string, { draftId: string; baseline: string[] }>>({});
+  const branchKey = createMemo(() => live() ? `live:${visibleAgentIds()[0] || 'empty'}` : '');
   const [focusRequest, setFocusRequest] = createSignal<{ id: string; revision: number }>();
 
   const [notification, setNotification] = createSignal({ message: "", isError: false });
   const [busy, setBusy] = createSignal(false);
-  const [extensionDialogs, setExtensionDialogs] = createSignal<Wire[]>([]);
+  const extensionDialogs = createMemo<Wire[]>(() => visibleAgents().flatMap(agent => agent.dialogs.map(dialog => ({ ...dialog, agentId: agent.agentId! }))));
   const [models, setModels] = createSignal<Wire[]>([]);
   const [previewImage, setPreviewImage] = createSignal<PreviewImage | null>(null);
   const createdPrompts = createMemo<CreatedPrompt[]>(() => sessionEntries()
@@ -99,25 +108,13 @@ export default function App(props: ParentProps) {
   let token = "";
   let markBridgeReady!: () => void;
   const bridgeReady = new Promise<void>(resolve => { markBridgeReady = resolve; });
-  let events: EventSource | undefined;
+  const streams = new Map<string, EventSource>();
   let conversation: ConversationController | undefined;
 
   const actualEntries = createMemo<Wire[]>(() => {
     if (!live()) return [];
 
-    let parentId = sessionLeafId();
-    const streaming = streamedMessages().map((message, index) => {
-      const id = `stream-${index}`;
-      const entry = { type: "message", id, parentId, message };
-      parentId = id;
-      return entry;
-    });
-
-    return [
-      { type: "session", cwd: sessionCwd() },
-      ...sessionEntries(),
-      ...streaming,
-    ];
+    return [{ type: 'session', cwd: sessionCwd() }, ...mergeAgentEntries(visibleAgents(), laneOrigins())];
   });
 
   const viewEntries = createMemo<Wire[]>(() => {
@@ -147,7 +144,13 @@ export default function App(props: ParentProps) {
     equals: (previous, next) => previous.length === next.length && previous.every((version, index) => version === next[index]),
   });
 
-  const graph = createMemo(() => createConversationGraph(viewEntries(), systemPrompts()));
+  const graph = createMemo(() => {
+    const value = createConversationGraph(viewEntries(), systemPrompts());
+    const agent = agentSnapshots()[selectedAgentId()];
+    const selected = agent && value.leaves.find((leaf: Wire) => agentForLeaf(value, [agent], leaf.id));
+    if (selected) value.activeLeaf = selected;
+    return value;
+  });
 
   function createBranch(sourceId: string, anchorId?: string) {
     const source = actualEntries().find(entry => entry.id === sourceId && entry.message?.role === 'user');
@@ -195,7 +198,7 @@ export default function App(props: ParentProps) {
       method: "POST",
       signal: appLifecycle.signal,
       headers: { "Content-Type": "application/json", "X-Lilim-Token": token },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...(selectedAgentId() ? { agentId: selectedAgentId() } : {}), ...data }),
     });
 
     const result = await response.json();
@@ -221,11 +224,89 @@ export default function App(props: ParentProps) {
   }
 
   function accept(value: Snapshot) {
+    if (value.agentId) setAgentSnapshots(previous => ({ ...previous, [value.agentId!]: value }));
+  }
+
+  function updateAgent(id: string, update: (previous: Snapshot) => Snapshot) {
+    setAgentSnapshots(previous => previous[id] ? { ...previous, [id]: update(previous[id]) } : previous);
+  }
+
+  function infoUrl(id = selectedAgentId()) {
+    return `/api/info?agentId=${encodeURIComponent(id)}`;
+  }
+
+  function watchAgent(id: string) {
+    if (streams.has(id)) return;
+    const events = new EventSource(`/api/events?agentId=${encodeURIComponent(id)}`);
+    streams.set(id, events);
+    events.addEventListener('snapshot', event => accept(JSON.parse((event as MessageEvent).data)));
+    events.addEventListener('record', event => {
+      const record = JSON.parse((event as MessageEvent).data);
+      updateAgent(id, previous => {
+        const live = applyRecord(previous.live, record);
+        const running = record.type === 'agent_start' ? true : record.type === 'agent_settled' ? false : previous.running;
+        const dialogs = record.type === 'extension_ui_request' && ['confirm', 'select', 'input', 'editor'].includes(record.method)
+          ? [...previous.dialogs.filter(dialog => dialog.id !== record.id), record] : previous.dialogs;
+        return { ...previous, live, running, dialogs };
+      });
+      if (record.type === 'auto_retry_start') setNotification({ message: `Connection failed. Retrying in ${Math.ceil(record.delayMs / 1000)} seconds…`, isError: true });
+      if (record.type === 'auto_retry_end') setNotification({ message: record.success ? '' : record.finalError || 'Reply failed.', isError: !record.success });
+      if (record.type === 'extension_ui_request') {
+        if (record.method === 'set_editor_text' && id === selectedAgentId()) conversation?.setDraft(record.text || '');
+        if (record.method === 'notify') setNotification({ message: record.message || '', isError: record.notifyType === 'error' });
+      }
+    });
+    events.addEventListener('disconnected', event => {
+      updateAgent(id, previous => ({ ...previous, connected: false, running: false, dialogs: [] }));
+      setNotification({ message: JSON.parse((event as MessageEvent).data), isError: true });
+    });
+    events.onerror = () => setNotification({ message: 'Local bridge disconnected; reconnecting…', isError: true });
+    events.onopen = () => setNotification(previous => previous.message === 'Local bridge disconnected; reconnecting…'
+      ? { message: '', isError: false } : previous);
+  }
+
+  function showAgent(value: Snapshot, replace: boolean) {
     batch(() => {
-      setSnapshot(value);
-      setExtensionDialogs(value.dialogs || []);
+      accept(value);
+      setSelectedAgentId(value.agentId!);
+      setVisibleAgentIds(previous => replace ? [value.agentId!] : [...new Set([...previous, value.agentId!])]);
+      setLive(true);
+    });
+    if (replace) for (const [id, stream] of streams) {
+      if (id !== value.agentId) { stream.close(); streams.delete(id); }
+    }
+    watchAgent(value.agentId!);
+  }
+
+  async function openChat() {
+    setProjectCwd(sessionCwd());
+    chatDialog.showModal();
+    await act(async () => {
+      const response = await fetch('/api/agents', { signal: appLifecycle.signal });
+      if (!response.ok) throw new Error('Could not list agents');
+      setAvailableAgents(await response.json());
     });
   }
+
+  async function chooseAgent(id: string) {
+    await act(async () => {
+      const response = await fetch(infoUrl(id), { signal: appLifecycle.signal });
+      if (!response.ok) throw new Error('Could not load the agent');
+      const value = await response.json();
+      showAgent(value, !visibleAgentIds().includes(id));
+      setModels([]);
+      if (value.connected) {
+        const available = await post('command', { agentId: id, type: 'get_available_models' });
+        setModels(available.models || []);
+      }
+      chatDialog.close();
+    });
+  }
+
+  createEffect(() => {
+    try { window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: visibleAgentIds(), selected: selectedAgentId() })); }
+    catch { /* The selection still works when browser storage is unavailable. */ }
+  });
 
   function openImage(image: PreviewImage) {
     setPreviewImage(image);
@@ -252,7 +333,7 @@ export default function App(props: ParentProps) {
 
   async function openResume() {
     await act(async () => {
-      const response = await fetch("/api/sessions?scope=cwd", { signal: appLifecycle.signal });
+      const response = await fetch(`/api/sessions?scope=cwd${selectedAgentId() ? `&agentId=${encodeURIComponent(selectedAgentId())}` : ''}`, { signal: appLifecycle.signal });
       if (!response.ok) throw new Error("Could not list chats");
       setResumeSessions(await response.json());
       setResumeSearch("");
@@ -260,68 +341,98 @@ export default function App(props: ParentProps) {
     });
   }
 
-  async function start(sessionId?: string) {
+  async function start(sessionId?: string, cwd = sessionCwd()) {
+    await bridgeReady;
     await act(async () => {
-      const result = await post("start", sessionId ? { sessionId } : {});
-      accept(result);
-      setLive(true);
+      const result = await post('agents', { ...(cwd ? { cwd } : {}), ...(sessionId ? { sessionId } : {}) });
+      showAgent(result, true);
       chatDialog.close();
       resumeDialog.close();
-      const available = await post("command", { type: "get_available_models" });
+      const available = await post('command', { agentId: result.agentId, type: 'get_available_models' });
       setModels(available.models || []);
     });
   }
 
-  async function newSession() {
-    if (!snapshot().connected) return start();
-    await act(async () => {
-      const result = await post("command", { type: "new_session" });
-      if (result.cancelled) return;
-      setLive(true);
-      resumeDialog.close();
-      chatDialog.close();
-    });
+  async function newSession() { await start(); }
+
+  function leafAgent(leafId: string) {
+    return agentForLeaf(graph(), visibleAgents(), leafId, selectedAgentId()) as Snapshot | undefined;
   }
 
-  async function abort() {
+  function focusLeaf(leafId: string) {
+    const agent = leafAgent(leafId);
+    if (agent?.agentId) setSelectedAgentId(agent.agentId);
+  }
+
+  function leafBusy(leafId: string) {
+    return sending().includes(leafId) || sending().includes(leafAgent(leafId)?.agentId || '');
+  }
+
+  async function abort(leafId?: string) {
+    const id = leafId ? leafAgent(leafId)?.agentId : selectedAgentId();
+    if (!id) return;
     await act(async () => {
-      const queue = await post("command", { type: "clear_queue" });
-      conversation?.setDraft([...(queue.steering || []), ...(queue.followUp || [])].join('\n'));
-      await post("command", { type: "abort" });
+      const queue = await post('command', { agentId: id, type: 'clear_queue' });
+      if (id === selectedAgentId()) conversation?.setDraft([...(queue.steering || []), ...(queue.followUp || [])].join('\n'));
+      await post('command', { agentId: id, type: 'abort' });
     });
   }
 
   async function send(message: string, leafId: string): Promise<boolean> {
-    if (!message.trim() || busy()) return false;
-    if (!snapshot().connected) await start();
-    if (!snapshot().connected) return false;
+    if (!message.trim() || leafBusy(leafId)) return false;
+    const originatingConversation = conversation;
+    if (!selectedAgentId()) {
+      setSending(previous => [...previous, leafId]);
+      await start();
+      if (!selectedAgentId()) {
+        setSending(previous => previous.filter(id => id !== leafId));
+        return false;
+      }
+    }
 
     const key = branchKey();
     const draft = (draftBranches()[key] || []).find(item => item.id === leafId);
-    const target = !draft && leafId && leafId !== graph().activeLeaf?.id ? continuationTarget(graph(), leafId) : undefined;
+    let agent = !draft ? leafAgent(leafId) : undefined;
+    const target = !draft && !agent && leafId !== 'empty-chat-draft' ? continuationTarget(graph(), leafId) : undefined;
+    if (!draft && !target && !agent) agent = snapshot();
     let accepted = false;
+    let sendingAgentId = agent?.agentId;
+    setSending(previous => [...previous, leafId, ...(sendingAgentId ? [sendingAgentId] : [])]);
 
     if (draft) setDraftBranches(previous => ({ ...previous, [key]: previous[key].map(item =>
       item.id === draft.id ? { ...item, text: message, sentAt: Date.now() } : item) }));
 
-    await act(async () => {
-      try {
-        const systemPrompt = { choice: 'current', ...(draft?.prompt ? { selected: draft.prompt } : {}) };
-        if (message.trim().startsWith('/')) await post('command', { type: 'prompt', message, systemPrompt });
-        else if (draft) await post('branch', { entryId: draft.sourceId, message, systemPrompt });
-        else if (target) await post('continue', { entryId: target, message, systemPrompt });
-        else await post('command', { type: 'prompt', message, systemPrompt, ...(snapshot().running ? { streamingBehavior: 'steer' } : {}) });
-        accepted = true;
-      } catch (failure) {
-        if (draft) batch(() => {
-          setDraftBranches(previous => ({ ...previous, [key]: previous[key].map(item =>
-            item.id === draft.id ? { ...item, text: undefined, sentAt: undefined } : item) }));
-          setFocusRequest(previous => ({ id: draft.id, revision: (previous?.revision || 0) + 1 }));
-        });
-        else conversation?.setDraft(message);
-        throw failure;
+    try {
+      if (draft || target) {
+        const entryId = draft?.sourceId || target;
+        const source = agentForEntry(visibleAgents(), entryId, selectedAgentId());
+        if (!source) throw new Error('Could not find the source agent for this branch');
+        agent = await post('agents', { sourceAgentId: source.agentId, entryId });
+        if (draft) setLaneOrigins(previous => ({ ...previous, [agent!.agentId!]: { draftId: draft.id, baseline: agent!.entries.map(entry => entry.id) } }));
+        if (branchKey() === key) showAgent(agent!, false);
+        sendingAgentId = agent!.agentId;
+        setSending(previous => [...previous, sendingAgentId!]);
       }
-    });
+      if (!agent?.agentId) throw new Error('No agent selected');
+      if (!agent.connected) {
+        agent = await post('start', { agentId: agent.agentId });
+        accept(agent!);
+      }
+      const systemPrompt = { choice: 'current', ...(draft?.prompt ? { selected: draft.prompt } : {}) };
+      await post('command', { agentId: agent!.agentId, type: 'prompt', message, systemPrompt,
+        ...(agent!.running ? { streamingBehavior: 'steer' } : {}) });
+      accepted = true;
+    } catch (failure) {
+      if (draft) batch(() => {
+        setDraftBranches(previous => ({ ...previous, [key]: previous[key].map(item =>
+          item.id === draft.id ? { ...item, text: undefined, sentAt: undefined } : item) }));
+        setFocusRequest(previous => ({ id: draft.id, revision: (previous?.revision || 0) + 1 }));
+      });
+      if (!draft && branchKey() === key && selectedAgentId() === agent?.agentId && conversation !== originatingConversation) conversation?.setDraft(message);
+      if (!appLifecycle.signal.aborted) setNotification({ message: failure instanceof Error ? failure.message : String(failure), isError: true });
+    } finally {
+      setSending(previous => previous.filter(id => id !== leafId && id !== sendingAgentId));
+    }
 
     return accepted;
   }
@@ -332,54 +443,30 @@ export default function App(props: ParentProps) {
 
   onMount(() => {
     act(async () => {
-      const response = await fetch("/api/info", { signal: appLifecycle.signal });
-      if (!response.ok)
-        throw new Error("Could not connect to the local bridge");
+      const response = await fetch('/api/info', { signal: appLifecycle.signal });
+      if (!response.ok) throw new Error('Could not connect to the local bridge');
       const info = await response.json();
       token = info.token;
-      accept(info);
-      if (info.connected) setLive(true);
-      events = new EventSource("/api/events");
-      events.addEventListener("snapshot", (event) =>
-        accept(JSON.parse((event as MessageEvent).data)),
-      );
-      events.addEventListener("record", (event) => {
-        const record = JSON.parse((event as MessageEvent).data);
-        setSnapshot(previous => {
-          const live = applyRecord(previous.live, record);
-          const running = record.type === 'agent_start' ? true
-            : record.type === 'agent_settled' ? false : previous.running;
-
-          return live === previous.live && running === previous.running ? previous : { ...previous, live, running };
-        });
-        if (record.type === "extension_ui_request") {
-          if (["confirm", "select", "input", "editor"].includes(record.method))
-            setExtensionDialogs((previous) => [...previous, record]);
-          else if (record.method === "set_editor_text") {
-            conversation?.setDraft(record.text || '');
-          } else if (record.method === "notify") {
-            setNotification({ message: record.message || "", isError: record.notifyType === "error" });
-          }
-        }
-      });
-      events.addEventListener("disconnected", (event) => {
-        setSnapshot((previous) => ({
-          ...previous,
-          connected: false,
-          running: false,
-        }));
-        setNotification({ message: JSON.parse((event as MessageEvent).data), isError: true });
-      });
-      const reconnectingMessage = "Local bridge disconnected; reconnecting…";
-      events.onopen = () => setNotification(previous =>
-        previous.message === reconnectingMessage ? { message: "", isError: false } : previous);
-      events.onerror = () =>
-        setNotification({ message: reconnectingMessage, isError: true });
+      setBridgeCwd(info.cwd);
+      const listed = await fetch('/api/agents', { signal: appLifecycle.signal });
+      if (!listed.ok) throw new Error('Could not list agents');
+      const agents: Wire[] = await listed.json();
+      setAvailableAgents(agents);
+      const ids = visibleAgentIds().filter(id => agents.some(agent => agent.agentId === id));
+      setVisibleAgentIds(ids);
+      if (!ids.includes(selectedAgentId())) setSelectedAgentId(ids[0] || '');
+      await Promise.all(ids.map(async id => {
+        const response = await fetch(infoUrl(id), { signal: appLifecycle.signal });
+        if (!response.ok) throw new Error('Could not restore the selected agent');
+        accept(await response.json());
+        watchAgent(id);
+      }));
+      if (ids.length) setLive(true);
     }).finally(markBridgeReady);
   });
   onCleanup(() => {
     appLifecycle.abort();
-    events?.close();
+    for (const stream of streams.values()) stream.close();
   });
 
   return (
@@ -389,7 +476,7 @@ export default function App(props: ParentProps) {
       '--code-content-width': codeLinewrap() ? '100%' : 'max-content',
     }}>
       <NavigationLinksContext.Provider value={() => <>
-        <button class="tree-title" onClick={() => chatDialog.showModal()}>{sessionCwd()}</button>
+        <button class="tree-title" onClick={openChat}>{sessionCwd()}</button>
         <button onClick={openResume}>Sessions</button>
         <div class="view-switch" role="group" aria-label="Views">
           <button class="state-toggle" aria-pressed={location.pathname === '/'} onClick={() => navigate('/')}>Chat</button>
@@ -401,7 +488,10 @@ export default function App(props: ParentProps) {
         load: async () => {
           await bridgeReady;
           if (!token) throw new Error('Could not connect to the local bridge');
-          if (!snapshot().connected) await start();
+          if (!snapshot().connected) {
+            if (selectedAgentId()) accept(await post('start'));
+            else await start();
+          }
           const promptSnapshot = await post('command', { type: 'get_system_prompt_document' }) as PromptDocumentSnapshot;
           const current = createSystemPromptCatalog([{ id: 'editor-source', parentId: null, type: 'message',
             message: { role: 'system', ...promptSnapshot.current } }]).versions[0];
@@ -427,7 +517,7 @@ export default function App(props: ParentProps) {
         },
         save: async value => {
           const prompt = await post('command', { type: 'save_system_prompt', prompt: value }) as CreatedPrompt;
-          const response = await fetch('/api/info', { signal: appLifecycle.signal });
+          const response = await fetch(infoUrl(), { signal: appLifecycle.signal });
           if (!response.ok) throw new Error('Could not reload the saved prompt');
           accept(await response.json());
           openSystemPrompt(prompt.id);
@@ -439,7 +529,7 @@ export default function App(props: ParentProps) {
           onCleanup(() => { conversation = undefined; });
           return <Show when={branchKey() || 'empty'} keyed>{_sessionKey => (
           <Conversation graph={graph()} active
-            running={snapshot().running} busy={busy()} focusRequest={focusRequest()} notification={notification()}
+            running={id => !!leafAgent(id)?.running} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}
@@ -474,7 +564,7 @@ export default function App(props: ParentProps) {
       >
         <div class="chat-dialog-heading">
           <span>Sessions</span>
-          <button disabled={busy() || snapshot().running} onClick={newSession}>New session</button>
+          <button disabled={busy()} onClick={newSession}>New session</button>
           <button onClick={() => resumeDialog.close()}>Close</button>
         </div>
         <input class="resume-search" aria-label="Search chats" value={resumeSearch()} onInput={event => setResumeSearch(event.currentTarget.value)} />
@@ -504,10 +594,20 @@ export default function App(props: ParentProps) {
           <span>Pi chat</span>
           <button onClick={() => chatDialog.close()}>Close</button>
         </div>
+        <label>Agent
+          <SelectWithDialog label="Agent" value={selectedAgentId()} placeholder="Choose a running agent"
+            options={availableAgents().map(agent => ({ value: agent.agentId,
+              label: `${agent.cwd} — ${agent.agentId.slice(0, 8)}${agent.running ? ' (working)' : agent.connected ? '' : ' (disconnected)'}` }))}
+            disabled={busy()} onChange={chooseAgent} />
+        </label>
+        <label>Project directory
+          <input aria-label="Project directory" value={projectCwd()} onInput={event => setProjectCwd(event.currentTarget.value)} />
+        </label>
         <div class="chat-actions">
-          <button disabled={busy() || snapshot().running} onClick={newSession}>New session</button>
+          <button disabled={busy() || !projectCwd().trim()} onClick={() => start(undefined, projectCwd().trim())}>Open project</button>
+          <button disabled={busy()} onClick={newSession}>New session</button>
           <Show when={snapshot().connected}>
-                <button disabled={busy()} onClick={abort}>
+                <button disabled={busy()} onClick={() => abort()}>
                   Stop agent
                 </button>
                 <button
@@ -545,7 +645,7 @@ export default function App(props: ParentProps) {
                     entryId,
                   });
                   if (!result.cancelled) {
-                    const response = await fetch('/api/info', { signal: appLifecycle.signal });
+                    const response = await fetch(infoUrl(), { signal: appLifecycle.signal });
                     if (!response.ok) throw new Error('Could not refresh the forked session');
                     accept(await response.json());
                     conversation?.setDraft(result.text || '');
@@ -588,10 +688,8 @@ export default function App(props: ParentProps) {
             dialog={dialog}
             reply={(response) =>
               act(async () => {
-                await post("ui", { id: dialog.id, ...response });
-                setExtensionDialogs((previous) =>
-                  previous.filter((item) => item.id !== dialog.id),
-                );
+                await post('ui', { agentId: dialog.agentId, id: dialog.id, ...response });
+                updateAgent(dialog.agentId, previous => ({ ...previous, dialogs: previous.dialogs.filter(item => item.id !== dialog.id) }));
               })
             }
           />

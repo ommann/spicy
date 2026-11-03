@@ -36,8 +36,9 @@ export interface ConversationController {
 interface Props {
   graph: Wire;
   active: boolean;
-  running: boolean;
-  busy: boolean;
+  running: (leafId: string) => boolean;
+  busy: (leafId: string) => boolean;
+  onFocusLeaf: (leafId: string) => void;
   focusRequest?: { id: string; revision: number };
   notification: { message: string; isError: boolean };
   onReady: (controller: ConversationController) => void;
@@ -48,7 +49,7 @@ interface Props {
   onSelectBranchPrompt: (id: string, key?: string) => void;
   onOpenSystemPrompt: (id: string) => void;
   onImage: (image: PreviewImage) => void;
-  onAbort: () => void;
+  onAbort: (leafId: string) => void;
   onOptions: () => void;
 }
 
@@ -122,6 +123,7 @@ export default function Conversation(props: Props) {
   const nodeIds = () => (props.graph.ids as string[]).filter(id => props.graph.nodes.get(id).entry.message?.role !== 'system');
   const laneKeys = createMemo(() => lanes().map(lane => lane.key as string));
   const focused = () => Math.max(0, Math.min(selectedLane(), lanes().length - 1));
+  createEffect(on(() => lanes()[focused()]?.leafId, id => { if (id) props.onFocusLeaf(id); }));
   const maxWidth = () => Math.max(480, dimensions().width - spacing().edge * 2);
   const workingWidth = () => mode() === 'focused' && focusedFitsWindow() ? maxWidth() : widths[mode()];
   const layout = createMemo(() => layoutConversation(props.graph, {
@@ -261,7 +263,7 @@ export default function Conversation(props: Props) {
 
   async function submit(key: string, leafId: string) {
     const text = drafts[key] || '';
-    if (!text.trim() || props.busy) return;
+    if (!text.trim() || props.busy(leafId)) return;
     setDrafts(key, '');
     if (!await props.onSubmit(text, leafId) && !drafts[key]) setDrafts(key, text);
   }
@@ -459,7 +461,8 @@ export default function Conversation(props: Props) {
             left: `${inline() ? layout().composers[index()]?.left || 0 : layout().inset - scroll().left}px`,
             top: inline() ? `${layout().composers[index()]?.top || 0}px` : '0px' }}
           onFocus={() => selectLane(index(), false)} onSubmit={() => submit(key, lane().leafId)}
-          onAbort={() => { if (props.running) props.onAbort(); }} />
+          running={props.running(lane()?.leafId)} busy={props.busy(lane()?.leafId)}
+          onAbort={() => { if (props.running(lane()?.leafId)) props.onAbort(lane().leafId); }} />
       </Portal>;
     }}</For>
   </div>;

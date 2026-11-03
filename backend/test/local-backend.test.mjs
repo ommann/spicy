@@ -14,7 +14,7 @@ test('web bridge and agent use the local fork without built packages', { timeout
   const state = await rpc.start(process.execPath, [
     '--import', new URL('packages/coding-agent/src/experimental/source-resolver.ts', repository).href,
     fileURLToPath(new URL('packages/coding-agent/src/cli.ts', repository)),
-    '--mode', 'rpc', '--no-session', '--no-extensions', '--no-skills', '--no-prompt-templates', '--no-themes',
+    '--mode', 'rpc', '--no-session', '--no-extensions', '--no-skills', '--no-prompt-templates',
   ], fileURLToPath(repository));
   assert.equal(typeof state.sessionId, 'string');
   const result = await rpc.command({ type: 'get_entries' });

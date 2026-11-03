@@ -6,7 +6,7 @@ const fixture = fileURLToPath(new URL('./fake-pi.mjs', import.meta.url));
 test('RPC correlates concurrent commands and preserves Unicode separators in JSONL', async () => {
   const rpc = new PiRpc();
   try {
-    await rpc.start(process.execPath, [fixture], process.cwd());
+    await rpc.start(process.execPath, ['--import', new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href, fixture], process.cwd());
     const results = await Promise.all([rpc.command({ type: 'echo', value: 'a\u2028b\u2029c' }), rpc.command({ type: 'echo', value: 'second' })]);
     assert.deepEqual(results, ['a\u2028b\u2029c', 'second']);
     await assert.rejects(rpc.command({ type: 'unknown' }), /Unsupported/);

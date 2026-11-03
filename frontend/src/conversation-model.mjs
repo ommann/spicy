@@ -38,6 +38,9 @@ export function projectChatParts(entries) {
             : ''}` : block.thinking?.trim() ? block.thinking.trim() : 'Thinking...',
       });
     }
+    if (message.role === 'assistant' && message.stopReason === 'error') add(entry, {
+      kind: 'error', text: message.errorMessage || 'The reply failed.',
+    });
     if (message.role === 'bashExecution') add(entry, {
       kind: 'tool', call: { name: 'bash', arguments: { command: message.command } },
       result: { content: [{ type: 'text', text: message.output || '' }], isError: message.exitCode !== 0 },
@@ -147,7 +150,8 @@ export function matchConversationLanes(graph, previous = []) {
   const lanes = graph.leaves.map(leaf => {
     const saved = previous.find(lane => lane.leafId === leaf.id);
     if (saved) used.add(saved.key);
-    return { key: saved?.key, leafId: leaf.id, path: graph.ancestors(leaf.id) };
+    const path = graph.ancestors(leaf.id);
+    return { key: saved?.key, leafId: leaf.id, path: [...path, ...path.map(id => graph.raw.get(id)?.laneOriginId).filter(Boolean)] };
   });
 
   for (const lane of lanes) {
@@ -155,7 +159,9 @@ export function matchConversationLanes(graph, previous = []) {
     const candidates = previous.filter(saved => !used.has(saved.key) && !currentIds.has(saved.leafId))
       .map(saved => ({ saved, score: Math.max(0, ...lane.path.filter(id => saved.path.includes(id)).map(id => saved.path.length - saved.path.indexOf(id))) }))
       .sort((a, b) => b.score - a.score);
-    const saved = candidates[0]?.score ? candidates[0].saved : undefined;
+    const origins = lane.path.map(id => graph.raw.get(id)?.laneOriginId).filter(Boolean);
+    const saved = previous.find(saved => !used.has(saved.key) && origins.some(id => saved.path.includes(id)))
+      ?? (candidates[0]?.score ? candidates[0].saved : undefined);
     lane.key = saved?.key || `lane:${lane.leafId}`;
     used.add(lane.key);
   }

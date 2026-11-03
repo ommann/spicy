@@ -243,6 +243,9 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
     : (props.part.content || []).filter((block: Wire) => block.type === 'text');
 
   return <Switch>
+    <Match when={props.part.kind === 'error'}>
+      <section ref={useContext(SectionContext)} class="message notification-error" role="alert" data-entry-id={props.part.entryId}>{props.part.text}</section>
+    </Match>
     <Match when={props.part.kind === 'draft'}><section ref={useContext(SectionContext)} class="branch-draft" data-entry-id={props.part.entryId} /></Match>
     <Match when={props.part.kind === 'tool' && ['handoff_task_to_user', 'get_handoff_result'].includes(props.part.call.name)}>
       <HandoffTool call={props.part.call} result={props.part.result} entryId={props.part.entryId} />

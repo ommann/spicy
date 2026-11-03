@@ -4,6 +4,7 @@ import { render } from 'solid-js/web';
 import { MemoryRouter, Route, createMemoryHistory } from '@solidjs/router';
 import SystemPromptRoute from '../src/SystemPromptRoute';
 import App from '../src/App';
+import ChatRoute from '../src/ChatRoute';
 import SystemPrompts from '../src/SystemPrompts';
 import SystemPromptContent from '../src/SystemPromptContent';
 import ChatContent from '../src/ChatContent';
@@ -26,7 +27,7 @@ export function mountApp(root: HTMLElement, path = '/') {
   history.set({ value: path, replace: true });
 
   const dispose = render(() => <MemoryRouter root={App} history={history}>
-    <Route path="/" component={() => null} />
+    <Route path="/" component={ChatRoute} />
     <Route path="/system-prompts/:number?" component={SystemPromptRoute} />
     <Route path="/system-prompt-creator" component={SystemPromptCreator} />
   </MemoryRouter>, root);

@@ -1,0 +1,65 @@
+{
+  "groups": [
+    [
+      "build",
+      "lint",
+      "test"
+    ],
+    [
+      "ast-grep-no-clear-interval"
+    ],
+    [
+      "ast-grep-no-discarded-router-navigation"
+    ],
+    [
+      "ast-grep-no-dynamic-code"
+    ],
+    [
+      "ast-grep-no-sanitization-bypass"
+    ],
+    [
+      "ast-grep-no-subscribe"
+    ],
+    [
+      "never-applicable"
+    ],
+    [
+      "stryker-mutation"
+    ],
+    [
+      "typescript-empty-lines"
+    ],
+    [
+      "vitest-coverage"
+    ]
+  ],
+  "policies": {
+    "ast-grep-no-clear-interval": "agent",
+    "ast-grep-no-discarded-router-navigation": "agent",
+    "ast-grep-no-dynamic-code": "agent",
+    "ast-grep-no-sanitization-bypass": "agent",
+    "ast-grep-no-subscribe": "agent",
+    "build": "agent",
+    "lint": "agent",
+    "never-applicable": "agent",
+    "stryker-mutation": "agent",
+    "test": "agent",
+    "typescript-empty-lines": "agent",
+    "vitest-coverage": "agent"
+  },
+  "removed": [],
+  "options": {
+    "useNix": false
+  },
+  "configs": {
+    "stryker-mutation": {
+      "minMutationScore": 80
+    },
+    "typescript-empty-lines": {
+      "minEmptyLineRatio": 0.05
+    },
+    "vitest-coverage": {
+      "minLineCoverage": 80
+    }
+  }
+}

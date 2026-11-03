@@ -243,11 +243,12 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
 test('saving adds a persistent prompt to the viewer and leaves chat requests and entries alone', async () => {
   globalThis.localStorage = window.localStorage;
   const requests = [];
-  const snapshot = { entries, leafId: 'user2', state: { sessionId: 'creator-test' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test', token: 'test' };
+  window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
+  const snapshot = { agentId: 'default', entries, leafId: 'user2', state: { sessionId: 'creator-test' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test', token: 'test' };
   const before = JSON.stringify(snapshot.entries);
   globalThis.fetch = async (url, options) => {
     requests.push({ url, body: options?.body && JSON.parse(options.body) });
-    return { ok: true, json: async () => url === '/api/info' ? snapshot : {
+    return { ok: true, json: async () => url.startsWith('/api/info') ? snapshot : url === '/api/agents' ? [snapshot] : {
       document: { version: 1, parts: [{ id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Original instructions' }] },
       current: { content: 'Original instructions', sections: {}, toolsAdded: [] },
     } };
@@ -284,11 +285,12 @@ test('chat references open the Solid view without creating a model request or mo
   const imageEntries = entries.map(entry => entry.id === user.id ? { ...entry, message: { ...entry.message,
     content: [{ type: 'text', text: 'Hello' }, { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
   } } : entry);
-  const snapshot = { entries: imageEntries, leafId: 'user2', state: { sessionId: 'test' }, live: [], dialogs: [],
+  window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
+  const snapshot = { agentId: 'default', entries: imageEntries, leafId: 'user2', state: { sessionId: 'test' }, live: [], dialogs: [],
     connected: true, running: false, cwd: '/test/project', token: 'test' };
   globalThis.fetch = async (url, options) => {
     requests.push({ url, options });
-    return { ok: true, json: async () => url === '/api/info' ? snapshot : [] };
+    return { ok: true, json: async () => url.startsWith('/api/info') ? snapshot : url === '/api/agents' ? [snapshot] : [] };
   };
   let eventSource;
   globalThis.EventSource = class {
@@ -377,6 +379,107 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(JSON.stringify(entries), before);
     assert.ok(requests.every(request => !request.options?.method || request.options.method === 'GET'));
   } finally { dispose(); }
+});
+
+test('side-by-side chats send and stop independently while both agents stream', async () => {
+  const common = [original, user, { id: 'base-answer', parentId: user.id, type: 'message',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'Shared answer' }] } }];
+  const makeAgent = id => ({ agentId: id, entries: [...common,
+    { id: `${id}-user`, parentId: 'base-answer', type: 'message', message: { role: 'user', content: `${id} request` } },
+    { id: `${id}-answer`, parentId: `${id}-user`, type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: `${id} answer` }] } },
+  ], leafId: `${id}-answer`, state: { sessionId: id }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
+  const snapshots = { left: makeAgent('left'), right: makeAgent('right') };
+  window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    const body = options?.body && JSON.parse(options.body);
+    if (body) requests.push(body);
+    if (url === '/api/agents' && body) {
+      const source = snapshots[body.sourceAgentId];
+      const index = source.entries.findIndex(entry => entry.id === body.entryId);
+      snapshots.fork = { ...makeAgent('fork'), entries: source.entries.slice(0, index), leafId: source.entries[index].parentId };
+      return { ok: true, json: async () => snapshots.fork };
+    }
+    const value = url === '/api/agents' ? Object.values(snapshots)
+      : url.startsWith('/api/info') ? { ...snapshots[new URL(url, window.location.href).searchParams.get('agentId') || 'left'], token: 'test' }
+      : body?.type === 'clear_queue' ? { steering: [], followUp: [] } : { disposition: 'started' };
+    return { ok: true, json: async () => value };
+  };
+  const streams = new Map();
+  globalThis.EventSource = class {
+    listeners = new Map();
+    constructor(url) { streams.set(new URL(url, window.location.href).searchParams.get('agentId'), this); }
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    emit(type, value) { this.listeners.get(type)?.({ data: JSON.stringify(value) }); }
+    close() { this.closed = true; }
+  };
+  const dispose = components.mountApp(root);
+  try {
+    for (let i = 0; i < 8; i++) await flush();
+    const send = (id, text) => {
+      const input = root.querySelector(`.editor[data-leaf-id="${id}-answer"] textarea`);
+      assert.ok(input, `Composer for ${id} exists`);
+      input.value = text;
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    };
+    send('left', 'Continue left');
+    await flush();
+    streams.get('left').emit('record', { type: 'agent_start' });
+    send('right', 'Continue right');
+    await flush();
+    streams.get('right').emit('record', { type: 'agent_start' });
+    assert.deepEqual(requests.filter(request => request.type === 'prompt').map(request => [request.agentId, request.message]),
+      [['left', 'Continue left'], ['right', 'Continue right']]);
+    for (const id of ['left', 'right']) {
+      streams.get(id).emit('record', { type: 'message_start', message: { role: 'user', content: `${id} live`, timestamp: 100 } });
+      streams.get(id).emit('record', { type: 'message_start', message: { role: 'assistant', content: [{ type: 'text', text: `${id} streaming` }], timestamp: 101, stopReason: 'pending' } });
+    }
+    await flush();
+    assert.match(root.textContent, /left streaming/);
+    assert.match(root.textContent, /right streaming/);
+    const stops = root.querySelectorAll('.composer-stop');
+    assert.equal(stops.length, 2);
+    root.querySelector('.editor[data-leaf-id="stream-left-1"] .composer-stop').click();
+    await flush();
+    assert.deepEqual(requests.filter(request => request.type === 'abort').map(request => request.agentId), ['left']);
+    streams.get('left').emit('record', { type: 'agent_settled' });
+    await flush();
+    assert.equal(root.querySelectorAll('.composer-stop').length, 1);
+    assert.ok(root.querySelector('.editor[data-leaf-id="stream-right-1"] .composer-stop'));
+    assert.match(root.textContent, /right streaming/);
+    const rightInput = root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea');
+    rightInput.value = 'Keep right draft';
+    rightInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+    root.querySelector('[data-entry-id="left-user"] [aria-label="New branch"]').click();
+    await flush();
+    const forkInput = root.querySelector('.editor[data-leaf-id^="draft-"] textarea');
+    assert.ok(forkInput);
+    forkInput.value = 'Independent fork';
+    forkInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+    forkInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    for (let i = 0; i < 4; i++) await flush();
+    assert.equal(requests.find(request => request.sourceAgentId)?.sourceAgentId, 'left');
+    assert.equal(requests.filter(request => request.type === 'prompt').at(-1).agentId, 'fork');
+    streams.get('fork').emit('record', { type: 'agent_start' });
+    streams.get('fork').emit('record', { type: 'message_start', message: { role: 'user', content: 'Independent fork', timestamp: Date.now() + 1 } });
+    streams.get('fork').emit('record', { type: 'message_start', message: { role: 'assistant', content: [{ type: 'text', text: 'Fork streaming' }], timestamp: Date.now() + 2, stopReason: 'pending' } });
+    await flush();
+    assert.match(root.textContent, /Fork streaming/);
+    assert.equal(root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea'), rightInput);
+    assert.equal(rightInput.value, 'Keep right draft');
+    assert.equal(root.querySelectorAll('.tree-node[data-entry-id="user1"]').length, 1);
+    rightInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    const steering = requests.filter(request => request.type === 'prompt').at(-1);
+    assert.equal(steering.agentId, 'right');
+    assert.equal(steering.streamingBehavior, 'steer');
+  } finally {
+    dispose();
+    assert.ok([...streams.values()].every(stream => stream.closed));
+    assert.equal(requests.filter(request => request.type === 'stop').length, 0);
+    window.sessionStorage.removeItem('pi-agent-view');
+  }
 });
 
 test('edit results render the recorded patch with syntax, line numbers and word emphasis', () => {
