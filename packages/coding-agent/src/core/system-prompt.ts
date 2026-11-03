@@ -3,6 +3,7 @@
  */
 
 import { getSystemMessageText } from "@earendil-works/pi-ai";
+import { undent } from "../utils/undent.ts";
 import {getDocsPath, getReadmePath} from "../config.ts";
 import {formatSkillsForPrompt, type Skill} from "./skills.ts";
 import {
@@ -320,10 +321,10 @@ export function buildSystemPrompt(input: BuildSystemPromptOptions): string {
 		return getSystemMessageText({ role: "system", content: "", sections, timestamp: 0 });
 	}
 	const paragraph = (text: string | undefined) => text ? `\n\n${text}` : "";
-	const addedInstructions = paragraph(addendum);
-	const projectInstructions = paragraph(project_context);
-	const skillInstructions = paragraph(skills);
-	const extensionInstructions = paragraph(Object.values(extensions).filter(Boolean).join("\n\n"));
+	const addedInstructions = addendum || undefined;
+	const projectInstructions = project_context || undefined;
+	const skillInstructions = skills || undefined;
+	const extensionInstructions = Object.values(extensions).filter(Boolean).join("\n\n") || undefined;
 	const customInstructions = paragraph(Object.entries(sections)
 		.filter(([name]) => name !== "preamble").map(([, text]) => text).filter(Boolean).join("\n\n"));
 
@@ -335,22 +336,25 @@ export function buildSystemPrompt(input: BuildSystemPromptOptions): string {
 	});
 }
 
-function systemPromptTemplate({preamble, tools, rules, docs, addedInstructions, projectInstructions, skillInstructions, cwd, extensionInstructions}: Record<string, string>): string {
-	return `\
-${preamble}
+function systemPromptTemplate({preamble, tools, rules, docs, addedInstructions, projectInstructions, skillInstructions, cwd, extensionInstructions}: Record<string, string | undefined>): string {
+	return undent`
+		${preamble}
 
-${tools}
+		${tools}
 
-${rules}
+		${rules}
 
-${docs}\
-${addedInstructions}\
-${projectInstructions}\
-${skillInstructions}
+		${docs}
 
-${cwd}\
-${extensionInstructions}\
-`;
+		${addedInstructions}
+
+		${projectInstructions}
+
+		${skillInstructions}
+
+		${cwd}
+
+		${extensionInstructions}`;
 }
 
 /** @deprecated Legacy comparison utility only. New runs never write prompt patches. */
