@@ -15,7 +15,7 @@ export function promptDocument(before, after) {
 }
 
 // Number captured prompt states in recording order, independently of the active lane.
-export function createSystemPromptCatalog(entries, assignedNumbers = new Map()) {
+export function createSystemPromptCatalog(entries) {
   const prefix = createPrefixResolver(entries);
   const numbers = new Map();
   const versions = [];
@@ -26,8 +26,7 @@ export function createSystemPromptCatalog(entries, assignedNumbers = new Map()) 
     const text = systemPromptText(state);
     const key = entry.systemPromptKey ?? state.promptKey ?? text;
     if (numbers.has(key)) continue;
-    if (!assignedNumbers.has(key)) assignedNumbers.set(key, Math.max(0, ...assignedNumbers.values()) + 1);
-    const number = assignedNumbers.get(key);
+    const number = versions.length + 1;
     const previous = prefix.get(entry.parentId);
     const previousText = previous.captured ? systemPromptText(previous) : undefined;
     const previousKey = previous.promptKey ?? previousText;

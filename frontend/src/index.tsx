@@ -8,7 +8,7 @@ import './style.css';
 render(() => (
   <Router root={App}>
     <Route path="/" component={() => null} />
-    <Route path="/system-prompts/:number?" component={SystemPromptRoute} />
+    <Route path="/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/system-prompt-creator" component={SystemPromptCreator} />
   </Router>
 ), document.getElementById('root')!);

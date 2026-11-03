@@ -85,8 +85,6 @@ export default function SystemPromptCreator() {
   let optionsDialog!: HTMLDialogElement;
   let saveDialog!: HTMLDialogElement;
   const [promptName, setPromptName] = createSignal('');
-  const [shorthand, setShorthand] = createSignal('');
-  const [reservedNumber, setReservedNumber] = createSignal(0);
   const [saveError, setSaveError] = createSignal('');
   const [separateRules, setSeparateRules] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -144,9 +142,6 @@ export default function SystemPromptCreator() {
   function openSave() {
     if (!api) return;
     try {
-      const number = api.reserveNumber();
-      setReservedNumber(number);
-      setShorthand(`System Prompt ${number}`);
       setPromptName('');
       setSaveError('');
       saveDialog.showModal();
@@ -157,13 +152,8 @@ export default function SystemPromptCreator() {
     const value = composedDocument();
     if (!value || !api) return;
     if (!promptName().trim()) { setSaveError('Enter a name.'); return; }
-    const match = /^System Prompt ([1-9]\d*)$/.exec(shorthand());
-    if (!match) { setSaveError('Use System Prompt followed by a positive integer.'); return; }
     try {
-      const requested = Number(match[1]);
-      const number = requested === reservedNumber() ? requested : api.reserveNumber(requested);
-      setReservedNumber(number);
-      api.save({ title: promptName().trim(), number, document: value, excludedIds: [...excluded()], toolsAdded: tools() });
+      api.save({ title: promptName().trim(), document: value, excludedIds: [...excluded()], toolsAdded: tools() });
       saveDialog.close();
     } catch (failure) { setSaveError(String(failure)); }
   }
@@ -172,7 +162,6 @@ export default function SystemPromptCreator() {
     <Dialog ref={saveDialog} title="Save as" closeLabel="Cancel">
       <form onSubmit={save}>
         <label>Name<input autofocus required value={promptName()} onInput={event => setPromptName(event.currentTarget.value)} /></label>
-        <label>Shorthand<input required pattern="System Prompt [1-9][0-9]*" value={shorthand()} onInput={event => setShorthand(event.currentTarget.value)} /></label>
         <Show when={saveError()}><div role="alert">{saveError()}</div></Show>
         <button type="submit">Save</button>
       </form>

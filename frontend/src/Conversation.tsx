@@ -18,6 +18,8 @@ import { layoutConversation, matchConversationLanes } from './conversation-model
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
+import { promptLabel } from './prompt-numbers';
+import { systemPromptText } from './lilim/system-prompts.js';
 
 export interface ViewOptions {
   widths: { focused: number; side: number };
@@ -44,16 +46,16 @@ interface Props {
   onDismissBranch: (id: string) => void;
   prompts: PromptVersion[];
   onSelectBranchPrompt: (id: string, key?: string) => void;
-  onOpenSystemPrompt: (number: number) => void;
+  onOpenSystemPrompt: (id: string) => void;
   onImage: (image: PreviewImage) => void;
   onAbort: () => void;
   onOptions: () => void;
 }
 
-function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; scrollTop: number; promptRowTop: number;
+function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; promptTitle?: string; scrollTop: number; promptRowTop: number;
   selection?: { value: string; options: SelectOption[]; onChange: (value: string) => void };
   registerSection: (id: string, element: HTMLElement) => () => void;
-  width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; onPrompt: (number: number) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
+  width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
   let element!: HTMLElement;
 
   onMount(() => props.measure(props.id, element));
@@ -63,7 +65,7 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JS
     hidden={props.position.hidden} style={{ ...props.gridStyle, width: `${props.position.span}px` }}>
     <Card ref={element} anchors={props.node.anchors} style={{ left: `${props.position.cardLeft}px`, width: `${props.width}px` }}>
       <Show when={props.node.entry.type === 'branch_draft'}>
-        <SystemPromptPlaceholder number={props.promptNumber} stickyOffset={props.scrollTop - props.promptRowTop}
+        <SystemPromptPlaceholder number={props.promptNumber} title={props.promptTitle} stickyOffset={props.scrollTop - props.promptRowTop}
           rowOffset={props.node.entry.draftSourceId ? props.promptRowTop - props.position.top : undefined} selection={props.selection} />
         <Show when={props.node.entry.draftSourceId}>
           <button class="text-action branch-dismiss" aria-label="Dismiss pending branch"
@@ -108,6 +110,15 @@ export default function Conversation(props: Props) {
     }, onScroll: updateScroll,
   });
   const lanes = createMemo<Wire[]>((previous = []) => matchConversationLanes(props.graph, previous), []);
+  function inheritedVersion(id: string) {
+    const state = props.graph.prefix.get(id);
+    const key = state.promptKey ?? systemPromptText(state);
+    return props.prompts.find(prompt => prompt.key === key);
+  }
+  function versionFor(id: string) {
+    const key = props.graph.nodes.get(id)?.entry.draftPromptKey;
+    return (key ? props.prompts.find(prompt => prompt.key === key) : undefined) ?? inheritedVersion(id);
+  }
   const nodeIds = () => (props.graph.ids as string[]).filter(id => props.graph.nodes.get(id).entry.message?.role !== 'system');
   const laneKeys = createMemo(() => lanes().map(lane => lane.key as string));
   const focused = () => Math.max(0, Math.min(selectedLane(), lanes().length - 1));
@@ -376,29 +387,29 @@ export default function Conversation(props: Props) {
         <For each={props.graph.leaves}>{(leaf: Wire, index) => <Show when={leaf.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf.id).captured}>
           <article class="tree-node" hidden={mode() === 'focused' && index() !== focused()}
             style={{ ...tracks().place(layout().inset + layout().starts[index()], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
-            <Card><SystemPromptReference entryId={leaf.id}
-              number={props.prompts.find(prompt => prompt.key === leaf.entry.draftPromptKey)?.number
-                ?? props.graph.prompts.numberFor(props.graph.prefix.get(leaf.id))} onOpen={props.onOpenSystemPrompt} /></Card>
+            <Card><SystemPromptReference entryId={leaf.id} promptId={versionFor(leaf.id)?.full?.id || ''}
+              title={versionFor(leaf.id)?.title} number={versionFor(leaf.id)?.number || 1}
+              onOpen={props.onOpenSystemPrompt} /></Card>
           </article>
         </Show>}</For>
         <For each={nodeIds()}>{id => {
           const node = () => props.graph.nodes.get(id);
-          const inheritedNumber = () => props.graph.prompts.numberFor(props.graph.prefix.get(id));
-          const inheritedKey = () => props.prompts.find(prompt => prompt.number === inheritedNumber())?.key;
-          const number = () => props.prompts.find(prompt => prompt.key === node().entry.draftPromptKey)?.number ?? inheritedNumber();
+          const inheritedKey = () => inheritedVersion(id)?.key;
+          const number = () => versionFor(id)?.number;
           const selection = () => node().entry.type === 'branch_draft' && node().entry.draftSourceId ? {
             value: node().entry.draftPromptKey ?? inheritedKey() ?? '',
             options: props.prompts.map(prompt => ({ value: prompt.key,
-              label: `System Prompt ${prompt.number}${prompt.title ? ` — ${prompt.title}` : ''}${prompt.key === inheritedKey() ? ' (inherited)' : ''}` })),
+              label: `${promptLabel(prompt.number, prompt.title)}${prompt.key === inheritedKey() ? ' (inherited)' : ''}` })),
             onChange: (key: string) => props.onSelectBranchPrompt(id, key === inheritedKey() ? undefined : key),
           } : undefined;
 
           const promptRoot = () => props.graph.prefix.get(id).rootId;
           return <TreeCard id={id} node={node()} position={layout().items.get(id)}
-            gridStyle={tracks().place(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)} promptNumber={number()} scrollTop={scroll().top}
+            gridStyle={tracks().place(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)}
+            promptNumber={number()} promptTitle={versionFor(id)?.title} scrollTop={scroll().top}
             promptRowTop={layout().items.get(promptRoot())?.top ?? spacing().row} selection={selection()}
             registerSection={registerSection} width={workingWidth()}
-            onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch} onPrompt={props.onOpenSystemPrompt}
+            onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch}
             measure={(key, element) => observe(key, element, 'node')} unmeasure={unobserve} />;
         }}</For>
       </div>

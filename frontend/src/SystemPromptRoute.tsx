@@ -1,5 +1,6 @@
-import { createContext, useContext, type Accessor } from 'solid-js';
-import { useNavigate, useParams } from '@solidjs/router';
+import { createContext, Show, useContext, type Accessor } from 'solid-js';
+import { A, useNavigate, useParams } from '@solidjs/router';
+import Navigation from './Navigation';
 import SystemPrompts from './SystemPrompts';
 import type { Wire } from './types';
 
@@ -28,7 +29,16 @@ export default function SystemPromptRoute() {
   const params = useParams();
   const navigate = useNavigate();
 
-  return <SystemPrompts versions={versions()} selected={Number(params.number) || 1}
-    onSelect={number => navigate(`/system-prompts/${number}`, { replace: true })}
-    ignored={policy.ignored} onIgnore={policy.setIgnored} />;
+  const selected = () => params.id ? versions().find(version => version.full?.id === params.id) : versions()[0];
+
+  return <Show when={!params.id || selected()} fallback={<>
+    <Navigation />
+    <p>System prompt not found. <A href="/system-prompts">View system prompts</A></p>
+  </>}><SystemPrompts versions={versions()}
+    selected={selected()?.key || ''}
+    onSelect={key => {
+      const version = versions().find(version => version.key === key);
+      if (version?.full) navigate(`/system-prompts/${encodeURIComponent(version.full.id)}`, { replace: true });
+    }}
+    ignored={policy.ignored} onIgnore={policy.setIgnored} /></Show>;
 }

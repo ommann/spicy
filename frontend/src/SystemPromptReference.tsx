@@ -1,7 +1,11 @@
+import { promptLabel } from './prompt-numbers';
+
 interface Props {
   entryId: string;
+  promptId: string;
   number: number;
-  onOpen: (number: number) => void;
+  title?: string;
+  onOpen: (id: string) => void;
 }
 
 export default function SystemPromptReference(props: Props) {
@@ -9,14 +13,14 @@ export default function SystemPromptReference(props: Props) {
     <section class="message system-message system-prompt-reference"
       data-entry-id={props.entryId} data-system-prompt={props.number}
       role="button" tabIndex={0}
-      onClick={() => props.onOpen(props.number)}
+      onClick={() => props.onOpen(props.promptId)}
       onKeyDown={event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         event.stopPropagation();
-        props.onOpen(props.number);
+        props.onOpen(props.promptId);
       }}>
-      System prompt {props.number}
+      {promptLabel(props.number, props.title)}
     </section>
   );
 }

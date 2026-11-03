@@ -1,4 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount, on, untrack } from 'solid-js';
+import { promptLabel } from './prompt-numbers';
 import type { PromptVersion } from './SystemPromptRoute';
 import SystemPromptContent from './SystemPromptContent';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
@@ -15,8 +16,8 @@ import { createColumnShortcuts } from './column-shortcuts';
 
 interface Props {
   versions: PromptVersion[];
-  selected: number;
-  onSelect?: (number: number) => void;
+  selected: string;
+  onSelect?: (key: string) => void;
   ignored?: (key: string) => boolean;
   onIgnore?: (key: string, ignored: boolean) => void;
 }
@@ -24,7 +25,7 @@ interface Props {
 export default function SystemPrompts(props: Props) {
   const [expanded, setExpanded] = createSignal(true);
   const [selection, setSelection] = createSignal(untrack(() => props.selected));
-  const sections = new Map<number, HTMLElement>();
+  const sections = new Map<string, HTMLElement>();
   let viewport!: HTMLElement;
   let optionsDialog!: HTMLDialogElement;
   const interaction = createColumnInteraction({
@@ -34,29 +35,29 @@ export default function SystemPrompts(props: Props) {
       const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
       return { inset: viewport.clientWidth / 2, starts: props.versions.map((_, index) => index * (720 + gap)), width: 720 };
     },
-    onColumn: index => { const version = props.versions[index]; if (version) setSelection(version.number); },
+    onColumn: index => { const version = props.versions[index]; if (version) setSelection(version.key); },
     onScroll: () => {},
   });
-  const selected = createMemo(() => props.versions.find(version => version.number === selection()) || props.versions[0]);
+  const selected = createMemo(() => props.versions.find(version => version.key === selection()) || props.versions[0]);
 
   const [navigation, setNavigation] = createSignal(untrack(() => props.selected));
   createEffect(() => { setSelection(props.selected); setNavigation(props.selected); });
 
-  function select(number: number) {
+  function select(key: string) {
     interaction.resetPointer();
-    setSelection(number);
-    setNavigation(number);
-    props.onSelect?.(number);
+    setSelection(key);
+    setNavigation(key);
+    props.onSelect?.(key);
   }
 
   function adjacent(direction: number) {
-    const index = props.versions.findIndex(version => version.number === selected()?.number);
+    const index = props.versions.findIndex(version => version.key === selected()?.key);
     const version = props.versions[index + direction];
-    if (version) select(version.number);
+    if (version) select(version.key);
   }
 
-  createEffect(on([navigation, mode, () => props.versions], ([number]) => {
-    const section = sections.get(number);
+  createEffect(on([navigation, mode, () => props.versions], ([key]) => {
+    const section = sections.get(key);
     section?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }));
   onMount(() => {
@@ -66,7 +67,7 @@ export default function SystemPrompts(props: Props) {
 
   function changeMode(value: 'focused' | 'side') {
     interaction.resetPointer();
-    setNavigation(selected()?.number || props.selected);
+    setNavigation(selected()?.key || props.selected);
     setMode(value);
   }
 
@@ -98,18 +99,17 @@ export default function SystemPrompts(props: Props) {
         events={{ ...interaction.handlers, role: 'main' }} contentClass="system-prompts-content"
         contentStyle={{ 'grid-template-columns': mode() === 'focused' ? 'minmax(0, 1fr)' : `repeat(${Math.max(1, props.versions.length)}, 720px)` }}
         contentClassList={{ 'focused-columns': mode() === 'focused', 'pan-ready': interaction.space(), panning: interaction.dragging(),
-          'has-headings': props.versions.some(version => (mode() !== 'focused' || selected()?.number === version.number)
-            && (version.title || version.priorityReason || version.candidateKey)) }}>
-        <Show when={props.versions.length} fallback={<Card class="system-prompt-version" ref={element => sections.set(1, element)}><SystemPromptPlaceholder /></Card>}>
+          'has-headings': props.versions.length > 0 }}>
+        <Show when={props.versions.length} fallback={<Card class="system-prompt-version" ref={element => sections.set('empty', element)}><SystemPromptPlaceholder /></Card>}>
           <For each={props.versions}>{(version, index) => {
-            const focused = () => selected()?.number === version.number;
-            onCleanup(() => sections.delete(version.number));
+            const focused = () => selected()?.key === version.key;
+            onCleanup(() => sections.delete(version.key));
             const column = () => mode() === 'focused' ? 1 : index() + 1;
             return <>
               <div class="system-prompt-heading" hidden={mode() === 'focused' && !focused()}
-                ref={element => sections.set(version.number, element)}
+                ref={element => sections.set(version.key, element)}
                 style={{ 'grid-column': column(), 'grid-row': 1 }}>
-                <div><Show when={version.title}><span>{version.title}</span></Show><Show when={version.priorityReason}><span>{version.priorityReason}</span></Show></div>
+                <div><span>{promptLabel(version.number, version.title)}</span><Show when={version.priorityReason}><span>{version.priorityReason}</span></Show></div>
                 <div><Show when={version.candidateKey}>{key => <label>
                   <Checkbox checked={props.ignored?.(key()) ?? false}
                     onChange={event => props.onIgnore?.(key(), event.currentTarget.checked)} />

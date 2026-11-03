@@ -22,7 +22,6 @@ export interface PromptDocumentSnapshot {
 export interface CreatedPrompt {
   id: string;
   title: string;
-  number?: number;
   document: SystemPromptDocument;
   excludedIds: string[];
   toolsAdded: Wire[];
@@ -30,6 +29,5 @@ export interface CreatedPrompt {
 
 export const SystemPromptCreatorContext = createContext<{
   load: () => Promise<PromptDocumentSnapshot>;
-  reserveNumber: (requested?: number) => number;
   save: (prompt: Omit<CreatedPrompt, 'id'>) => void;
 }>();

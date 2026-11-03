@@ -1,9 +1,11 @@
 import { A } from '@solidjs/router';
+import { promptLabel } from './prompt-numbers';
 import { Show, type JSX } from 'solid-js';
 import SelectWithDialog, { type SelectOption } from './SelectWithDialog';
 
 export default function SystemPromptPlaceholder(props: {
   number?: number;
+  title?: string;
   stickyOffset?: number;
   rowOffset?: number;
   selection?: { value: string; options: SelectOption[]; onChange: (value: string) => void };
@@ -14,10 +16,10 @@ export default function SystemPromptPlaceholder(props: {
     width: props.rowOffset === undefined ? undefined : '100%',
     transform: `translateY(max(0px, calc(${props.stickyOffset}px + 1lh)))`,
   };
-  const label = () => <>System prompt {props.number ?? 1}</>;
+  const label = () => promptLabel(props.number ?? 1, props.title);
   return <Show when={props.selection} fallback={
     <A class="branch-draft system-prompt-reference empty-placeholder" style={style()}
-      href="/system-prompt-creator" aria-label={`Edit System prompt ${props.number ?? 1}`}>{label()}</A>
+      href="/system-prompt-creator" aria-label={`Edit ${label()}`}>{label()}</A>
   }>{selection => <SelectWithDialog label="Select system prompt" value={selection().value} options={selection().options}
     onChange={value => selection().onChange(value)} class="branch-draft system-prompt-reference empty-placeholder" style={style()}>{label()}</SelectWithDialog>}
   </Show>;

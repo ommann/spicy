@@ -19,7 +19,7 @@ import { createConversationGraph, continuationTarget } from './conversation-mode
 import { applyRecord } from "./stream.mjs";
 import { hasCommittedDraft } from "./branch-drafts.mjs";
 import { createSystemPromptCatalog } from "./lilim/system-prompts.js";
-import { createPromptNumberRegistry, reservePromptNumber } from './prompt-numbers';
+import { promptLabel } from './prompt-numbers';
 import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
@@ -61,15 +61,13 @@ export default function App(props: ParentProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const showingPrompts = () => location.pathname.startsWith('/system-prompt');
-  const openSystemPrompt = (number: number) => navigate(`/system-prompts/${number}`);
+  const openSystemPrompt = (id: string) => navigate(`/system-prompts/${encodeURIComponent(id)}`);
 
   const [snapshot, setSnapshot] = createSignal<Snapshot>(empty);
   const sessionEntries = createMemo(() => snapshot().entries);
   const streamedMessages = createMemo(() => snapshot().live);
   const sessionId = createMemo(() => snapshot().state?.sessionId || '');
   const sessionCwd = createMemo(() => snapshot().cwd);
-  const sessionPromptNumbers = createPromptNumberRegistry();
-  function promptNumbers() { return sessionPromptNumbers(sessionId()); }
   const sessionLeafId = createMemo(() => snapshot().leafId);
 
   const [live, setLive] = createSignal(false);
@@ -140,9 +138,8 @@ export default function App(props: ParentProps) {
   const systemPrompts = createMemo<PromptVersion[]>((previous = []) => {
     const entries: Wire[] = [...actualEntries()];
     const created = createdPrompts()[sessionId()] || [];
-    for (const prompt of created) if (prompt.number && !promptNumbers().has(prompt.id)) promptNumbers().set(prompt.id, prompt.number);
     entries.push(...created.map(createdPromptEntry));
-    const versions: PromptVersion[] = createSystemPromptCatalog(entries, promptNumbers()).versions.map((version: PromptVersion) => {
+    const versions: PromptVersion[] = createSystemPromptCatalog(entries).versions.map((version: PromptVersion) => {
       const saved = created.find(item => item.id === version.key || item.id === version.full?.id);
       return saved ? { ...version, title: saved.title } : version;
     });
@@ -155,7 +152,7 @@ export default function App(props: ParentProps) {
     equals: (previous, next) => previous.length === next.length && previous.every((version, index) => version === next[index]),
   });
 
-  const graph = createMemo(() => createConversationGraph(viewEntries(), promptNumbers(), systemPrompts()));
+  const graph = createMemo(() => createConversationGraph(viewEntries(), systemPrompts()));
 
   function createBranch(sourceId: string, anchorId?: string) {
     const source = actualEntries().find(entry => entry.id === sourceId && entry.message?.role === 'user');
@@ -411,24 +408,22 @@ export default function App(props: ParentProps) {
           if (!snapshot().connected) await start();
           const promptSnapshot = await post('command', { type: 'get_system_prompt_document' }) as PromptDocumentSnapshot;
           const current = createSystemPromptCatalog([{ id: 'editor-source', parentId: null, type: 'message',
-            message: { role: 'system', ...promptSnapshot.current } }], promptNumbers()).versions[0];
+            message: { role: 'system', ...promptSnapshot.current } }]).versions[0];
           const sources = [
-            ...systemPrompts().filter(version => !version.title).map(version => ({ id: version.key, label: `System Prompt ${version.number}`, document: systemPromptDocumentFromState({ content: version.full?.message?.content || '', sections: version.full?.message?.sections || {} }), toolsAdded: version.full?.message?.toolsAdded || [] })),
-            ...(createdPrompts()[sessionId()] || []).map(prompt => ({ ...prompt, label: `System Prompt ${promptNumbers().get(prompt.id)} — ${prompt.title}` })),
+            ...systemPrompts().filter(version => !version.title).map(version => ({ id: version.key, label: promptLabel(version.number), document: systemPromptDocumentFromState({ content: version.full?.message?.content || '', sections: version.full?.message?.sections || {} }), toolsAdded: version.full?.message?.toolsAdded || [] })),
+            ...(createdPrompts()[sessionId()] || []).map(prompt => ({ ...prompt, label: promptLabel(systemPrompts().find(version => version.key === prompt.id)!.number, prompt.title) })),
           ].filter(source => source.id !== current.key);
-          sources.unshift({ id: current.key, label: `System Prompt ${current.number}`, document: promptSnapshot.document, toolsAdded: promptSnapshot.current.toolsAdded || [] });
+          sources.unshift({ id: current.key, label: promptLabel(systemPrompts().find(version => version.key === current.key)?.number ?? systemPrompts().length + 1), document: promptSnapshot.document, toolsAdded: promptSnapshot.current.toolsAdded || [] });
           return { ...promptSnapshot, sources, currentSourceId: current.key };
         },
-        reserveNumber: requested => reservePromptNumber(promptNumbers(), requested),
         save: value => {
           const prompt = { ...value, id: `created-prompt-${crypto.randomUUID()}` };
-          if (prompt.number) promptNumbers().set(prompt.id, prompt.number);
           const next = { ...createdPrompts(), [sessionId()]: [...(createdPrompts()[sessionId()] || []), prompt] };
           localStorage.setItem('spicy.created-system-prompts', JSON.stringify(next));
           setCreatedPrompts(next);
           const key = createSystemPromptCatalog([createdPromptEntry(prompt)]).versions[0]?.key;
-          const number = systemPrompts().find(version => version.key === key)?.number;
-          navigate(`/system-prompts/${number || 1}`);
+          const version = systemPrompts().find(version => version.key === key);
+          if (version?.full) openSystemPrompt(version.full.id);
         },
       }}>
       <SystemPromptContext.Provider value={systemPrompts}>
