@@ -113,7 +113,11 @@ export function createConversationGraph(entries, promptVersions) {
   function assign(node, depth) {
     node.depth = depth;
     node.first = leaves.length;
-    if (!node.children.length) leaves.push(node);
+    // A required tool-set update starts a new presentation lane. The real parent
+    // remains the endpoint of the old lane; recorded parent links stay untouched.
+    node.promptFork = node.children.some(child => prefix.changesPrefix(child.entry)
+      && (child.entry.message?.toolsAdded?.length || child.entry.message?.toolsRemoved?.length));
+    if (!node.children.length || node.promptFork) leaves.push(node);
     for (const child of node.children) assign(child, depth + 1);
     node.last = leaves.length - 1;
   }
@@ -134,7 +138,7 @@ export function createConversationGraph(entries, promptVersions) {
   };
 
   return { raw, nodes, roots, leaves, activeLeaf, prefix, prompts, ancestors,
-    ids: [...nodes.keys()], forks: [...nodes.values()].filter(node => node.children.length > 1) };
+    ids: [...nodes.keys()], forks: [...nodes.values()].filter(node => node.children.length > 1 || node.promptFork) };
 }
 
 export function matchConversationLanes(graph, previous = []) {
@@ -229,10 +233,10 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
     if (position.hidden || node.entry.message?.role === 'system') continue;
     let parent = node.parent;
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
-    if (!parent || parent.children.length < 2) continue;
+    if (!parent || (parent.children.length < 2 && !parent.promptFork)) continue;
 
     const previous = items.get(parent.id);
-    paths.push({ id: node.id, fork: parent.children.length > 1,
+    paths.push({ id: node.id, fork: parent.children.length > 1 || parent.promptFork,
       d: `M ${inset + starts[previous.column] + rowGap} ${previous.top + previous.height} V ${position.top - rowGap / 2} H ${inset + starts[position.column] + rowGap} V ${position.top}` });
   }
 
