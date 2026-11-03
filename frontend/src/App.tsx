@@ -13,6 +13,7 @@ import {
 } from "solid-js";
 import { useLocation, useNavigate } from '@solidjs/router';
 import Dialog from './Dialog';
+import SelectWithDialog from './SelectWithDialog';
 import Conversation, { type ConversationController, type ViewOptions } from './Conversation';
 import { createConversationGraph, continuationTarget } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
@@ -452,12 +453,13 @@ export default function App(props: ParentProps) {
         <For each={['focused', 'side'] as const}>{mode =>
           <label class="width-option">
             <span>{mode === 'focused' ? 'Focused' : 'Side by side'}</span>
-            <select aria-label={`${mode === 'focused' ? 'Focused' : 'Side by side'} width`}
+            <SelectWithDialog label={`${mode === 'focused' ? 'Focused' : 'Side by side'} width`}
               value={mode === 'focused' && viewOptions()?.focusedFitsWindow ? 'auto' : String(viewOptions()?.widths[mode])}
-              onChange={event => changeWidth(mode, event.currentTarget.value)}>
-              <Show when={mode === 'focused'}><option value="auto">Fit</option></Show>
-              <For each={widthChoices(mode)}>{width => <option value={String(width)}>{width}px</option>}</For>
-            </select>
+              options={[
+                ...(mode === 'focused' ? [{ value: 'auto', label: 'Fit' }] : []),
+                ...widthChoices(mode).map(width => ({ value: String(width), label: `${width}px` })),
+              ]}
+              onChange={value => changeWidth(mode, value)} />
           </label>
         }</For>
         <label class="width-option">
@@ -524,11 +526,18 @@ export default function App(props: ParentProps) {
         <Show when={live() && snapshot().connected}>
           <label>
             Fork from{" "}
-            <select
-              aria-label="Fork from user message"
+            <SelectWithDialog
+              label="Fork from user message"
+              value=""
+              placeholder="Choose message"
+              options={branchEntries(viewEntries()).filter(
+                (entry: Wire) => entry.message?.role === "user" && !entry.id.startsWith("stream-"),
+              ).map((entry: Wire) => ({
+                value: entry.id,
+                label: typeof entry.message.content === "string" ? entry.message.content.slice(0, 100) : entry.id,
+              }))}
               disabled={busy() || snapshot().running}
-              onChange={(event) => {
-                const entryId = event.currentTarget.value;
+              onChange={entryId => {
                 if (!entryId) return;
                 act(async () => {
                   const result = await post("command", {
@@ -544,38 +553,21 @@ export default function App(props: ParentProps) {
                   chatDialog.close();
                 });
               }}
-            >
-              <option value="" />
-              <For
-                each={branchEntries(viewEntries()).filter(
-                  (entry: Wire) =>
-                    entry.message?.role === "user" &&
-                    !entry.id.startsWith("stream-"),
-                )}
-              >
-                {(entry: Wire) => (
-                  <option value={entry.id}>
-                    {typeof entry.message.content === "string"
-                      ? entry.message.content.slice(0, 100)
-                      : entry.id}
-                  </option>
-                )}
-              </For>
-            </select>
+            />
           </label>
           <Show when={models().length}>
             <label>
               Model{" "}
-              <select
-                aria-label="Model"
+              <SelectWithDialog
+                label="Model"
                 disabled={busy() || snapshot().running}
                 value={`${snapshot().state?.model?.provider}/${snapshot().state?.model?.id}`}
-                onChange={(event) => {
-                  const model = models().find(
-                    (model) =>
-                      `${model.provider}/${model.id}` ===
-                      event.currentTarget.value,
-                  );
+                options={models().map(model => ({
+                  value: `${model.provider}/${model.id}`,
+                  label: `${model.provider}/${model.name || model.id}`,
+                }))}
+                onChange={value => {
+                  const model = models().find(model => `${model.provider}/${model.id}` === value);
                   if (model)
                     act(async () => {
                       await post("command", {
@@ -585,15 +577,7 @@ export default function App(props: ParentProps) {
                       });
                     });
                 }}
-              >
-                <For each={models()}>
-                  {(model) => (
-                    <option value={`${model.provider}/${model.id}`}>
-                      {model.provider}/{model.name || model.id}
-                    </option>
-                  )}
-                </For>
-              </select>
+              />
             </label>
           </Show>
         </Show>

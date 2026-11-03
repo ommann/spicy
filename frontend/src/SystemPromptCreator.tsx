@@ -7,7 +7,7 @@ import { createColumnInteraction } from './column-interaction';
 import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
 import Dialog from './Dialog';
-import Select from './Select';
+import SelectWithDialog from './SelectWithDialog';
 import ToolbarActions from './ToolbarActions';
 import type { Wire } from './types';
 import { promptDocument } from './lilim/system-prompts.js';
@@ -192,7 +192,7 @@ export default function SystemPromptCreator() {
           onKeyUp: switchboardInteraction.keyup, onBlur: switchboardInteraction.blur }}
         contentClassList={{ 'pan-ready': switchboardInteraction.space(), panning: switchboardInteraction.dragging() }}>
         <Show when={snapshot()?.sources?.length}><div>Start from{' '}
-          <Select label="Start from" value={startingSource()} options={promptOptions()} onChange={id => {
+          <SelectWithDialog label="Start from" value={startingSource()} options={promptOptions()} onChange={id => {
             setStartingSource(id);
             const source = snapshot()?.sources?.find(item => item.id === id);
             if (source) { loadDocument(source.document, source.excludedIds); loadTools(source.toolsAdded || []); }
@@ -219,7 +219,7 @@ export default function SystemPromptCreator() {
           onKeyUp: previewInteraction.keyup, onBlur: previewInteraction.blur }}
         contentClassList={{ 'pan-ready': previewInteraction.space(), panning: previewInteraction.dragging() }}>
         <div><label><Checkbox checked={showDiff()} onChange={event => setShowDiff(event.currentTarget.checked)} /> Compare with</label>{' '}
-          <Select label="Compare with" value={comparison()} options={promptOptions()}
+          <SelectWithDialog label="Compare with" value={comparison()} options={promptOptions()}
             onChange={id => { setComparison(id); setShowDiff(true); }} />
         </div>
         <SystemPromptContent entry={entry()} full expandAll />

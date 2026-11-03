@@ -1,6 +1,6 @@
 import { A } from '@solidjs/router';
 import { Show, type JSX } from 'solid-js';
-import Select, { type SelectOption } from './Select';
+import SelectWithDialog, { type SelectOption } from './SelectWithDialog';
 
 export default function SystemPromptPlaceholder(props: {
   number?: number;
@@ -18,7 +18,7 @@ export default function SystemPromptPlaceholder(props: {
   return <Show when={props.selection} fallback={
     <A class="branch-draft system-prompt-reference empty-placeholder" style={style()}
       href="/system-prompt-creator" aria-label={`Edit System prompt ${props.number ?? 1}`}>{label()}</A>
-  }>{selection => <Select label="Select system prompt" value={selection().value} options={selection().options}
-    onChange={value => selection().onChange(value)} class="branch-draft system-prompt-reference empty-placeholder" style={style()}>{label()}</Select>}
+  }>{selection => <SelectWithDialog label="Select system prompt" value={selection().value} options={selection().options}
+    onChange={value => selection().onChange(value)} class="branch-draft system-prompt-reference empty-placeholder" style={style()}>{label()}</SelectWithDialog>}
   </Show>;
 }

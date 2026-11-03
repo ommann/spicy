@@ -7,26 +7,30 @@ export interface SelectOption {
   label: string;
 }
 
-export default function Select(props: {
+export default function SelectWithDialog(props: {
   label: string;
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
   class?: string;
   style?: JSX.CSSProperties;
   children?: JSX.Element;
 }) {
   let dialog!: HTMLDialogElement;
   const [open, setOpen] = createSignal(false);
-  const selected = () => props.options.find(option => option.value === props.value)?.label || 'Choose';
+  const selected = () => props.options.find(option => option.value === props.value)?.label ?? props.placeholder ?? 'Choose';
   function show() {
+    if (props.disabled) return;
     dialog.showModal();
     setOpen(true);
-    dialog.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();
+    (dialog.querySelector<HTMLButtonElement>('[aria-selected="true"]')
+      ?? dialog.querySelector<HTMLButtonElement>('[role="option"]'))?.focus();
   }
   function choose(value: string) {
-    props.onChange(value);
     dialog.close();
+    props.onChange(value);
   }
   function navigate(event: KeyboardEvent) {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
@@ -40,7 +44,7 @@ export default function Select(props: {
   }
   return <>
     <button type="button" class={props.class || 'select-choice'} style={props.style} aria-label={`${props.label}: ${selected()}`}
-      aria-haspopup="dialog" aria-expanded={open()} onClick={show}>{props.children ?? selected()}</button>
+      disabled={props.disabled} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>{props.children ?? selected()}</button>
     <Dialog ref={dialog} class="chat-dialog select-dialog" title={props.label} onClose={() => setOpen(false)}>
       <ScrollArea class="select-options" vertical>
         <div role="listbox" aria-label={props.label} onKeyDown={navigate}>

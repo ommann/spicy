@@ -17,7 +17,7 @@ import { createColumnShortcuts } from './column-shortcuts';
 import { CHAT_BLOCK_GAP, layoutConversation, matchConversationLanes } from './conversation-model.mjs';
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
-import type { SelectOption } from './Select';
+import type { SelectOption } from './SelectWithDialog';
 
 export interface ViewOptions {
   widths: { focused: number; side: number };
