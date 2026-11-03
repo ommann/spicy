@@ -28,12 +28,6 @@ export function getPackageDir(): string {
 	return findNodePackageDir(__dirname);
 }
 
-export function getThemesDir(): string {
-	const packageDir = getPackageDir();
-	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
-	return join(packageDir, srcOrDist, "modes", "interactive", "theme");
-}
-
 export function getPackageJsonPath(): string {
 	return join(getPackageDir(), "package.json");
 }

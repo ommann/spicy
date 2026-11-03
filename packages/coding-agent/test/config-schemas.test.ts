@@ -4,11 +4,9 @@ import { join } from "node:path";
 import { Compile } from "typebox/compile";
 import { afterEach, describe, expect, it } from "vitest";
 import { renderConfigSchemas } from "../scripts/generate-schemas.ts";
-import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { ModelConfig } from "../src/core/model-config.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { SettingsSchema } from "../src/core/settings-schema.ts";
-import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
 
 const schemaBaseUrl = "https://pi.dev/schemas";
 const temporaryDirectories: string[] = [];
@@ -25,48 +23,20 @@ function createTemporaryDirectory(): string {
 	return directory;
 }
 
-function schemaUrl(name: "models" | "settings" | "keybindings" | "theme"): string {
+function schemaUrl(name: "models" | "settings"): string {
 	return `${schemaBaseUrl}/${name}.schema.json`;
 }
 
 describe("generated configuration schemas", () => {
-	it("matches the four committed artifacts", () => {
+	it("matches the committed artifacts", () => {
 		const rendered = renderConfigSchemas();
-		expect([...rendered.keys()]).toEqual([
-			"schemas/models.schema.json",
-			"schemas/settings.schema.json",
-			"schemas/keybindings.schema.json",
-			"schemas/theme.schema.json",
-		]);
+		expect([...rendered.keys()]).toEqual(["schemas/models.schema.json", "schemas/settings.schema.json"]);
 		for (const [relativePath, expected] of rendered) {
 			expect(
 				readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf-8"),
 				`${relativePath} is stale; run npm run generate:schemas`,
 			).toBe(expected);
 		}
-	});
-
-	it("preserves editor guidance in the generated theme schema", () => {
-		const schema = JSON.parse(renderConfigSchemas().get("schemas/theme.schema.json") ?? "");
-		const accent = schema.properties.colors.properties.accent;
-		const colorValue = accent.$ref ? schema.$defs.ColorValue : accent;
-		expect(schema).toMatchObject({
-			title: "Pi Coding Agent Theme",
-			description: "Theme schema for Pi coding agent",
-			properties: {
-				colors: {
-					description: expect.stringContaining("use compatible fallbacks"),
-					properties: {
-						scrollbarTrack: { description: expect.stringContaining("falls back to muted") },
-						accent: { description: "Primary accent color (logo, selected items, cursor)" },
-					},
-				},
-				export: { description: expect.stringContaining("defaults derived from userMessageBg") },
-			},
-		});
-		expect(colorValue).toMatchObject({
-			anyOf: [{ description: expect.stringContaining("Hex color") }, expect.any(Object)],
-		});
 	});
 
 	it("preserves moved model and settings guidance", () => {
@@ -126,12 +96,6 @@ describe("generated configuration schemas", () => {
 			},
 			invalid: { cacheWarming: "always" },
 		},
-		{
-			name: "keybindings.json",
-			artifact: "schemas/keybindings.schema.json",
-			valid: { "app.session.new": "ctrl+n", "extension.action": ["alt+x"] },
-			invalid: { "app.session.new": 42 },
-		},
 	])("validates representative $name documents", ({ artifact, valid, invalid }) => {
 		const schema = JSON.parse(renderConfigSchemas().get(artifact) ?? "");
 		const validator = Compile(schema);
@@ -164,24 +128,6 @@ describe("generated configuration schemas", () => {
 				},
 			}),
 		).toBe(true);
-	});
-
-	it("validates keybinding syntax", () => {
-		const schema = JSON.parse(renderConfigSchemas().get("schemas/keybindings.schema.json") ?? "");
-		const validator = Compile(schema);
-		for (const binding of ["a", "9", "pageUp", "+", "ctrl+shift+x", "alt+ctrl+?", "ctrl+shift+alt+super+f12"]) {
-			expect(validator.Check({ "extension.action": binding }), binding).toBe(true);
-		}
-		for (const binding of [
-			"",
-			"Ctrl+x",
-			"control+x",
-			"ctrl+not-a-key",
-			"ctrl+ctrl+x",
-			"ctrl+shift+alt+super+ctrl+x",
-		]) {
-			expect(validator.Check({ "extension.action": binding }), binding).toBe(false);
-		}
 	});
 
 	it("rejects settings values that runtime accessors reject", () => {
@@ -283,44 +229,5 @@ describe("generated configuration schemas", () => {
 			$schema: schemaUrl("settings"),
 			extensionSetting: { enabled: true },
 		});
-	});
-
-	it("accepts $schema in keybindings.json without treating it as an action", () => {
-		const directory = createTemporaryDirectory();
-		writeFileSync(
-			join(directory, "keybindings.json"),
-			JSON.stringify({
-				$schema: schemaUrl("keybindings"),
-				"app.session.new": "ctrl+n",
-				"extension.invalid": "ctrl+not-a-key",
-			}),
-		);
-
-		const manager = KeybindingsManager.create(directory);
-		expect(manager.getUserBindings()).toEqual({ "app.session.new": "ctrl+n" });
-		expect(manager.getEffectiveConfig()["app.session.new"]).toBe("ctrl+n");
-	});
-
-	it("accepts $schema in themes and rejects malformed themes", () => {
-		const builtIn = JSON.parse(
-			readFileSync(new URL("../src/modes/interactive/theme/dark.json", import.meta.url), "utf-8"),
-		) as Record<string, unknown>;
-		expect(validateThemeJson("custom", { ...builtIn, $schema: schemaUrl("theme"), name: "custom" }).name).toBe(
-			"custom",
-		);
-		expect(() => validateThemeJson("invalid", { ...builtIn, name: "invalid/name" })).toThrow(
-			"theme names cannot contain",
-		);
-		expect(() => validateThemeJson("invalid", { ...builtIn, colors: {} })).toThrow("Missing required color tokens");
-		for (const invalid of [
-			{ ...builtIn, unexpected: true },
-			{
-				...builtIn,
-				colors: { ...(builtIn.colors as Record<string, unknown>), scrollbarThmb: "" },
-			},
-			{ ...builtIn, export: { unexpected: "" } },
-		]) {
-			expect(() => validateThemeJson("invalid", invalid)).toThrow(/additional properties/i);
-		}
 	});
 });

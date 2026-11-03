@@ -3,7 +3,6 @@ import * as bundledPiAiCompat from "@earendil-works/pi-ai/compat";
 import * as bundledPiAiModels from "@earendil-works/pi-ai/models";
 import * as bundledPiAiOauth from "@earendil-works/pi-ai/oauth";
 import * as bundledPiAiProviders from "@earendil-works/pi-ai/providers/all";
-import * as bundledPiTui from "@earendil-works/pi-tui";
 import * as bundledTypebox from "typebox";
 import * as bundledTypeboxCompile from "typebox/compile";
 import * as bundledTypeboxValue from "typebox/value";
@@ -20,7 +19,6 @@ export const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@sinclair/typebox/compile": bundledTypeboxCompile,
 	"@sinclair/typebox/value": bundledTypeboxValue,
 	"@earendil-works/pi-agent-core": bundledPiAgentCore,
-	"@earendil-works/pi-tui": bundledPiTui,
 	// Extensions resolve the pi-ai root to the compat entrypoint (a strict
 	// superset of the core entrypoint): existing extensions using the old
 	// global API keep working at runtime until compat is removed.
@@ -31,7 +29,6 @@ export const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@earendil-works/pi-ai/providers/all": bundledPiAiProviders,
 	"@earendil-works/pi-coding-agent": bundledPiCodingAgent,
 	"@mariozechner/pi-agent-core": bundledPiAgentCore,
-	"@mariozechner/pi-tui": bundledPiTui,
 	"@mariozechner/pi-ai": bundledPiAiCompat,
 	"@mariozechner/pi-ai/compat": bundledPiAiCompat,
 	"@mariozechner/pi-ai/models": bundledPiAiModels,

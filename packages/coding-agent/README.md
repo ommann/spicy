@@ -19,14 +19,12 @@ One launcher supports both interfaces:
 
 ```bash
 npm run dev           # web app
-npm run dev -- --tui  # terminal interface
 ```
 
 To use `spicy` from any project directory, run `npm link --ignore-scripts` once at the repository root:
 
 ```bash
 spicy        # web app
-spicy --tui  # terminal interface
 ```
 
 Both use the current directory as the project (`PI_CWD` overrides it for the web app). No build step is required. Use `/login` in the TUI to connect a provider and `/model` to select a model.

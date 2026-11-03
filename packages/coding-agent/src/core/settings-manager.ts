@@ -1,6 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
-import type { ScrollViewScrollbar, TerminalCapabilities, WheelScrollLines } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -1116,7 +1115,7 @@ export class SettingsManager {
 		return this.settings.thinkingBudgets;
 	}
 
-	getTerminalCapabilityOverrides(): Partial<TerminalCapabilities> {
+	getTerminalCapabilityOverrides() {
 		const terminal = this.settings.terminal;
 		const images = terminal?.images;
 		return {
@@ -1209,12 +1208,12 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getFullscreenScrollbar(): ScrollViewScrollbar {
+	getFullscreenScrollbar(): NonNullable<Settings["fullscreenScrollbar"]> {
 		const mode = this.settings.fullscreenScrollbar;
 		return mode === "always" || mode === "hidden" ? mode : SETTINGS_DEFAULTS.fullscreenScrollbar;
 	}
 
-	setFullscreenScrollbar(mode: ScrollViewScrollbar): void {
+	setFullscreenScrollbar(mode: NonNullable<Settings["fullscreenScrollbar"]>): void {
 		this.globalSettings.fullscreenScrollbar = mode;
 		this.markModified("fullscreenScrollbar");
 		this.save();
@@ -1230,14 +1229,14 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getFullscreenWheelScrollLines(): WheelScrollLines {
+	getFullscreenWheelScrollLines(): NonNullable<Settings["fullscreenWheelScrollLines"]> {
 		const lines = this.settings.fullscreenWheelScrollLines;
 		return typeof lines === "number" && Number.isFinite(lines)
 			? Math.max(1, Math.min(100, Math.floor(lines)))
 			: SETTINGS_DEFAULTS.fullscreenWheelScrollLines;
 	}
 
-	setFullscreenWheelScrollLines(lines: WheelScrollLines): void {
+	setFullscreenWheelScrollLines(lines: NonNullable<Settings["fullscreenWheelScrollLines"]>): void {
 		this.globalSettings.fullscreenWheelScrollLines =
 			lines === "auto" ? lines : Math.max(1, Math.min(100, Math.floor(lines)));
 		this.markModified("fullscreenWheelScrollLines");

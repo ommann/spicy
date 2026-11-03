@@ -1,12 +1,11 @@
 import { join } from "node:path";
 import chalk from "chalk";
-import { selectConfig } from "./cli/config-selector.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
 import { APP_NAME, CONFIG_DIR_NAME, getAgentDir } from "./config.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { DefaultPackageManager } from "./core/package-manager.ts";
-import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
+import { resolveProjectTrusted } from "./core/project-trust.ts";
 import { DefaultResourceLoader, isBuiltinExtension } from "./core/resource-loader.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
@@ -323,10 +322,6 @@ interface CommandSettingsResult {
 	projectTrustWarnings: string[];
 }
 
-function getCommandAppMode(): AppMode {
-	return process.stdin.isTTY && process.stdout.isTTY ? "interactive" : "print";
-}
-
 function reportProjectTrustWarnings(warnings: readonly string[]): void {
 	for (const warning of warnings) {
 		console.error(chalk.yellow(`Warning: ${warning}`));
@@ -349,7 +344,7 @@ async function createCommandSettingsManager(options: {
 		return { settingsManager, projectTrustWarnings };
 	}
 
-	const appMode = getCommandAppMode();
+	const appMode = "print";
 	const extensionsResult =
 		options.projectTrustOverride === undefined && hasTrustRequiringProjectResources(options.cwd)
 			? await new DefaultResourceLoader({
@@ -373,7 +368,7 @@ async function createCommandSettingsManager(options: {
 			cwd: options.cwd,
 			mode: appMode,
 			settingsManager,
-			hasUI: appMode === "interactive",
+			hasUI: false,
 		}),
 		onExtensionError: (message) => projectTrustWarnings.push(message),
 	});
@@ -446,14 +441,7 @@ export async function handleConfigCommand(
 		? await new DefaultPackageManager({ cwd, agentDir, settingsManager, builtinExtensions }).resolve()
 		: globalResolvedPaths;
 
-	await selectConfig({
-		resolvedPaths: { global: globalResolvedPaths, project: projectResolvedPaths },
-		settingsManager,
-		cwd,
-		agentDir,
-		writeScope: local ? "project" : "global",
-		projectModeAvailable: settingsManager.isProjectTrusted(),
-	});
+	console.log(JSON.stringify(local ? projectResolvedPaths : globalResolvedPaths, null, 2));
 
 	process.exit(0);
 }

@@ -23,7 +23,6 @@ import type {
 	ExtensionUIContext,
 	ProviderConfig,
 } from "../src/core/extensions/types.ts";
-import { KeybindingsManager, type KeyId } from "../src/core/keybindings.ts";
 import type { ModelRegistry } from "../src/core/model-registry.ts";
 import type { ScopedModel } from "../src/core/model-resolver.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -34,7 +33,6 @@ describe("ExtensionRunner", () => {
 	let extensionsDir: string;
 	let sessionManager: SessionManager;
 	let modelRegistry: ModelRegistry;
-	const defaultKeybindings = new KeybindingsManager().getEffectiveConfig();
 
 	beforeEach(async () => {
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-runner-test-"));
@@ -150,7 +148,7 @@ describe("ExtensionRunner", () => {
 				{ type: "project_trust", cwd: tempDir },
 				{
 					cwd: tempDir,
-					mode: "tui",
+					mode: "rpc",
 					hasUI: false,
 					ui: {
 						select: async () => undefined,
@@ -163,214 +161,6 @@ describe("ExtensionRunner", () => {
 
 			expect(result.result).toEqual({ trusted: "no", remember: true });
 			expect(result.errors).toEqual([]);
-		});
-	});
-
-	describe("shortcut conflicts", () => {
-		it("warns when extension shortcut conflicts with built-in", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+c", {
-						description: "Conflicts with built-in",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "conflict.ts"), extCode);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const shortcuts = runner.getShortcuts(defaultKeybindings);
-
-			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("conflicts with built-in"));
-			expect(shortcuts.has("ctrl+c")).toBe(false);
-
-			warnSpy.mockRestore();
-		});
-
-		it("allows a shortcut when the reserved set no longer contains the default key", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+p", {
-						description: "Uses freed default",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "rebinding.ts"), extCode);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const keybindings = { ...defaultKeybindings, "app.model.cycleForward": "ctrl+n" as KeyId };
-			const shortcuts = runner.getShortcuts(keybindings);
-
-			expect(shortcuts.has("ctrl+p")).toBe(true);
-			expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("conflicts with built-in"));
-
-			warnSpy.mockRestore();
-		});
-
-		it("warns but allows when extension uses non-reserved built-in shortcut", async () => {
-			const pasteImageKey = Array.isArray(defaultKeybindings["app.clipboard.pasteImage"])
-				? (defaultKeybindings["app.clipboard.pasteImage"][0] ?? "")
-				: defaultKeybindings["app.clipboard.pasteImage"];
-			const extCode = `
-				export default function(pi) {
-					pi.registerShortcut("${pasteImageKey}", {
-						description: "Overrides non-reserved",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "non-reserved.ts"), extCode);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const shortcuts = runner.getShortcuts(defaultKeybindings);
-
-			expect(warnSpy).toHaveBeenCalledWith(
-				expect.stringContaining("built-in shortcut for app.clipboard.pasteImage"),
-			);
-			expect(shortcuts.has(pasteImageKey as KeyId)).toBe(true);
-
-			warnSpy.mockRestore();
-		});
-
-		it("blocks shortcuts for reserved actions even when rebound", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+x", {
-						description: "Conflicts with rebound reserved",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "rebound-reserved.ts"), extCode);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const keybindings = { ...defaultKeybindings, "app.interrupt": "ctrl+x" as KeyId };
-			const shortcuts = runner.getShortcuts(keybindings);
-
-			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("conflicts with built-in"));
-			expect(shortcuts.has("ctrl+x")).toBe(false);
-
-			warnSpy.mockRestore();
-		});
-
-		it("blocks shortcuts when reserved key is also bound to non-reserved actions", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+p", {
-						description: "Conflicts with shared reserved default",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "shared-reserved.ts"), extCode);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const shortcuts = runner.getShortcuts(defaultKeybindings);
-
-			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("conflicts with built-in"));
-			expect(shortcuts.has("ctrl+p")).toBe(false);
-
-			warnSpy.mockRestore();
-		});
-
-		it("blocks shortcuts when reserved action has multiple keys", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+y", {
-						description: "Conflicts with multi-key reserved",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "multi-reserved.ts"), extCode);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const keybindings = { ...defaultKeybindings, "app.clear": ["ctrl+x", "ctrl+y"] as KeyId[] };
-			const shortcuts = runner.getShortcuts(keybindings);
-
-			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("conflicts with built-in"));
-			expect(shortcuts.has("ctrl+y")).toBe(false);
-
-			warnSpy.mockRestore();
-		});
-
-		it("warns but allows when non-reserved action has multiple keys", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+y", {
-						description: "Overrides multi-key non-reserved",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "multi-non-reserved.ts"), extCode);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const keybindings = { ...defaultKeybindings, "app.clipboard.pasteImage": ["ctrl+x", "ctrl+y"] as KeyId[] };
-			const shortcuts = runner.getShortcuts(keybindings);
-
-			expect(warnSpy).toHaveBeenCalledWith(
-				expect.stringContaining("built-in shortcut for app.clipboard.pasteImage"),
-			);
-			expect(shortcuts.has("ctrl+y")).toBe(true);
-
-			warnSpy.mockRestore();
-		});
-
-		it("warns when two extensions register same shortcut", async () => {
-			// Use a non-reserved shortcut
-			const extCode1 = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+shift+x", {
-						description: "First extension",
-						handler: async () => {},
-					});
-				}
-			`;
-			const extCode2 = `
-				export default function(pi) {
-					pi.registerShortcut("ctrl+shift+x", {
-						description: "Second extension",
-						handler: async () => {},
-					});
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "ext1.ts"), extCode1);
-			fs.writeFileSync(path.join(extensionsDir, "ext2.ts"), extCode2);
-
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const shortcuts = runner.getShortcuts(defaultKeybindings);
-
-			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("shortcut conflict"));
-			// Last one wins
-			expect(shortcuts.has("ctrl+shift+x")).toBe(true);
-
-			warnSpy.mockRestore();
 		});
 	});
 
@@ -586,17 +376,6 @@ describe("ExtensionRunner", () => {
 			expect(ctx.mode).toBe("rpc");
 			expect(ctx.hasUI).toBe(true);
 		});
-
-		it("exposes tui mode with hasUI true when a TUI UI context is provided", async () => {
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			runner.bindCore(extensionActions, extensionContextActions);
-			runner.setUIContext({} as ExtensionUIContext, "tui");
-
-			const ctx = runner.createContext();
-			expect(ctx.mode).toBe("tui");
-			expect(ctx.hasUI).toBe(true);
-		});
 	});
 
 	describe("error handling", () => {
@@ -719,39 +498,6 @@ describe("ExtensionRunner", () => {
 			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
 
 			expect(runner.getMarkdownTransformers()).toHaveLength(2);
-		});
-
-		it("gets message renderer by type", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerMessageRenderer("my-type", (message, options, theme) => null);
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "renderer.ts"), extCode);
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-
-			const renderer = runner.getMessageRenderer("my-type");
-			expect(renderer).toBeDefined();
-
-			const missing = runner.getMessageRenderer("not-exists");
-			expect(missing).toBeUndefined();
-		});
-
-		it("gets entry renderer by type", async () => {
-			const extCode = `
-				export default function(pi) {
-					pi.registerEntryRenderer("my-entry", (entry, options, theme) => null);
-				}
-			`;
-			fs.writeFileSync(path.join(extensionsDir, "entry-renderer.ts"), extCode);
-
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-
-			expect(runner.getEntryRenderer("my-entry")).toBeDefined();
-			expect(runner.getEntryRenderer("not-exists")).toBeUndefined();
 		});
 	});
 
@@ -889,30 +635,6 @@ describe("ExtensionRunner", () => {
 			expect(chained.messages).toEqual([]);
 			expect(buildSystemPrompt(chained.systemPromptOptions)).toMatch(/base[\s\S]*\nfirst\nsecond$/);
 		});
-	});
-
-	// Issue #10285: the MCP extension renders calls to tools that are not registered.
-	it("resolves tool renderers in extension load order, each able to defer to the next", async () => {
-		const runtime = createExtensionRuntime();
-		const eventBus = createEventBus();
-		const renderCall = () => ({ render: () => [], invalidate: () => {} });
-		const first = await loadExtensionFromFactory(
-			(pi) => pi.registerToolRenderer((toolName, next) => (toolName === "a" ? { renderCall } : next())),
-			tempDir,
-			eventBus,
-			runtime,
-		);
-		const second = await loadExtensionFromFactory(
-			(pi) => pi.registerToolRenderer((_toolName, next) => next() ?? { renderShell: "self" }),
-			tempDir,
-			eventBus,
-			runtime,
-		);
-		const runner = new ExtensionRunner([first, second], runtime, tempDir, sessionManager, modelRegistry);
-
-		expect(runner.resolveToolRenderers("a", () => undefined)).toEqual({ renderCall });
-		expect(runner.resolveToolRenderers("b", () => undefined)).toEqual({ renderShell: "self" });
-		expect(runner.resolveToolRenderers("b", () => ({ renderCall }))).toEqual({ renderCall });
 	});
 
 	describe("boundary chaining", () => {

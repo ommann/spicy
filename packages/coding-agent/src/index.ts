@@ -60,8 +60,6 @@ export type {
 	AgentStartEvent,
 	AgentToolResult,
 	AgentToolUpdateCallback,
-	AppKeybinding,
-	AutocompleteProviderFactory,
 	BashToolCallEvent,
 	BeforeAgentStartCustomEvent,
 	BeforeAgentStartEvent,
@@ -87,7 +85,6 @@ export type {
 	CustomMessageEntryDraft,
 	CustomToolCallEvent,
 	EditToolCallEvent,
-	EntryRenderer,
 	EntryRenderOptions,
 	ExecOptions,
 	ExecResult,
@@ -117,7 +114,6 @@ export type {
 	InputEvent,
 	InputEventResult,
 	InputSource,
-	KeybindingsManager,
 	LoadExtensionsResult,
 	LsToolCallEvent,
 	MarkdownTransformContext,
@@ -125,7 +121,6 @@ export type {
 	McpServersChangeEvent,
 	MessageEndEvent,
 	MessageEndEventResult,
-	MessageRenderer,
 	MessageRenderOptions,
 	MessageStartEvent,
 	MessageUpdateEvent,
@@ -164,7 +159,6 @@ export type {
 	SlashCommandInfo,
 	SlashCommandSource,
 	SourceInfo,
-	TerminalInputHandler,
 	ThinkingLevelSelectEvent,
 	ToolAnnotations,
 	ToolCallEvent,
@@ -179,9 +173,6 @@ export type {
 	ToolLoadout,
 	ToolLoadoutChanges,
 	ToolNamespace,
-	ToolRendererResolver,
-	ToolRenderers,
-	ToolRenderResultOptions,
 	ToolResultEvent,
 	ToolResultEventResult,
 	TurnEndEvent,
@@ -193,7 +184,6 @@ export type {
 	UserBashEvent,
 	UserBashEventResult,
 	WidgetPlacement,
-	WorkingIndicatorOptions,
 	WriteToolCallEvent,
 } from "./core/extensions/index.ts";
 export {
@@ -378,7 +368,6 @@ export {
 	type WriteToolOptions,
 	withFileMutationQueue,
 } from "./core/tools/index.ts";
-export { formatReadLineRange } from "./core/tools/render-utils.ts";
 export {
 	hasTrustRequiringProjectResources,
 	type ProjectTrustDecision,
@@ -404,8 +393,6 @@ export { createToolSearchExtension } from "./extensions/tool-search/index.ts";
 export { type MainOptions, main } from "./main.ts";
 // Run modes for programmatic SDK usage
 export {
-	InteractiveMode,
-	type InteractiveModeOptions,
 	type JsonAgentSessionEvent,
 	type ModelInfo,
 	type PrintModeOptions,
@@ -420,62 +407,6 @@ export {
 	runPrintMode,
 	runRpcMode,
 } from "./modes/index.ts";
-// UI components for extensions
-export {
-	AssistantMessageComponent,
-	BashExecutionComponent,
-	BorderedLoader,
-	BranchSummaryMessageComponent,
-	CompactionSummaryMessageComponent,
-	CustomEditor,
-	type CustomEditorOptions,
-	CustomMessageComponent,
-	DynamicBorder,
-	ExtensionEditorComponent,
-	ExtensionInputComponent,
-	ExtensionSelectorComponent,
-	FooterComponent,
-	keyHint,
-	keyText,
-	LoginDialogComponent,
-	ModelSelectorComponent,
-	OAuthSelectorComponent,
-	type RenderDiffOptions,
-	rawKeyHint,
-	renderDiff,
-	SessionSelectorComponent,
-	type SettingsCallbacks,
-	type SettingsConfig,
-	SettingsSelectorComponent,
-	ShowImagesSelectorComponent,
-	SkillInvocationMessageComponent,
-	ThemeSelectorComponent,
-	ThinkingSelectorComponent,
-	ToolExecutionComponent,
-	type ToolExecutionOptions,
-	TreeSelectorComponent,
-	truncateToVisualLines,
-	UserMessageComponent,
-	UserMessageSelectorComponent,
-	type VisualTruncateResult,
-} from "./modes/interactive/components/index.ts";
-// Theme utilities for custom tools and extensions
-export {
-	getLanguageFromPath,
-	getMarkdownTheme,
-	getSelectListTheme,
-	getSettingsListTheme,
-	highlightCode,
-	initTheme,
-	Theme,
-	type ThemeAppearance,
-	type ThemeBg,
-	type ThemeColor,
-	type ThemeStyle,
-	type ThemeToken,
-} from "./modes/interactive/theme/theme.ts";
-// Clipboard utilities
-export { copyToClipboard } from "./utils/clipboard.ts";
 export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";
 export { convertToPng } from "./utils/image-convert.ts";
 export { formatDimensionNote, type ResizedImage, resizeImage } from "./utils/image-resize.ts";

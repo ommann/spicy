@@ -32,8 +32,6 @@ export type {
 	AgentToolUpdateCallback,
 	AppendEntryHandler,
 	// App keybindings (for custom editors)
-	AppKeybinding,
-	AutocompleteProviderFactory,
 	// Events - Tool (ToolCallEvent types)
 	BashToolCallEvent,
 	BashToolResultEvent,
@@ -64,11 +62,9 @@ export type {
 	CustomMessageEntryDraft,
 	CustomToolCallEvent,
 	CustomToolResultEvent,
-	EditorFactory,
 	EditToolCallEvent,
 	EditToolResultEvent,
 	// Message and Entry Rendering
-	EntryRenderer,
 	EntryRenderOptions,
 	ExecOptions,
 	ExecResult,
@@ -109,7 +105,6 @@ export type {
 	InputEvent,
 	InputEventResult,
 	InputSource,
-	KeybindingsManager,
 	LoadExtensionsResult,
 	LsToolCallEvent,
 	LsToolResultEvent,
@@ -119,7 +114,6 @@ export type {
 	// Events - Message
 	MessageEndEvent,
 	MessageEndEventResult,
-	MessageRenderer,
 	MessageRenderOptions,
 	MessageStartEvent,
 	MessageUpdateEvent,
@@ -168,7 +162,6 @@ export type {
 	SetLabelHandler,
 	SetModelHandler,
 	SetThinkingLevelHandler,
-	TerminalInputHandler,
 	ThinkingLevelSelectEvent,
 	ToolAnnotations,
 	// Events - Tool
@@ -187,9 +180,6 @@ export type {
 	ToolLoadout,
 	ToolLoadoutChanges,
 	ToolNamespace,
-	ToolRendererResolver,
-	ToolRenderers,
-	ToolRenderResultOptions,
 	ToolResultEvent,
 	ToolResultEventResult,
 	TreePreparation,
@@ -203,7 +193,6 @@ export type {
 	UserBashEvent,
 	UserBashEventResult,
 	WidgetPlacement,
-	WorkingIndicatorOptions,
 	WriteToolCallEvent,
 	WriteToolResultEvent,
 } from "./types.ts";

@@ -27,8 +27,7 @@
 	],
 	"scripts": {
 		"clean": "shx rm -rf dist",
-		"build": "tsc -p tsconfig.build.json && shx chmod +x dist/cli.js dist/rpc-entry.js && npm run copy-assets",
-		"copy-assets": "shx mkdir -p dist/modes/interactive/theme && shx cp src/modes/interactive/theme/*.json dist/modes/interactive/theme/",
+		"build": "tsc -p tsconfig.build.json && shx chmod +x dist/cli.js dist/rpc-entry.js",
 		"test": "vitest --run",
 		"generate:schemas": "node --import ./src/experimental/source-resolver.ts scripts/generate-schemas.ts"
 	},
@@ -37,7 +36,6 @@
 		"@earendil-works/pi-ai": "1.4.0",
 		"@earendil-works/pi-codemode": "1.4.0",
 		"@earendil-works/pi-mcp": "1.4.0",
-		"@earendil-works/pi-tui": "1.4.0",
 		"@silvia-odwyer/photon-node": "0.3.4",
 		"chalk": "6.0.0",
 		"diff": "8.0.4",
@@ -69,7 +67,6 @@
 		"ai",
 		"llm",
 		"cli",
-		"tui",
 		"agent"
 	],
 	"author": "Mario Zechner",

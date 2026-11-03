@@ -1,7 +1,7 @@
 /**
  * AgentSession - Core abstraction for agent lifecycle and session management.
  *
- * This class is shared between all run modes (interactive, print, rpc).
+ * This class is shared between all run modes (print, json, rpc).
  * It encapsulates:
  * - Agent state access
  * - Event subscription with automatic session persistence
@@ -1530,7 +1530,9 @@ export class AgentSession {
 			),
 		);
 		const recordedBuilder = current?.promptBuilder as SystemPromptBuilder | undefined;
-		const builder = recordedBuilder ? systemPromptBuilderForOutput(recordedBuilder, { sections: current?.sections }) : undefined;
+		const builder = recordedBuilder
+			? systemPromptBuilderForOutput(recordedBuilder, { sections: current?.sections })
+			: undefined;
 		const document =
 			builder?.document ??
 			(current
@@ -1541,7 +1543,10 @@ export class AgentSession {
 			excludedIds: builder?.excludedIds,
 			currentBuilder: builder,
 			diagnostic: builder
-				? systemPromptOutputMatches(builder, { content: contentText(current?.content ?? ""), sections: current?.sections })
+				? systemPromptOutputMatches(builder, {
+						content: contentText(current?.content ?? ""),
+						sections: current?.sections,
+					})
 					? undefined
 					: "Builder output differs from the saved prompt."
 				: current

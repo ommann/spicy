@@ -3,7 +3,6 @@
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { fuzzyFilter } from "@earendil-works/pi-tui";
 import chalk from "chalk";
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
 import type { ModelRuntime } from "../core/model-runtime.ts";
@@ -46,7 +45,16 @@ export async function listModels(
 	// Apply fuzzy filter if search pattern provided
 	let filteredModels: Model<Api>[] = models;
 	if (searchPattern) {
-		filteredModels = fuzzyFilter(models, searchPattern, (m) => `${m.provider} ${m.id}`);
+		filteredModels = models.filter((model) => {
+			const text = `${model.provider} ${model.id}`.toLowerCase();
+			let position = 0;
+			for (const character of searchPattern.toLowerCase()) {
+				const index = text.indexOf(character, position);
+				if (index < 0) return false;
+				position = index + 1;
+			}
+			return true;
+		});
 	}
 
 	if (filteredModels.length === 0) {

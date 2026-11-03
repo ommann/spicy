@@ -12,10 +12,8 @@ import {
 	ThinkingLevelMapSchema,
 } from "@earendil-works/pi-ai/providers/model-schema";
 import type { TSchema } from "typebox";
-import { KeybindingsSchema, KeybindingValueSchema } from "../src/core/keybindings-schema.ts";
 import { ModelsConfigSchema } from "../src/core/model-config.ts";
 import { SettingsSchema } from "../src/core/settings-schema.ts";
-import { ColorValueSchema, ThemeJsonSchema } from "../src/modes/interactive/theme/theme-schema.ts";
 
 const packageDirectory = fileURLToPath(new URL("..", import.meta.url));
 const schemaBaseUrl = "https://pi.dev/schemas";
@@ -45,16 +43,6 @@ const schemaArtifacts: readonly SchemaArtifact[] = [
 		filename: "settings.schema.json",
 		schema: SettingsSchema,
 		definitions: { ModelThinkingLevel: ModelThinkingLevelSchema },
-	},
-	{
-		filename: "keybindings.schema.json",
-		schema: KeybindingsSchema,
-		definitions: { KeybindingValue: KeybindingValueSchema },
-	},
-	{
-		filename: "theme.schema.json",
-		schema: ThemeJsonSchema,
-		definitions: { ColorValue: ColorValueSchema },
 	},
 ];
 
