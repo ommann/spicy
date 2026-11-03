@@ -639,7 +639,7 @@
 
 .creator-columns {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -650,13 +650,46 @@
   min-width: 100%;
   box-sizing: border-box;
 }
+.creator-columns > .creator-switchboard > .scroll-area-viewport > .scroll-area-content {
+  width: max-content;
+}
+
+.creator-tree-group {
+  display: grid;
+  grid-template-columns: 2ch minmax(0, 1fr);
+  align-items: center;
+  color: var(--text);
+}
+
+.creator-tree-disclosure {
+  display: grid;
+  place-items: center;
+  width: 2ch;
+  height: 1lh;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.creator-tree-disclosure svg {
+  width: 1.5ch;
+  height: 1.5ch;
+}
+
+.creator-tree-disclosure:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
+}
+
 .creator-switchboard ul { list-style: none; margin: 0; padding: 0 0 0 2ch; }
 .creator-switchboard > .scroll-area-viewport > .scroll-area-content > ul { padding-left: 0; }
 .creator-switchboard li { margin: 0; }
 .creator-switchboard li > label { display: inline-grid; margin-right: 2ch; }
 .creator-switchboard textarea { display: block; width: 100%; box-sizing: border-box; margin-block: 8px; font: inherit; }
 .creator-switchboard select { max-width: 100%; margin: 8px; }
-.creator-switchboard label { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 1ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+.creator-switchboard label { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 1ch; white-space: nowrap; overflow-wrap: normal; }
 .creator-preview .system-prompt-detail { margin-top: 1lh; }
 
 .creator-columns > .creator-preview > .scroll-area-viewport > .scroll-area-content {

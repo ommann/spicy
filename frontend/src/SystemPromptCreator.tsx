@@ -4,7 +4,7 @@ import { SystemPromptCreatorContext, type PromptDocumentSnapshot } from './Syste
 import SystemPromptContent from './SystemPromptContent';
 import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
-import CollapseToggle from './CollapseToggle';
+import TreeDisclosure from './TreeDisclosure';
 import Checkbox from './Checkbox';
 import Dialog from './Dialog';
 import CodeLinewrapOption from './CodeLinewrapOption';
@@ -19,19 +19,37 @@ function PartEditor(props: {
   onToggle: (id: string, enabled: boolean) => void;
 }) {
   const children = () => props.part.children || [];
+  const [expanded, setExpanded] = createSignal(true);
+  function counts(part: SystemPromptPart, enabled = true): { selected: number; total: number } {
+    enabled = enabled && !props.excluded.has(part.id);
+    if (!part.children?.length) return { selected: enabled ? 1 : 0, total: 1 };
+    return part.children.map(child => counts(child, enabled)).reduce((sum, child) => ({
+      selected: sum.selected + child.selected, total: sum.total + child.total,
+    }), { selected: 0, total: 0 });
+  }
+  const state = createMemo(() => counts(props.part));
+  function toggleSubtree(part: SystemPromptPart, enabled: boolean) {
+    props.onToggle(part.id, enabled);
+    part.children?.forEach(child => toggleSubtree(child, enabled));
+  }
   return <li>
-    <label title={props.part.source}>
-      <Checkbox checked={!props.excluded.has(props.part.id)}
-        onChange={event => props.onToggle(props.part.id, event.currentTarget.checked)} />
-      {props.part.label}
-    </label>
-    <For each={children().filter(part => part.inline)}>{part => <label class="creator-inline-choice">
-      <Checkbox checked={!props.excluded.has(part.id)}
-        onChange={event => props.onToggle(part.id, event.currentTarget.checked)} />{part.label}
-    </label>}</For>
-    <Show when={children().some(part => !part.inline)}>
-      <ul><Index each={children().filter(part => !part.inline)}>{part => <PartEditor part={part()} excluded={props.excluded}
-        onToggle={props.onToggle} />}</Index></ul>
+    <div class="creator-tree-group">
+      <Show when={children().length} fallback={<span />}>
+        <TreeDisclosure label={props.part.label} expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
+      </Show>
+      <label title={props.part.source}>
+        <Checkbox checked={state().selected === state().total}
+          indeterminate={state().selected > 0 && state().selected < state().total}
+          onChange={event => toggleSubtree(props.part, event.currentTarget.checked)} />
+        {props.part.label}
+      </label>
+    </div>
+    <Show when={expanded() && children().length}>
+      <ul><Index each={children()}>{part => <PartEditor part={part()} excluded={props.excluded}
+        onToggle={(id, enabled) => {
+          if (enabled) props.onToggle(props.part.id, true);
+          props.onToggle(id, enabled);
+        }} />}</Index></ul>
     </Show>
   </li>;
 }
@@ -53,6 +71,7 @@ export default function SystemPromptCreator() {
   const [excluded, setExcluded] = createSignal<ReadonlySet<string>>(new Set());
   const [tools, setTools] = createSignal<Wire[]>([]);
   const [toolChoices, setToolChoices] = createSignal<Wire[]>([]);
+  const [expandedTools, setExpandedTools] = createSignal(true);
   const [expandedToolSources, setExpandedToolSources] = createSignal<ReadonlySet<string>>(new Set());
   const toolGroups = createMemo(() => {
     const groups = new Map<string, Wire[]>();
@@ -106,7 +125,15 @@ export default function SystemPromptCreator() {
     };
     value.parts.forEach(collect);
     if (value.content) collect(value.content);
-    setExcluded(new Set(excludedIds ?? defaults));
+    const next = new Set(excludedIds ?? defaults);
+    const inheritExclusion = (part: SystemPromptPart, parentExcluded = false) => {
+      const disabled = parentExcluded || next.has(part.id);
+      if (disabled) next.add(part.id);
+      part.children?.forEach(child => inheritExclusion(child, disabled));
+    };
+    value.parts.forEach(part => inheritExclusion(part));
+    if (value.content) inheritExclusion(value.content);
+    setExcluded(next);
   }
   onMount(() => {
     void api?.load().then(value => {
@@ -191,15 +218,34 @@ export default function SystemPromptCreator() {
         <ul><Show when={value().content}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Show>
           <Index each={value().parts}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Index>
         </ul>
-        <Show when={toolChoices().length}><div>Tool definitions</div>
-          <ul><For each={toolGroups()}>{group => <li>
-            <CollapseToggle label={group.source} text={`${expandedToolSources().has(group.source) ? '[-]' : '[+]'} ${group.source} (${group.tools.filter(tool => tools().some(selected => selected.name === tool.name)).length}/${group.tools.length})`}
-              expanded={expandedToolSources().has(group.source)} onToggle={() => toggleToolSource(group.source)} />
-            <Show when={expandedToolSources().has(group.source)}><ul><For each={group.tools}>{tool => <li><label>
+        <Show when={toolChoices().length}>
+          <div class="creator-tree-group">
+            <TreeDisclosure label="Tool definitions" expanded={expandedTools()} onToggle={() => setExpandedTools(value => !value)} />
+            <label><Checkbox checked={tools().length === toolChoices().length}
+              indeterminate={tools().length > 0 && tools().length < toolChoices().length}
+              onChange={event => setTools(event.currentTarget.checked ? [...toolChoices()] : [])} />Tool definitions</label>
+          </div>
+          <Show when={expandedTools()}><ul><For each={toolGroups()}>{group => <li>
+            <div class="creator-tree-group">
+              <TreeDisclosure label={group.source} expanded={expandedToolSources().has(group.source)}
+                onToggle={() => toggleToolSource(group.source)} />
+              <label><Checkbox
+                checked={group.tools.every(tool => tools().some(selected => selected.name === tool.name))}
+                indeterminate={group.tools.some(tool => tools().some(selected => selected.name === tool.name))
+                  && !group.tools.every(tool => tools().some(selected => selected.name === tool.name))}
+                onChange={event => {
+                  const enabled = event.currentTarget.checked;
+                  const names = new Set(group.tools.map(tool => tool.name));
+                  setTools(previous => enabled
+                    ? [...previous.filter(tool => !names.has(tool.name)), ...group.tools]
+                    : previous.filter(tool => !names.has(tool.name)));
+                }} />{group.source}</label>
+            </div>
+            <Show when={expandedToolSources().has(group.source)}><ul><For each={group.tools}>{tool => <li><div class="creator-tree-group"><span /><label>
               <Checkbox checked={tools().some(selected => selected.name === tool.name)}
                 onChange={event => toggleTool(tool.name, event.currentTarget.checked)} />{tool.name}
-            </label></li>}</For></ul></Show>
-          </li>}</For></ul>
+            </label></div></li>}</For></ul></Show>
+          </li>}</For></ul></Show>
         </Show>
       </ScrollArea>
       <ScrollArea class="system-prompts-scroll-area creator-preview" vertical
