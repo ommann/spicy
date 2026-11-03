@@ -544,7 +544,7 @@
   gap: 48px;
   min-height: 0;
   height: auto;
-  padding: 24px 50vw;
+  padding: 1lh 50vw;
   overflow: auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
@@ -562,10 +562,20 @@
   display: none;
 }
 
+.system-prompt-version > .tree-card-body {
+  gap: 1lh;
+}
+
 .system-prompt-heading {
-  display: grid;
-  grid-template-rows: 24px 24px;
-  margin-bottom: 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2ch;
+  min-height: 1lh;
+}
+
+.system-prompt-heading > div:empty {
+  display: none;
 }
 
 .system-prompt-heading label {
@@ -578,19 +588,16 @@
   position: fixed;
   inset: var(--app-toolbar-height) 0 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--background);
   color: var(--text);
 }
 
-.creator-actions {
-  padding: 1lh 2ch;
-}
-
 .creator-toolbar {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 2ch;
+  margin-bottom: 1lh;
 }
 
 
@@ -608,12 +615,29 @@
   box-sizing: border-box;
 }
 .creator-switchboard ul { list-style: none; margin: 0; padding: 0 0 0 2ch; }
+.creator-switchboard > .scroll-area-viewport > .scroll-area-content > ul { padding-left: 0; }
 .creator-switchboard li { margin: 0; }
 .creator-switchboard li > label { display: inline-flex; margin-right: 2ch; }
 .creator-switchboard textarea { display: block; width: 100%; box-sizing: border-box; margin-block: 8px; font: inherit; }
 .creator-switchboard select { max-width: 100%; margin: 8px; }
 .creator-switchboard label { display: flex; align-items: baseline; gap: 1ch; white-space: pre-wrap; overflow-wrap: anywhere; }
 .creator-preview .system-prompt-detail { margin-top: 16px; }
+
+.creator-columns > .creator-preview > .scroll-area-viewport > .scroll-area-content {
+  width: var(--code-content-width, max-content);
+}
+
+.creator-preview .system-prompt-detail .custom-scroll-area {
+  padding: 0;
+}
+
+.creator-preview .system-prompt-detail .scroll-area-viewport {
+  overflow: visible;
+}
+
+.creator-preview .system-prompt-detail .canvas-scrollbar {
+  display: none;
+}
 
 .notification-error {
   color: var(--status-error);

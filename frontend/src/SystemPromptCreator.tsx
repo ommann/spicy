@@ -169,9 +169,6 @@ export default function SystemPromptCreator() {
   }
   return <section class="system-prompt-creator" aria-label="System Prompt Creator">
     <Navigation options={<button onClick={() => optionsDialog.showModal()}>Options</button>} />
-    <div class="creator-actions">
-      <button class="text-action" disabled={!document()} onClick={openSave}>Save as</button>
-    </div>
     <Dialog ref={saveDialog} title="Save as" closeLabel="Cancel">
       <form onSubmit={save}>
         <label>Name<input autofocus required value={promptName()} onInput={event => setPromptName(event.currentTarget.value)} /></label>
@@ -191,14 +188,17 @@ export default function SystemPromptCreator() {
         events={{ ...switchboardInteraction.handlers, onKeyDown: switchboardInteraction.keydown,
           onKeyUp: switchboardInteraction.keyup, onBlur: switchboardInteraction.blur }}
         contentClassList={{ 'pan-ready': switchboardInteraction.space(), panning: switchboardInteraction.dragging() }}>
-        <Show when={snapshot()?.sources?.length}><div>Start from{' '}
-          <SelectWithDialog label="Start from" value={startingSource()} options={promptOptions()} onChange={id => {
-            setStartingSource(id);
-            const source = snapshot()?.sources?.find(item => item.id === id);
-            if (source) { loadDocument(source.document, source.excludedIds); loadTools(source.toolsAdded || []); }
-            else if (snapshot()) { loadDocument(snapshot()!.document); loadTools(snapshot()!.current.toolsAdded || []); }
-          }} />
-        </div></Show>
+        <div class="creator-toolbar">
+          <Show when={snapshot()?.sources?.length}>
+            <SelectWithDialog class="text-action" label="Load" value={startingSource()} options={promptOptions()} onChange={id => {
+              setStartingSource(id);
+              const source = snapshot()?.sources?.find(item => item.id === id);
+              if (source) { loadDocument(source.document, source.excludedIds); loadTools(source.toolsAdded || []); }
+              else if (snapshot()) { loadDocument(snapshot()!.document); loadTools(snapshot()!.current.toolsAdded || []); }
+            }}>Load</SelectWithDialog>
+          </Show>
+          <button class="text-action" disabled={!document()} onClick={openSave}>Save as</button>
+        </div>
         <ul><Show when={value().content}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Show>
           <Index each={value().parts}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Index>
         </ul>
