@@ -1,12 +1,12 @@
 import { expect, test } from "vitest";
 import { undent } from "../src/utils/undent.ts";
 
-test("removes shared indentation and surrounding line breaks", () => {
+test("removes shared indentation and preserves the ending newline", () => {
 	expect(undent`
 		first
 		  nested
 		last
-	`).toBe("first\n  nested\nlast");
+	`).toBe("first\n  nested\nlast\n");
 });
 
 test("preserves interpolated text exactly, including its indentation", () => {
@@ -14,7 +14,7 @@ test("preserves interpolated text exactly, including its indentation", () => {
 	expect(undent`
 		${content}
 		end
-	`).toBe(`${content}\nend`);
+	`).toBe(`${content}\nend\n`);
 });
 
 test("omits undefined paragraphs without changing spacing inside supplied text", () => {
@@ -34,5 +34,5 @@ test("handles inline templates and empty values", () => {
 	expect(undent``).toBe("");
 	expect(undent`
 		${""}
-	`).toBe("");
+	`).toBe("\n");
 });

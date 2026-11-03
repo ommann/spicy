@@ -14,6 +14,15 @@ import {
 	type SystemPromptPart,
 } from "./system-prompt-document.ts";
 
+const DEFAULT_PREAMBLE = "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
+const ADDITIONAL_TOOLS_NOTE = "In addition to the tools above, you may have access to other custom tools depending on the project.";
+const PROJECT_CONTEXT_HEADING = "Project-specific instructions and guidelines:";
+
+const BASH_FILE_OPERATIONS_RULE = "Use bash for file operations like ls, rg, find";
+const CORE_RULES = undent`
+	Be concise in your responses
+	Show file paths clearly when working with files`;
+
 export interface BuildSystemPromptOptions {
 	/** Custom system prompt (replaces the default prefix). */
 	customPrompt?: string;
@@ -126,15 +135,14 @@ function buildRules(
 	const hasLs = selectedTools.includes("ls");
 
 	if (hasBash && !hasGrep && !hasFind && !hasLs) {
-		addRule("Use bash for file operations like ls, rg, find");
+		addRule(BASH_FILE_OPERATIONS_RULE);
 	}
 
 	for (const name of selectedTools) {
 		for (const rule of toolGuidelines[name] ?? []) addRule(rule, `tool:${name}`);
 	}
 	for (const rule of promptGuidelines) addRule(rule, "configuration");
-	addRule("Be concise in your responses");
-	addRule("Show file paths clearly when working with files");
+	for (const rule of CORE_RULES.split("\n")) addRule(rule);
 	const core = rules.filter((part) => part.source === "core");
 	if (core.length > 1) {
 		core[0].label = "Pi core start";
@@ -142,12 +150,6 @@ function buildRules(
 	}
 	return rules;
 }
-
-const DEFAULT_PREAMBLE =
-	"You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
-const ADDITIONAL_TOOLS_NOTE =
-	"In addition to the tools above, you may have access to other custom tools depending on the project.";
-const PROJECT_CONTEXT_HEADING = "Project-specific instructions and guidelines:";
 
 function textSection(name: string, text: string, source = "core"): SystemPromptPart {
 	return {

@@ -5,8 +5,7 @@ export function undent(strings: TemplateStringsArray, ...values: unknown[]): str
 
 	const source = strings
 		.reduce((text, literal, index) => text + (index ? `${marker}${index - 1}${marker}` : "") + literal, "")
-		.replace(/^\r?\n/, "")
-		.replace(/\r?\n[\t ]*$/, "");
+		.replace(/^\r?\n/, "");
 	const indents = [...source.matchAll(/^[\t ]*(?=\S)/gm)].map((match) => match[0].length);
 	const indentation = Math.min(...indents);
 	const unindented = source.replace(/^[\t ]+/gm, (spaces) => spaces.slice(indentation));
