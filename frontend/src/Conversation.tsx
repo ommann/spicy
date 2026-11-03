@@ -1,4 +1,4 @@
-import { For, Index, Show, batch, createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
+import { For, Index, Show, batch, createEffect, createMemo, createSignal, on, onCleanup, onMount, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import Card from './Card';
@@ -14,7 +14,7 @@ import ScrollBar from './ScrollBar';
 import SystemPromptReference from './SystemPromptReference';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createColumnShortcuts } from './column-shortcuts';
-import { CHAT_BLOCK_GAP, layoutConversation, matchConversationLanes } from './conversation-model.mjs';
+import { layoutConversation, matchConversationLanes } from './conversation-model.mjs';
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
@@ -50,7 +50,7 @@ interface Props {
   onOptions: () => void;
 }
 
-function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?: number; scrollTop: number; promptRowTop: number;
+function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; scrollTop: number; promptRowTop: number;
   selection?: { value: string; options: SelectOption[]; onChange: (value: string) => void };
   registerSection: (id: string, element: HTMLElement) => () => void;
   width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; onPrompt: (number: number) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
@@ -60,7 +60,7 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?
   onCleanup(() => props.unmeasure(element));
 
   return <SectionContext.Provider value={element => { const dispose = props.registerSection(props.id, element); onCleanup(dispose); }}><article class="tree-node" classList={{ 'prefix-preview': props.node.isPrefixDelta }} data-entry-id={props.id}
-    hidden={props.position.hidden} style={{ left: `${props.position.left}px`, top: `${props.position.top}px`, width: `${props.position.span}px` }}>
+    hidden={props.position.hidden} style={{ ...props.gridStyle, width: `${props.position.span}px` }}>
     <Card ref={element} anchors={props.node.anchors} style={{ left: `${props.position.cardLeft}px`, width: `${props.width}px` }}>
       <Show when={props.node.entry.type === 'branch_draft'}>
         <SystemPromptPlaceholder number={props.promptNumber} stickyOffset={props.scrollTop - props.promptRowTop}
@@ -78,6 +78,18 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; promptNumber?
 }
 
 export default function Conversation(props: Props) {
+  let spacingProbe!: HTMLSpanElement;
+  const [spacing, setSpacing] = createSignal({ row: 20, column: 48, edge: 24 });
+  onMount(() => {
+    const measureSpacing = () => {
+      const { width, height } = spacingProbe.getBoundingClientRect();
+      if (width && height) setSpacing({ row: height, column: width, edge: width / 2 });
+    };
+    const observer = new ResizeObserver(measureSpacing);
+    observer.observe(spacingProbe);
+    measureSpacing();
+    onCleanup(() => observer.disconnect());
+  });
   const [widths, setWidths] = createStore({ focused: 720, side: 720 });
   const [focusedFitsWindow, setFocusedFitsWindow] = createSignal(true);
   const [selectedLane, setSelectedLane] = createSignal(0);
@@ -99,12 +111,32 @@ export default function Conversation(props: Props) {
   const nodeIds = () => (props.graph.ids as string[]).filter(id => props.graph.nodes.get(id).entry.message?.role !== 'system');
   const laneKeys = createMemo(() => lanes().map(lane => lane.key as string));
   const focused = () => Math.max(0, Math.min(selectedLane(), lanes().length - 1));
-  const maxWidth = () => Math.max(480, dimensions().width - 48);
+  const maxWidth = () => Math.max(480, dimensions().width - spacing().edge * 2);
   const workingWidth = () => mode() === 'focused' && focusedFitsWindow() ? maxWidth() : widths[mode()];
   const layout = createMemo(() => layoutConversation(props.graph, {
     mode: mode(), width: workingWidth(), viewportWidth: dimensions().width, viewportHeight: dimensions().height,
-    lane: focused(), heights, composerHeights: Object.fromEntries(lanes().map((lane, index) => [index, composerHeights[lane.key] || 40])),
+    lane: focused(), heights, rowGap: spacing().row, columnGap: spacing().column, edgeGap: spacing().edge, composerHeights: Object.fromEntries(lanes().map((lane, index) => [index, composerHeights[lane.key] || 40])),
   }));
+  // Grid lines retain the measured branch geometry used by connectors and scrolling.
+  const tracks = createMemo(() => {
+    const value = layout();
+    const positions = [...value.items.values()];
+    const x = [...new Set<number>([0, value.width,
+      ...positions.flatMap((position: Wire) => [position.left, position.left + position.span]),
+      ...value.starts.flatMap((start: number) => [value.inset + start, value.inset + start + workingWidth()]),
+    ].filter(Number.isFinite))].sort((a, b) => a - b);
+    const y = [...new Set<number>([0, spacing().row, value.height,
+      ...positions.map((position: Wire) => position.top),
+    ].filter(Number.isFinite))].sort((a, b) => a - b);
+    return {
+      columns: x.slice(1).map((edge, index) => `${edge - x[index]}px`).join(' '),
+      rows: y.slice(1).map((edge, index) => `${edge - y[index]}px`).join(' '),
+      place: (left: number, top: number, width: number): JSX.CSSProperties => ({
+        'grid-column': `${x.indexOf(left) + 1} / ${x.indexOf(left + width) + 1}`,
+        'grid-row': y.indexOf(top) + 1,
+      }),
+    };
+  });
   const sections = new Map<HTMLElement, string>();
   function registerSection(id: string, element: HTMLElement) {
     sections.set(element, id);
@@ -336,13 +368,14 @@ export default function Conversation(props: Props) {
     <main ref={viewport} id="trace-viewport" class="transcript" aria-label="Conversation tree — scroll vertically through time, horizontally between branches"
       classList={{ 'pan-ready': interaction.space(), panning: interaction.dragging() }}
       {...interaction.handlers}>
-      <div ref={stage} class="tree-stage" style={{ '--chat-block-gap': `${CHAT_BLOCK_GAP}px`, width: `${layout().width}px`, height: `${layout().height}px` }}>
+      <div ref={stage} class="tree-stage" style={{ '--chat-block-gap': '1lh', width: `${layout().width}px`, height: `${layout().height}px`,
+        'grid-template-columns': tracks().columns, 'grid-template-rows': tracks().rows }}>
         <svg class="tree-connections" aria-hidden="true" width={layout().width} height={layout().height}>
           <For each={layout().paths}>{path => <path d={path.d} classList={{ 'fork-connection': path.fork }} />}</For>
         </svg>
         <For each={props.graph.leaves}>{(leaf: Wire, index) => <Show when={leaf.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf.id).captured}>
           <article class="tree-node" hidden={mode() === 'focused' && index() !== focused()}
-            style={{ left: `${layout().inset + layout().starts[index()]}px`, top: '24px', width: `${workingWidth()}px` }}>
+            style={{ ...tracks().place(layout().inset + layout().starts[index()], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
             <Card><SystemPromptReference entryId={leaf.id}
               number={props.prompts.find(prompt => prompt.key === leaf.entry.draftPromptKey)?.number
                 ?? props.graph.prompts.numberFor(props.graph.prefix.get(leaf.id))} onOpen={props.onOpenSystemPrompt} /></Card>
@@ -361,8 +394,9 @@ export default function Conversation(props: Props) {
           } : undefined;
 
           const promptRoot = () => props.graph.prefix.get(id).rootId;
-          return <TreeCard id={id} node={node()} position={layout().items.get(id)} promptNumber={number()} scrollTop={scroll().top}
-            promptRowTop={layout().items.get(promptRoot())?.top ?? 24} selection={selection()}
+          return <TreeCard id={id} node={node()} position={layout().items.get(id)}
+            gridStyle={tracks().place(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)} promptNumber={number()} scrollTop={scroll().top}
+            promptRowTop={layout().items.get(promptRoot())?.top ?? spacing().row} selection={selection()}
             registerSection={registerSection} width={workingWidth()}
             onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch} onPrompt={props.onOpenSystemPrompt}
             measure={(key, element) => observe(key, element, 'node')} unmeasure={unobserve} />;
@@ -391,6 +425,7 @@ export default function Conversation(props: Props) {
     onKeyDown={keydown} onKeyUp={release} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) blur();
     }}>
+    <span class="layout-spacing" ref={spacingProbe} aria-hidden="true" />
     <ChatToolbar active={props.active} mode={mode()} notification={props.notification}
       onOptions={props.onOptions} onMode={changeMode} onFork={adjacentFork} />
     {canvas}

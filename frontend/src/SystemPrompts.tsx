@@ -29,7 +29,11 @@ export default function SystemPrompts(props: Props) {
   let optionsDialog!: HTMLDialogElement;
   const interaction = createColumnInteraction({
     viewport: () => viewport, enabled: () => mode() === 'side',
-    columns: () => ({ inset: viewport.clientWidth / 2, starts: props.versions.map((_, index) => index * 768), width: 720 }),
+    columns: () => {
+      const content = viewport.firstElementChild!;
+      const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
+      return { inset: viewport.clientWidth / 2, starts: props.versions.map((_, index) => index * (720 + gap)), width: 720 };
+    },
     onColumn: index => { const version = props.versions[index]; if (version) setSelection(version.number); },
     onScroll: () => {},
   });
@@ -92,15 +96,19 @@ export default function SystemPrompts(props: Props) {
       </Dialog>
       <ScrollArea class="system-prompts-scroll-area" vertical viewportRef={element => { viewport = element; }}
         events={{ ...interaction.handlers, role: 'main' }} contentClass="system-prompts-content"
-        contentClassList={{ 'focused-columns': mode() === 'focused', 'pan-ready': interaction.space(), panning: interaction.dragging() }}>
+        contentStyle={{ 'grid-template-columns': mode() === 'focused' ? 'minmax(0, 1fr)' : `repeat(${Math.max(1, props.versions.length)}, 720px)` }}
+        contentClassList={{ 'focused-columns': mode() === 'focused', 'pan-ready': interaction.space(), panning: interaction.dragging(),
+          'has-headings': props.versions.some(version => (mode() !== 'focused' || selected()?.number === version.number)
+            && (version.title || version.priorityReason || version.candidateKey)) }}>
         <Show when={props.versions.length} fallback={<Card class="system-prompt-version" ref={element => sections.set(1, element)}><SystemPromptPlaceholder /></Card>}>
-          <For each={props.versions}>{version => {
+          <For each={props.versions}>{(version, index) => {
             const focused = () => selected()?.number === version.number;
             onCleanup(() => sections.delete(version.number));
-            return <Card class="system-prompt-version" data-active-column={focused()}
-              hidden={mode() === 'focused' && !focused()} data-system-prompt-version={version.number}
-              ref={element => sections.set(version.number, element)}>
-              <div class="system-prompt-heading">
+            const column = () => mode() === 'focused' ? 1 : index() + 1;
+            return <>
+              <div class="system-prompt-heading" hidden={mode() === 'focused' && !focused()}
+                ref={element => sections.set(version.number, element)}
+                style={{ 'grid-column': column(), 'grid-row': 1 }}>
                 <div><Show when={version.title}><span>{version.title}</span></Show><Show when={version.priorityReason}><span>{version.priorityReason}</span></Show></div>
                 <div><Show when={version.candidateKey}>{key => <label>
                   <Checkbox checked={props.ignored?.(key()) ?? false}
@@ -108,9 +116,13 @@ export default function SystemPrompts(props: Props) {
                   Ignore this system prompt
                 </label>}</Show></div>
               </div>
-              <SystemPromptContent entry={version.unified || version.full || version.detail}
-                full expandAll={expanded()} onExpandChange={setExpanded} />
-            </Card>;
+              <Card class="system-prompt-version" data-active-column={focused()}
+                hidden={mode() === 'focused' && !focused()} data-system-prompt-version={version.number}
+                style={{ 'grid-column': column(), 'grid-row': 2 }}>
+                <SystemPromptContent entry={version.unified || version.full || version.detail}
+                  full expandAll={expanded()} onExpandChange={setExpanded} />
+              </Card>
+            </>;
           }}</For>
         </Show>
       </ScrollArea>

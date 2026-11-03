@@ -118,6 +118,14 @@
   display: contents;
 }
 
+.layout-spacing {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  width: 6ch;
+  height: 1lh;
+}
+
 .trace-text,
 .codemode-preview,
 .tool-body pre,
@@ -222,6 +230,9 @@
  * The established tree canvas keeps its own branch/connector layout engine.
  */
 .app-toolbar {
+  display: grid;
+  grid-template-columns: max-content max-content max-content max-content minmax(0, 1fr);
+  align-items: center;
   position: fixed;
   inset: 0 0 auto;
   height: var(--app-toolbar-height);
@@ -236,12 +247,17 @@
 }
 
 .app-toolbar-actions {
-  margin-left: auto;
-  display: flex;
+  display: grid;
   align-items: center;
+  justify-self: end;
+  min-width: 0;
 }
 
 .app-toolbar .tree-toolbar {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;
   height: auto;
   padding: 0;
   gap: 2ch;
@@ -537,11 +553,11 @@
 
 .system-prompts-view .system-prompts-content {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 720px;
+  grid-template-rows: auto auto;
   align-content: start;
   align-items: start;
-  gap: 48px;
+  column-gap: 6ch;
+  row-gap: 0;
   min-height: 0;
   height: auto;
   padding: 1lh 50vw;
@@ -554,12 +570,22 @@
 .system-prompts-content.panning { cursor: grabbing; user-select: none; }
 
 .system-prompts-content.focused-columns {
-  grid-auto-columns: minmax(0, 1fr);
-  padding-inline: 24px;
+  padding-inline: 3ch;
 }
 
-.system-prompt-version[hidden] {
+.system-prompts-content.has-headings {
+  row-gap: 1lh;
+}
+
+.system-prompt-version[hidden],
+.system-prompt-heading[hidden] {
   display: none;
+}
+
+.system-prompt-version,
+.system-prompt-version .system-prompt-detail {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .system-prompt-version > .tree-card-body {
@@ -567,11 +593,17 @@
 }
 
 .system-prompt-heading {
-  display: flex;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 2ch;
-  min-height: 1lh;
+  column-gap: 2ch;
+}
+
+.system-prompt-heading > div:first-child {
+  display: grid;
+  align-content: start;
 }
 
 .system-prompt-heading > div:empty {
@@ -579,9 +611,10 @@
 }
 
 .system-prompt-heading label {
-  display: inline-flex;
+  display: inline-grid;
+  grid-auto-flow: column;
   align-items: center;
-  gap: 8px;
+  gap: 1ch;
 }
 
 .system-prompt-creator {
@@ -594,7 +627,10 @@
 }
 
 .creator-toolbar {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: start;
   align-items: baseline;
   gap: 2ch;
   margin-bottom: 1lh;
@@ -617,11 +653,11 @@
 .creator-switchboard ul { list-style: none; margin: 0; padding: 0 0 0 2ch; }
 .creator-switchboard > .scroll-area-viewport > .scroll-area-content > ul { padding-left: 0; }
 .creator-switchboard li { margin: 0; }
-.creator-switchboard li > label { display: inline-flex; margin-right: 2ch; }
+.creator-switchboard li > label { display: inline-grid; margin-right: 2ch; }
 .creator-switchboard textarea { display: block; width: 100%; box-sizing: border-box; margin-block: 8px; font: inherit; }
 .creator-switchboard select { max-width: 100%; margin: 8px; }
-.creator-switchboard label { display: flex; align-items: baseline; gap: 1ch; white-space: pre-wrap; overflow-wrap: anywhere; }
-.creator-preview .system-prompt-detail { margin-top: 16px; }
+.creator-switchboard label { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 1ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+.creator-preview .system-prompt-detail { margin-top: 1lh; }
 
 .creator-columns > .creator-preview > .scroll-area-viewport > .scroll-area-content {
   width: var(--code-content-width, max-content);

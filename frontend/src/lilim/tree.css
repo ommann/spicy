@@ -1,7 +1,9 @@
 /* Pi's transcript styling remains inside each node; only its arrangement changes. */
 .tree-toolbar {
   height: 42px;
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
   align-items: center;
   gap: 16px;
   padding: 0 32px;
@@ -178,8 +180,20 @@
   display: none;
 }
 .tree-stage {
+  display: grid;
+  align-items: start;
+  justify-items: start;
   position: relative;
   min-height: 100%;
+}
+
+.tree-stage > .tree-node {
+  position: relative;
+  min-width: 0;
+}
+
+.tree-stage > .tree-node[hidden] {
+  display: none;
 }
 .tree-connections {
   position: absolute;
@@ -367,9 +381,12 @@
 }
 .tree-card-body {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--chat-block-gap, 20px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: max-content;
+  align-content: start;
+  min-width: 0;
+  gap: var(--chat-block-gap, 1lh);
 }
 .chat-part-body {
   max-height: 440px;

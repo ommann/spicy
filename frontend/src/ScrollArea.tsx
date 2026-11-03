@@ -5,6 +5,7 @@ interface Props {
   children: JSX.Element;
   class?: string;
   contentClass?: string;
+  contentStyle?: JSX.CSSProperties;
   contentClassList?: Record<string, boolean>;
   vertical?: boolean;
   viewportRef?: (element: HTMLDivElement) => void;
@@ -43,7 +44,7 @@ export default function ScrollArea(props: Props) {
         const handler = props.events?.onScroll;
         if (typeof handler === 'function') handler(event);
       }}>
-      <div ref={content} class={`scroll-area-content${props.contentClass ? ` ${props.contentClass}` : ''}`} classList={props.contentClassList}>
+      <div ref={content} style={props.contentStyle} class={`scroll-area-content${props.contentClass ? ` ${props.contentClass}` : ''}`} classList={props.contentClassList}>
         {props.children}
       </div>
     </div>

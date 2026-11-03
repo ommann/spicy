@@ -172,10 +172,11 @@ export function continuationTarget(graph, id) {
 
 // Retain the established packing, shared-card placement, connector paths, and overscroll.
 // This function has no browser or rendering dependency.
-export function layoutConversation(graph, { mode, width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {} }) {
+export function layoutConversation(graph, { mode, width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {},
+  rowGap = CHAT_BLOCK_GAP, columnGap = 48, edgeGap = 24 }) {
   const focused = Math.max(0, Math.min(lane, graph.leaves.length - 1));
-  const gap = 48;
-  const inset = mode === 'focused' ? Math.max(24, (viewportWidth - width) / 2) : Math.max(24, viewportWidth / 2);
+  const gap = columnGap;
+  const inset = mode === 'focused' ? Math.max(edgeGap, (viewportWidth - width) / 2) : Math.max(edgeGap, viewportWidth / 2);
   const pending = node => node.entry.type === 'branch_draft' && node.entry.draftSourceId;
   const committed = graph.leaves.filter(node => !pending(node));
   const drafts = graph.leaves.filter(pending);
@@ -202,9 +203,9 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
     const hidden = system || (mode === 'focused' && !onPath);
     let parent = node.parent;
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
-    const top = system ? 24 : parent ? items.get(parent.id).top + items.get(parent.id).height + CHAT_BLOCK_GAP
-      : 24 + (graph.prefix.get(node.id).captured ? prefixHeight + CHAT_BLOCK_GAP : 0);
-    const height = system ? 0 : heights[node.id] || (pending(node) ? 60 : node.entry.type === 'branch_draft' ? 120 + CHAT_BLOCK_GAP
+    const top = system ? rowGap : parent ? items.get(parent.id).top + items.get(parent.id).height + rowGap
+      : rowGap + (graph.prefix.get(node.id).captured ? prefixHeight + rowGap : 0);
+    const height = system ? 0 : heights[node.id] || (pending(node) ? 60 : node.entry.type === 'branch_draft' ? 120 + rowGap
       : node.parts.reduce((sum, part) => sum + (part.kind === 'message' || part.kind === 'thinking' ? 44 : 60), 0));
     const first = Math.min(...range);
     items.set(node.id, { top, height, hidden, column,
@@ -212,12 +213,12 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
   }
 
   const composers = graph.leaves.map((_, index) => {
-    const bottom = Math.max(24 + prefixHeight, ...[...graph.nodes.values()]
+    const bottom = Math.max(rowGap + prefixHeight, ...[...graph.nodes.values()]
       .filter(node => !items.get(node.id).hidden && node.first <= index && node.last >= index)
       .map(node => items.get(node.id).top + items.get(node.id).height));
-    return { left: inset + starts[index], top: bottom + CHAT_BLOCK_GAP, height: composerHeights[index] || 40 };
+    return { left: inset + starts[index], top: bottom + rowGap, height: composerHeights[index] || 40 };
   });
-  const height = Math.max(24 + prefixHeight,
+  const height = Math.max(rowGap + prefixHeight,
     ...(mode === 'side' ? composers.map(composer => composer.top + composer.height) : []),
     ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden).map(node => items.get(node.id).top + items.get(node.id).height))
     + Math.max(80, viewportHeight * .75);
@@ -232,9 +233,9 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
 
     const previous = items.get(parent.id);
     paths.push({ id: node.id, fork: parent.children.length > 1,
-      d: `M ${inset + starts[previous.column] + 20} ${previous.top + previous.height} V ${position.top - 10} H ${inset + starts[position.column] + 20} V ${position.top}` });
+      d: `M ${inset + starts[previous.column] + rowGap} ${previous.top + previous.height} V ${position.top - rowGap / 2} H ${inset + starts[position.column] + rowGap} V ${position.top}` });
   }
 
   return { items, composers, paths, inset, starts, width: totalWidth, height, lane: focused,
-    hasHorizontal: mode !== 'focused' || width + 48 > viewportWidth };
+    hasHorizontal: mode !== 'focused' || width + edgeGap * 2 > viewportWidth };
 }
