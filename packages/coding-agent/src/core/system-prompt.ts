@@ -3,8 +3,8 @@
  */
 
 import { getSystemMessageText } from "@earendil-works/pi-ai";
-import { getDocsPath, getReadmePath } from "../config.ts";
-import { formatSkillsForPrompt, type Skill } from "./skills.ts";
+import {getDocsPath, getReadmePath} from "../config.ts";
+import {formatSkillsForPrompt, type Skill} from "./skills.ts";
 import {
 	renderSystemPromptDocument,
 	renderSystemPromptPart,
@@ -142,6 +142,26 @@ function buildRules(
 	return rules;
 }
 
+const DEFAULT_PREAMBLE =
+	"You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
+const ADDITIONAL_TOOLS_NOTE =
+	"In addition to the tools above, you may have access to other custom tools depending on the project.";
+const PROJECT_CONTEXT_HEADING = "Project-specific instructions and guidelines:";
+
+function textSection(name: string, text: string, source = "core"): SystemPromptPart {
+	return {
+		id: name,
+		label: (name[0].toUpperCase() + name.slice(1)).replaceAll("_", " "),
+		source,
+		section: name,
+		text,
+	};
+}
+
+function exactPrompt(text: string): SystemPromptPart {
+	return { id: "forced", label: "Exact prompt replacement", source: "extension", text };
+}
+
 /** Construct the content tree before rendering; text comparisons are presentation only. */
 export function buildSystemPromptDocument(input: BuildSystemPromptOptions): SystemPromptDocument {
 	const options = normalizeBuildSystemPromptOptions(input);
@@ -166,124 +186,102 @@ export function buildSystemPromptDocument(input: BuildSystemPromptOptions): Syst
 	}
 
 	const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
-	const promptParts: Record<string, SystemPromptPart> = {};
-	const section = (name: string, text: string, source = "core") => {
-		promptParts[name] = {
-			id: name,
-			label: (name[0].toUpperCase() + name.slice(1)).replaceAll("_", " "),
-			source,
-			section: name,
-			text,
-		};
+	const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
+	const preamble = textSection("preamble", customPrompt || DEFAULT_PREAMBLE, customPrompt ? "configuration" : "core");
+	const tools: SystemPromptPart = {
+		id: "tools",
+		label: "Tool descriptions",
+		source: "core",
+		section: "tools",
+		separator: "\n\n",
+		children: [
+			visibleTools.length
+				? {
+						id: "tools/list",
+						label: "Descriptions",
+						source: "tools",
+						separator: "\n",
+						children: visibleTools.map((name) => ({
+							id: `tools/${name}`,
+							label: name,
+							source: `tool:${name}`,
+							text: `- ${name}: ${toolSnippets[name]}`,
+						})),
+					}
+				: { id: "tools/list", label: "No descriptions", source: "tools", text: "(none)" },
+			{ id: "tools/note", label: "Additional tools note", source: "core", text: ADDITIONAL_TOOLS_NOTE },
+		],
 	};
-	if (customPrompt) {
-		section("preamble", customPrompt, "configuration");
-	} else {
-		section(
-			"preamble",
-			"You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.",
-		);
-		const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
-		promptParts.tools = {
-			id: "tools",
-			label: "Tool descriptions",
-			source: "core",
-			section: "tools",
-			separator: "\n\n",
-			children: [
-				visibleTools.length
-					? {
-							id: "tools/list",
-							label: "Descriptions",
-							source: "tools",
-							separator: "\n",
-							children: visibleTools.map((name) => ({
-								id: `tools/${name}`,
-								label: name,
-								source: `tool:${name}`,
-								text: `- ${name}: ${toolSnippets[name]}`,
-							})),
-						}
-					: { id: "tools/list", label: "No descriptions", source: "tools", text: "(none)" },
-				{
-					id: "tools/note",
-					label: "Additional tools note",
-					source: "core",
-					text: "In addition to the tools above, you may have access to other custom tools depending on the project.",
-				},
-			],
-		};
-		promptParts.rules = {
-			id: "rules",
-			label: "Rules",
-			source: "core",
-			section: "rules",
-			separator: "\n",
-			children: buildRules(declaredTools, toolGuidelines, promptGuidelines),
-		};
-		section(
-			"docs",
-			`Spicy reference:
+	const rules: SystemPromptPart = {
+		id: "rules",
+		label: "Rules",
+		source: "core",
+		section: "rules",
+		separator: "\n",
+		children: buildRules(declaredTools, toolGuidelines, promptGuidelines),
+	};
+	const docs = textSection(
+		"docs",
+		`Spicy reference:
 - Project setup: ${getReadmePath()}
 - For codemode scripts and non-LLM models such as classifiers and image models, read ${getDocsPath()}/codemode.md.`,
-		);
-	}
-
-	if (appendSystemPrompt) section("addendum", appendSystemPrompt, "configuration");
-	if (contextFiles.length > 0)
-		promptParts.project_context = {
-			id: "project_context",
-			label: "Project context",
-			source: "context",
-			section: "project_context",
-			separator: "\n\n",
-			children: [
-				{
-					id: "project_context/heading",
-					label: "Context heading",
-					source: "core",
-					text: "Project-specific instructions and guidelines:",
-				},
-				...contextFiles.map(({ path, content }, index) => ({
-					id: `project_context/${encodeURIComponent(path)}/${contextFiles.slice(0, index).filter((file) => file.path === path).length}`,
-					label: path,
-					source: path,
-					text: content,
-					prefix: `<project_instructions path="${path}">\n`,
-					suffix: "\n</project_instructions>",
-				})),
-			],
-		};
+	);
+	const addendum = appendSystemPrompt ? textSection("addendum", appendSystemPrompt, "configuration") : undefined;
+	const projectContext: SystemPromptPart | undefined = contextFiles.length
+		? {
+				id: "project_context",
+				label: "Project context",
+				source: "context",
+				section: "project_context",
+				separator: "\n\n",
+				children: [
+					{
+						id: "project_context/heading",
+						label: "Context heading",
+						source: "core",
+						text: PROJECT_CONTEXT_HEADING,
+					},
+					...contextFiles.map(({ path, content }, index) => ({
+						id: `project_context/${encodeURIComponent(path)}/${contextFiles.slice(0, index).filter((file) => file.path === path).length}`,
+						label: path,
+						source: path,
+						text: content,
+						prefix: `<project_instructions path="${path}">\n`,
+						suffix: "\n</project_instructions>",
+					})),
+				],
+			}
+		: undefined;
 	// A hidden reader is still reachable through another tool, so skills stay but the hint names no tool.
 	const readers = ["read", "bash"] as const;
 	const skillFileReadTool =
 		readers.find((tool) => declaredTools.includes(tool)) ??
 		(readers.some((tool) => selectedTools.includes(tool)) ? "indirect" : undefined);
-	if (skillFileReadTool && skills.length > 0) {
-		const skillsPrompt = formatSkillsForPrompt(skills, skillFileReadTool).trim();
-		if (skillsPrompt) section("skills", skillsPrompt, "skills");
-	}
-	section("cwd", cwd.replace(/\\/g, "/"));
-	for (const [name, content] of Object.entries(customSections)) {
-		if (content) {
+	const skillsText = skillFileReadTool && skills.length ? formatSkillsForPrompt(skills, skillFileReadTool).trim() : "";
+	const skillInstructions = skillsText ? textSection("skills", skillsText, "skills") : undefined;
+	const workingDirectory = textSection("cwd", cwd.replace(/\\/g, "/"));
+	const extensionSections = Object.entries(customSections)
+		.filter(([, text]) => text)
+		.map(([name, text]) => {
 			const part = options.sectionParts?.[name];
-			if (part && renderSystemPromptPart(part) === content) promptParts[name] = { ...part, id: name, section: name };
-			else section(name, content, "extension");
-		}
-	}
+			return part && renderSystemPromptPart(part) === text
+				? { ...part, id: name, section: name }
+				: textSection(name, text, "extension");
+		});
+
+	const parts = [
+		preamble,
+		...(!customPrompt ? [tools, rules, docs] : []),
+		addendum,
+		projectContext,
+		skillInstructions,
+		workingDirectory,
+		...extensionSections,
+	].filter((part): part is SystemPromptPart => part !== undefined);
 	return {
 		version: 1,
-		parts: Object.values(promptParts),
-		...(options.forceSystemPrompt !== undefined
-			? {
-					forced: {
-						id: "forced",
-						label: "Exact prompt replacement",
-						source: "extension",
-						text: options.forceSystemPrompt,
-					},
-				}
-			: {}),
+		parts: [...new Map(parts.map((part) => [part.id, part])).values()],
+		...(options.forceSystemPrompt !== undefined ? { forced: exactPrompt(options.forceSystemPrompt) } : {}),
 	};
 }
 
@@ -304,19 +302,55 @@ export function buildSystemPromptState(input: BuildSystemPromptOptions): {
 		return renderSystemPromptDocument({
 			version: 1,
 			parts: [],
-			forced: {
-				id: "forced",
-				label: "Exact prompt replacement",
-				source: "extension",
-				text: input.forceSystemPrompt,
-			},
+			forced: exactPrompt(input.forceSystemPrompt),
 		});
 	return renderSystemPromptDocument(buildSystemPromptDocument(input));
 }
 
 /** Build the system prompt text, rendered exactly as the transcript's system message replays it. */
 export function buildSystemPrompt(input: BuildSystemPromptOptions): string {
-	return getSystemMessageText({ role: "system", ...buildSystemPromptState(input), timestamp: 0 });
+	if (input.forceSystemPrompt !== undefined) return input.forceSystemPrompt;
+	const sections = buildSystemPromptSections(input);
+	const { preamble, tools, rules, docs, cwd, ...remaining } = sections;
+	const { addendum, project_context, skills, ...extensions } = remaining;
+	const templateOrder = ["preamble", "tools", "rules", "docs", "addendum", "project_context", "skills", "cwd", ...Object.keys(extensions)]
+		.filter(name => name in sections);
+	// Extensions may supply their own ordering. Keep it outside the fixed template.
+	if (JSON.stringify(Object.keys(sections)) !== JSON.stringify(templateOrder)) {
+		return getSystemMessageText({ role: "system", content: "", sections, timestamp: 0 });
+	}
+	const paragraph = (text: string | undefined) => text ? `\n\n${text}` : "";
+	const addedInstructions = paragraph(addendum);
+	const projectInstructions = paragraph(project_context);
+	const skillInstructions = paragraph(skills);
+	const extensionInstructions = paragraph(Object.values(extensions).filter(Boolean).join("\n\n"));
+	const customInstructions = paragraph(Object.entries(sections)
+		.filter(([name]) => name !== "preamble").map(([, text]) => text).filter(Boolean).join("\n\n"));
+
+	if (input.customPrompt) return `${preamble}${customInstructions}`;
+	return systemPromptTemplate({
+		preamble, tools, rules, docs,
+		addedInstructions, projectInstructions, skillInstructions,
+		cwd, extensionInstructions,
+	});
+}
+
+function systemPromptTemplate({preamble, tools, rules, docs, addedInstructions, projectInstructions, skillInstructions, cwd, extensionInstructions}: Record<string, string>): string {
+	return `\
+${preamble}
+
+${tools}
+
+${rules}
+
+${docs}\
+${addedInstructions}\
+${projectInstructions}\
+${skillInstructions}
+
+${cwd}\
+${extensionInstructions}\
+`;
 }
 
 /** @deprecated Legacy comparison utility only. New runs never write prompt patches. */

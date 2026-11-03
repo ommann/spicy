@@ -85,7 +85,7 @@ function authorized(req) {
   const value = req.headers['x-lilim-token'];
   return typeof value === 'string' && value.length === token.length && timingSafeEqual(Buffer.from(value), Buffer.from(token));
 }
-const allowed = new Set(['prompt', 'abort', 'clear_queue', 'fork', 'new_session', 'set_model', 'set_thinking_level', 'get_available_models', 'get_available_thinking_levels', 'get_system_prompt_document']);
+const allowed = new Set(['prompt', 'abort', 'clear_queue', 'fork', 'new_session', 'set_model', 'set_thinking_level', 'get_available_models', 'get_available_thinking_levels', 'get_system_prompt_document', 'save_system_prompt']);
 const production = process.argv.includes('--production');
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
@@ -189,7 +189,7 @@ const server = http.createServer(async (req, res) => {
         if (!allowed.has(command.type)) throw new Error('Unsupported command');
         const reload = command.type === 'prompt' && command.message?.trim() === '/reload';
         if (reload && rpc.running) throw new Error('Stop the agent before reloading');
-        const changesBranch = reload || ['fork', 'new_session', 'set_model', 'set_thinking_level'].includes(command.type);
+        const changesBranch = reload || ['fork', 'new_session', 'set_model', 'set_thinking_level', 'save_system_prompt'].includes(command.type);
         if ((changesBranch || command.type === 'prompt') && mutating) throw new Error('Another command is in progress');
         if (changesBranch && rpc.running) throw new Error('Stop the agent before changing the session');
         if (changesBranch || command.type === 'prompt') mutating = true;

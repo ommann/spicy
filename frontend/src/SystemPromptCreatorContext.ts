@@ -1,5 +1,5 @@
 import { createContext } from 'solid-js';
-import type { SystemPromptDocument } from '../../packages/coding-agent/src/core/system-prompt-document';
+import type { SystemPromptBuilder, SystemPromptDocument } from '../../packages/coding-agent/src/core/system-prompt-document';
 import type { Wire } from './types';
 
 export interface PromptSource {
@@ -8,13 +8,17 @@ export interface PromptSource {
   document: SystemPromptDocument;
   excludedIds?: string[];
   toolsAdded?: Wire[];
+  diagnostic?: string;
 }
 
 export interface PromptDocumentSnapshot {
   availableTools?: Wire[];
   toolSources?: Record<string, string>;
   document: SystemPromptDocument;
-  current: { content: string; sections: Record<string, string>; toolsAdded?: Wire[] };
+  excludedIds?: string[];
+  currentBuilder?: SystemPromptBuilder;
+  diagnostic?: string;
+  current: { content: string; sections: Record<string, string>; toolsAdded?: Wire[]; systemPromptKey?: string };
   sources?: PromptSource[];
   currentSourceId?: string;
 }
@@ -25,9 +29,10 @@ export interface CreatedPrompt {
   document: SystemPromptDocument;
   excludedIds: string[];
   toolsAdded: Wire[];
+  output: { content: string; sections?: Record<string, string> };
 }
 
 export const SystemPromptCreatorContext = createContext<{
   load: () => Promise<PromptDocumentSnapshot>;
-  save: (prompt: Omit<CreatedPrompt, 'id'>) => void;
+  save: (prompt: Omit<CreatedPrompt, 'id' | 'output'>) => Promise<void>;
 }>();

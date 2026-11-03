@@ -461,6 +461,9 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			case "get_system_prompt_document":
 				return success(id, "get_system_prompt_document", session.getSystemPromptDocument());
 
+			case "save_system_prompt":
+				return success(id, "save_system_prompt", session.saveSystemPrompt(command.prompt));
+
 			case "get_state": {
 				const state: RpcSessionState = {
 					model: session.model,

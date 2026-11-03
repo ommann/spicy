@@ -30,7 +30,7 @@ import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnap
 import CodeLinewrapOption from './CodeLinewrapOption';
 import { codeLinewrap } from './code-linewrap';
 import { NavigationLinksContext } from './Navigation';
-import { renderSystemPromptDocument, systemPromptDocumentFromState } from '../../packages/coding-agent/src/core/system-prompt-document';
+import { SAVED_SYSTEM_PROMPT_ENTRY, type SystemPromptBuilder, systemPromptDocumentFromState, systemPromptOutputMatches, systemPromptBuilderForOutput } from '../../packages/coding-agent/src/core/system-prompt-document';
 
 const empty: Snapshot = {
   entries: [],
@@ -52,7 +52,7 @@ interface DraftBranch {
   id: string;
   sourceId: string;
   anchorId?: string;
-  prompt?: { key: string; content: string; sections: Record<string, string> };
+  prompt?: { key: string; content: string; sections: Record<string, string>; promptBuilder?: SystemPromptBuilder };
   parentId: string | null;
   text?: string;
   sentAt?: number;
@@ -80,13 +80,9 @@ export default function App(props: ParentProps) {
   const [extensionDialogs, setExtensionDialogs] = createSignal<Wire[]>([]);
   const [models, setModels] = createSignal<Wire[]>([]);
   const [previewImage, setPreviewImage] = createSignal<PreviewImage | null>(null);
-  const [createdPrompts, setCreatedPrompts] = createSignal<Record<string, CreatedPrompt[]>>((() => {
-    try { return JSON.parse(localStorage.getItem('spicy.created-system-prompts') || '{}') || {}; }
-    catch { return {}; }
-  })());
-  function createdPromptEntry(prompt: CreatedPrompt): Wire {
-    return { id: prompt.id, systemPromptKey: prompt.id, parentId: null, type: 'message', message: { role: 'system', ...renderSystemPromptDocument(prompt.document, prompt.excludedIds), toolsAdded: prompt.toolsAdded } };
-  }
+  const createdPrompts = createMemo<CreatedPrompt[]>(() => sessionEntries()
+    .filter(entry => entry.type === 'custom' && entry.customType === SAVED_SYSTEM_PROMPT_ENTRY)
+    .map(entry => ({ ...entry.data, id: entry.id })));
   const [resumeSessions, setResumeSessions] = createSignal<Wire[]>([]);
   const [resumeSearch, setResumeSearch] = createSignal("");
   const filteredResumeSessions = createMemo(() => {
@@ -137,8 +133,7 @@ export default function App(props: ParentProps) {
 
   const systemPrompts = createMemo<PromptVersion[]>((previous = []) => {
     const entries: Wire[] = [...actualEntries()];
-    const created = createdPrompts()[sessionId()] || [];
-    entries.push(...created.map(createdPromptEntry));
+    const created = createdPrompts();
     const versions: PromptVersion[] = createSystemPromptCatalog(entries).versions.map((version: PromptVersion) => {
       const saved = created.find(item => item.id === version.key || item.id === version.full?.id);
       return saved ? { ...version, title: saved.title } : version;
@@ -177,6 +172,7 @@ export default function App(props: ParentProps) {
       content: typeof message.content === 'string' ? message.content
         : (message.content || []).filter((block: Wire) => block.type === 'text').map((block: Wire) => block.text).join('\n'),
       sections: Object.fromEntries(Object.entries(message.sections || {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+      promptBuilder: message.promptBuilder,
     } : undefined;
     const key = branchKey();
     setDraftBranches(previous => ({ ...previous, [key]: (previous[key] || []).map(draft =>
@@ -410,20 +406,31 @@ export default function App(props: ParentProps) {
           const current = createSystemPromptCatalog([{ id: 'editor-source', parentId: null, type: 'message',
             message: { role: 'system', ...promptSnapshot.current } }]).versions[0];
           const sources = [
-            ...systemPrompts().filter(version => !version.title).map(version => ({ id: version.key, label: promptLabel(version.number), document: systemPromptDocumentFromState({ content: version.full?.message?.content || '', sections: version.full?.message?.sections || {} }), toolsAdded: version.full?.message?.toolsAdded || [] })),
-            ...(createdPrompts()[sessionId()] || []).map(prompt => ({ ...prompt, label: promptLabel(systemPrompts().find(version => version.key === prompt.id)!.number, prompt.title) })),
+            ...systemPrompts().filter(version => !version.title).map(version => {
+              const message = version.full?.message;
+              const builder = message?.promptBuilder ? systemPromptBuilderForOutput(message.promptBuilder, message) : undefined;
+              return { id: version.key, label: promptLabel(version.number),
+                document: builder?.document ?? systemPromptDocumentFromState({ content: message?.content || '', sections: message?.sections || {} }),
+                excludedIds: builder?.excludedIds, toolsAdded: message?.toolsAdded || [],
+                diagnostic: builder
+                  ? (systemPromptOutputMatches(builder, { content: message?.content || '', sections: message?.sections })
+                    ? undefined : 'Builder output differs from the saved prompt.')
+                  : 'Original Builder data is missing. Loaded the saved text.' };
+            }),
+            ...createdPrompts().map(prompt => ({ ...prompt,
+              label: promptLabel(systemPrompts().find(version => version.key === prompt.id)!.number, prompt.title),
+              diagnostic: systemPromptOutputMatches(prompt, prompt.output) ? undefined : 'Builder output differs from the saved prompt.',
+            })),
           ].filter(source => source.id !== current.key);
-          sources.unshift({ id: current.key, label: promptLabel(systemPrompts().find(version => version.key === current.key)?.number ?? systemPrompts().length + 1), document: promptSnapshot.document, toolsAdded: promptSnapshot.current.toolsAdded || [] });
+          sources.unshift({ id: current.key, label: promptLabel(systemPrompts().find(version => version.key === current.key)?.number ?? systemPrompts().length + 1), document: promptSnapshot.document, excludedIds: promptSnapshot.excludedIds, toolsAdded: promptSnapshot.current.toolsAdded || [], diagnostic: promptSnapshot.diagnostic });
           return { ...promptSnapshot, sources, currentSourceId: current.key };
         },
-        save: value => {
-          const prompt = { ...value, id: `created-prompt-${crypto.randomUUID()}` };
-          const next = { ...createdPrompts(), [sessionId()]: [...(createdPrompts()[sessionId()] || []), prompt] };
-          localStorage.setItem('spicy.created-system-prompts', JSON.stringify(next));
-          setCreatedPrompts(next);
-          const key = createSystemPromptCatalog([createdPromptEntry(prompt)]).versions[0]?.key;
-          const version = systemPrompts().find(version => version.key === key);
-          if (version?.full) openSystemPrompt(version.full.id);
+        save: async value => {
+          const prompt = await post('command', { type: 'save_system_prompt', prompt: value }) as CreatedPrompt;
+          const response = await fetch('/api/info', { signal: appLifecycle.signal });
+          if (!response.ok) throw new Error('Could not reload the saved prompt');
+          accept(await response.json());
+          openSystemPrompt(prompt.id);
         },
       }}>
       <SystemPromptContext.Provider value={systemPrompts}>

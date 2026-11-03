@@ -21,6 +21,9 @@ function applyMessage(previous, message, sourceId) {
   for (const tool of message.toolsAdded || []) state.tools.set(tool.name, tool);
   state.key = JSON.stringify([state.content, [...state.sections], [...state.tools]]);
   state.promptKey = message.systemPromptKey ?? (state.key === inherited.key ? inherited.promptKey : undefined);
+  state.promptBuilder = message.promptBuilder ?? (
+    !message.systemPromptSnapshot && !message.sections && !message.content?.length ? inherited.promptBuilder : undefined
+  );
   return state;
 }
 export function createPrefixResolver(entries) {
@@ -63,6 +66,7 @@ export function systemEntryForState(source, state) {
     message: {
       ...source.message,
       role: 'system',
+      promptBuilder: state.promptBuilder,
       content: state.content,
       sections: Object.fromEntries(state.sections),
       toolsAdded: [...state.tools.values()],

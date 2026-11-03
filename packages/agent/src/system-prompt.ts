@@ -10,9 +10,15 @@ export interface SystemPromptSnapshot {
 	content: string;
 	sections: Record<string, string>;
 	key?: string;
+	/** Editor source owned by the application; never rendered or sent as instructions. */
+	promptBuilder?: unknown;
 }
 
-type SnapshotMessage = SystemMessage & { systemPromptSnapshot: true; systemPromptKey?: string };
+type SnapshotMessage = SystemMessage & {
+	systemPromptSnapshot: true;
+	systemPromptKey?: string;
+	promptBuilder?: unknown;
+};
 
 /** A complete prompt, never a patch to earlier instructions. Tools are independent. */
 export function createSystemPromptSnapshot(prompt: SystemPromptSnapshot): SnapshotMessage {
@@ -22,6 +28,7 @@ export function createSystemPromptSnapshot(prompt: SystemPromptSnapshot): Snapsh
 		sections: { ...prompt.sections },
 		systemPromptSnapshot: true,
 		...(prompt.key !== undefined ? { systemPromptKey: prompt.key } : {}),
+		...(prompt.promptBuilder ? { promptBuilder: prompt.promptBuilder } : {}),
 		timestamp: Date.now(),
 	};
 }
@@ -46,8 +53,29 @@ export function projectSystemPromptSnapshots(messages: AgentMessage[]): AgentMes
 }
 
 /** Also reads legacy session files without migrating or rewriting them. */
-export function getCurrentSystemMessage(messages: AgentMessage[]): SystemMessage | undefined {
-	return readLegacySystemMessage(projectSystemPromptSnapshots(messages));
+export function getCurrentSystemMessage(
+	messages: AgentMessage[],
+): (SystemMessage & { promptBuilder?: unknown; systemPromptKey?: string }) | undefined {
+	const projected = projectSystemPromptSnapshots(messages);
+	const current = readLegacySystemMessage(projected);
+	if (!current) return undefined;
+	let promptBuilder: unknown;
+	let systemPromptKey: string | undefined;
+	for (const message of messages) {
+		if (message.role !== "system") continue;
+		const recorded = message as SystemMessage & { promptBuilder?: unknown; systemPromptKey?: string };
+		if (recorded.sections || (typeof recorded.content === "string" && recorded.content.length)) {
+			promptBuilder = undefined;
+			systemPromptKey = undefined;
+		}
+		if (recorded.promptBuilder) promptBuilder = recorded.promptBuilder;
+		if (recorded.systemPromptKey) systemPromptKey = recorded.systemPromptKey;
+	}
+	return {
+		...current,
+		...(promptBuilder ? { promptBuilder } : {}),
+		...(systemPromptKey ? { systemPromptKey } : {}),
+	};
 }
 
 export function getCurrentSystemPrompt(messages: AgentMessage[]): string {

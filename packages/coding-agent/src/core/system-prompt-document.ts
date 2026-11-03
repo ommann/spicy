@@ -1,3 +1,6 @@
+import { getSystemMessageText } from "@earendil-works/pi-ai";
+import type { SystemMessage } from "@earendil-works/pi-ai/compat";
+
 /** Serializable prompt content only. These selections never control tools or permissions. */
 export interface SystemPromptPart {
 	id: string;
@@ -25,6 +28,22 @@ export interface SystemPromptDocument {
 	/** Opaque exact replacement; kept separate from structured transcript sections. */
 	forced?: SystemPromptPart;
 }
+
+/** The editable source, stored alongside its rendered snapshot in the session file. */
+export interface SystemPromptBuilder {
+	document: SystemPromptDocument;
+	excludedIds: string[];
+}
+
+export interface SavedSystemPrompt extends SystemPromptBuilder {
+	id: string;
+	title: string;
+	toolsAdded: NonNullable<SystemMessage["toolsAdded"]>;
+	output: { content: string; sections?: Record<string, string> };
+}
+
+export type SaveSystemPromptInput = Omit<SavedSystemPrompt, "id" | "output">;
+export const SAVED_SYSTEM_PROMPT_ENTRY = "saved-system-prompt";
 
 function renderPart(part: SystemPromptPart, excluded: ReadonlySet<string>): string | undefined {
 	if (excluded.has(part.id)) return undefined;
@@ -68,6 +87,27 @@ export function renderSystemPromptDocument(
 		content: document.content ? (renderPart(document.content, new Set(excludedIds)) ?? "") : "",
 		sections: renderSystemPromptSections(document, excludedIds),
 	};
+}
+
+/** Older snapshots sometimes retained an override that the recorded sections did not use. */
+export function systemPromptBuilderForOutput(
+	builder: SystemPromptBuilder,
+	output: { content?: string; sections?: Record<string, string | null> },
+): SystemPromptBuilder {
+	if (!output.sections || !builder.document.forced) return builder;
+	return { ...builder, document: { ...builder.document, forced: undefined } };
+}
+
+export function systemPromptOutputMatches(
+	builder: SystemPromptBuilder,
+	output: { content: string; sections?: Record<string, string | null> },
+): boolean {
+	const source = systemPromptBuilderForOutput(builder, output);
+	const rendered = renderSystemPromptDocument(source.document, source.excludedIds);
+	return (
+		getSystemMessageText({ role: "system", ...rendered, timestamp: 0 }) ===
+		getSystemMessageText({ role: "system", ...output, timestamp: 0 })
+	);
 }
 
 /** Old recordings remain exact opaque sections, without guessing structure from text. */

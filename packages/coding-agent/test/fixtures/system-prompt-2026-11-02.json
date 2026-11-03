@@ -1,0 +1,64 @@
+{
+  "source": "backend/.sessions/2026-11-02T12-12-40-900Z_01a19c2d-0e44-709a-af9d-c26422d6f866.jsonl",
+  "entryId": "6f0173f7",
+  "timestamp": "2026-11-02T12:12:41.179Z",
+  "input": {
+    "cwd": "/home/olli/Development/spicy",
+    "selectedTools": [
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "devcontainer_bash",
+      "validate",
+      "nix_bash",
+      "tool_search"
+    ],
+    "toolSnippets": {
+      "read": "Read file contents",
+      "bash": "Execute bash commands (ls, grep, find, etc.)",
+      "edit": "Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
+      "write": "Create or overwrite files",
+      "devcontainer_bash": "Run bash inside the devcontainer",
+      "validate": "Run the project's validation plan through its local service",
+      "nix_bash": "Run bash in the Nix development environment (nix develop -c)",
+      "tool_search": "Search for tools that are not loaded yet and load the matches"
+    },
+    "promptGuidelines": [
+      "Use read to examine files instead of cat or sed.",
+      "You can inspect PI_* environment variables for current model and session details.",
+      "Use edit for precise changes (edits[].oldText must match exactly)",
+      "When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls",
+      "Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.",
+      "Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.",
+      "Use write only for new files or complete rewrites.",
+      "Use devcontainer_bash when you need to run bash inside the devcontainer.",
+      "Use nix_bash for commands that need the project's Nix development environment. Plain bash remains on the host."
+    ],
+    "skills": [
+      {
+        "name": "reverse-engineer-anything",
+        "description": "Reverse engineer native, managed, Electron/JavaScript, packaged, firmware, and browser targets with REA. Use shipped-artifact or requested runtime evidence to explain features, compare versions, decompile code, or guide a reconstruction. Skip REA for ordinary source-repository architecture analysis.",
+        "filePath": "/home/olli/.agents/skills/reverse-engineer-anything/SKILL.md",
+        "baseDir": "/home/olli/.agents/skills/reverse-engineer-anything",
+        "disableModelInvocation": false
+      }
+    ],
+    "sections": {
+      "mcp_servers": "MCP servers whose tools are not declared to you. Load the tools of `tool_search` servers with `tool_search`.\n- mcp__rea (tool_search)"
+    }
+  },
+  "expected": {
+    "content": "",
+    "sections": {
+      "preamble": "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.",
+      "tools": "<tools>\n- read: Read file contents\n- bash: Execute bash commands (ls, grep, find, etc.)\n- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call\n- write: Create or overwrite files\n- devcontainer_bash: Run bash inside the devcontainer\n- validate: Run the project's validation plan through its local service\n- nix_bash: Run bash in the Nix development environment (nix develop -c)\n- tool_search: Search for tools that are not loaded yet and load the matches\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.\n</tools>",
+      "rules": "<rules>\n- Use bash for file operations like ls, rg, find\n- Use read to examine files instead of cat or sed.\n- You can inspect PI_* environment variables for current model and session details.\n- Use edit for precise changes (edits[].oldText must match exactly)\n- When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls\n- Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.\n- Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.\n- Use write only for new files or complete rewrites.\n- Use devcontainer_bash when you need to run bash inside the devcontainer.\n- Use nix_bash for commands that need the project's Nix development environment. Plain bash remains on the host.\n- Be concise in your responses\n- Show file paths clearly when working with files\n</rules>",
+      "docs": "<docs>\nSpicy reference:\n- Project setup: <CODING_AGENT>/README.md\n- For codemode scripts and non-LLM models such as classifiers and image models, read <CODING_AGENT>/docs/codemode.md.\n</docs>",
+      "skills": "<skills>\nThe following skills provide specialized instructions for specific tasks.\nUse the read tool to load a skill's file when the task matches its description.\nWhen a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.\n\n<available_skills>\n  <skill>\n    <name>reverse-engineer-anything</name>\n    <description>Reverse engineer native, managed, Electron/JavaScript, packaged, firmware, and browser targets with REA. Use shipped-artifact or requested runtime evidence to explain features, compare versions, decompile code, or guide a reconstruction. Skip REA for ordinary source-repository architecture analysis.</description>\n    <location>/home/olli/.agents/skills/reverse-engineer-anything/SKILL.md</location>\n  </skill>\n</available_skills>\n</skills>",
+      "cwd": "<cwd>\n/home/olli/Development/spicy\n</cwd>",
+      "mcp_servers": "<mcp_servers>\nMCP servers whose tools are not declared to you. Load the tools of `tool_search` servers with `tool_search`.\n- mcp__rea (tool_search)\n</mcp_servers>"
+    },
+    "text": "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.\n\n<tools>\n- read: Read file contents\n- bash: Execute bash commands (ls, grep, find, etc.)\n- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call\n- write: Create or overwrite files\n- devcontainer_bash: Run bash inside the devcontainer\n- validate: Run the project's validation plan through its local service\n- nix_bash: Run bash in the Nix development environment (nix develop -c)\n- tool_search: Search for tools that are not loaded yet and load the matches\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.\n</tools>\n\n<rules>\n- Use bash for file operations like ls, rg, find\n- Use read to examine files instead of cat or sed.\n- You can inspect PI_* environment variables for current model and session details.\n- Use edit for precise changes (edits[].oldText must match exactly)\n- When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls\n- Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.\n- Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.\n- Use write only for new files or complete rewrites.\n- Use devcontainer_bash when you need to run bash inside the devcontainer.\n- Use nix_bash for commands that need the project's Nix development environment. Plain bash remains on the host.\n- Be concise in your responses\n- Show file paths clearly when working with files\n</rules>\n\n<docs>\nSpicy reference:\n- Project setup: <CODING_AGENT>/README.md\n- For codemode scripts and non-LLM models such as classifiers and image models, read <CODING_AGENT>/docs/codemode.md.\n</docs>\n\n<skills>\nThe following skills provide specialized instructions for specific tasks.\nUse the read tool to load a skill's file when the task matches its description.\nWhen a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.\n\n<available_skills>\n  <skill>\n    <name>reverse-engineer-anything</name>\n    <description>Reverse engineer native, managed, Electron/JavaScript, packaged, firmware, and browser targets with REA. Use shipped-artifact or requested runtime evidence to explain features, compare versions, decompile code, or guide a reconstruction. Skip REA for ordinary source-repository architecture analysis.</description>\n    <location>/home/olli/.agents/skills/reverse-engineer-anything/SKILL.md</location>\n  </skill>\n</available_skills>\n</skills>\n\n<cwd>\n/home/olli/Development/spicy\n</cwd>\n\n<mcp_servers>\nMCP servers whose tools are not declared to you. Load the tools of `tool_search` servers with `tool_search`.\n- mcp__rea (tool_search)\n</mcp_servers>"
+  }
+}

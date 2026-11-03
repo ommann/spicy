@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { SystemPromptSections } from "./system-prompt.ts";
+import type { SystemPromptBuilder } from "./system-prompt-document.ts";
 
 export interface SystemPromptCandidate {
 	key: string;
@@ -12,6 +13,7 @@ export interface SelectedSystemPrompt {
 	key: string;
 	content: string;
 	sections: Record<string, string>;
+	promptBuilder?: SystemPromptBuilder;
 }
 
 export interface SystemPromptPolicy {

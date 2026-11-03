@@ -12,6 +12,7 @@ import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
+import type { SavedSystemPrompt, SaveSystemPromptInput } from "../../core/system-prompt-document.ts";
 import type { SelectedSystemPrompt, SystemPromptCandidate } from "../../core/system-prompt-policy.ts";
 
 // ============================================================================
@@ -37,6 +38,7 @@ export type RpcCommand =
 	// State
 	| { id?: string; type: "get_state" }
 	| { id?: string; type: "get_system_prompt_document" }
+	| { id?: string; type: "save_system_prompt"; prompt: SaveSystemPromptInput }
 
 	// Model
 	| { id?: string; type: "set_model"; provider: string; modelId: string }
@@ -157,6 +159,7 @@ export type RpcResponse =
 			success: true;
 			data: ReturnType<import("../../core/agent-session.ts").AgentSession["getSystemPromptDocument"]>;
 	  }
+	| { id?: string; type: "response"; command: "save_system_prompt"; success: true; data: SavedSystemPrompt }
 
 	// Model
 	| {

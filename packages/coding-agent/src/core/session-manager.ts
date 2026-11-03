@@ -37,6 +37,7 @@ import {
 	createCompactionSummaryMessage,
 	createCustomMessage,
 } from "./messages.ts";
+import { SAVED_SYSTEM_PROMPT_ENTRY } from "./system-prompt-document.ts";
 export const CURRENT_SESSION_VERSION = 3;
 
 export interface SessionHeader {
@@ -1157,14 +1158,16 @@ export class SessionManager {
 	}
 
 	/**
-	 * A new session file is created only once the session contains a user or assistant message.
+	 * A new session file is created once it contains a conversation or an explicitly saved prompt.
 	 * Setup entries alone (model, thinking level, system prompt) stay in memory so opening and
 	 * closing pi without chatting leaves no file behind. Starting at the user message (not the
 	 * first assistant reply) keeps the prompt on disk if the first turn never completes (#10000).
 	 */
-	private _hasConversation(): boolean {
+	private _hasDurableContent(): boolean {
 		return this.fileEntries.some(
-			(e) => e.type === "message" && (e.message.role === "user" || e.message.role === "assistant"),
+			(e) =>
+				(e.type === "message" && (e.message.role === "user" || e.message.role === "assistant")) ||
+				(e.type === "custom" && e.customType === SAVED_SYSTEM_PROMPT_ENTRY),
 		);
 	}
 
@@ -1172,7 +1175,7 @@ export class SessionManager {
 		if (!this.persist || !this.sessionFile) return;
 
 		if (!this.flushed) {
-			if (!this._hasConversation()) return;
+			if (!this._hasDurableContent()) return;
 			const fd = openSync(this.sessionFile, "wx");
 			try {
 				for (const e of this.fileEntries) {
@@ -1715,7 +1718,7 @@ export class SessionManager {
 
 			// Use the same rule as _persist(): write now if the branched path already
 			// has a conversation, otherwise let _persist() create the file later.
-			if (this._hasConversation()) {
+			if (this._hasDurableContent()) {
 				this._rewriteFile();
 				this.flushed = true;
 			} else {

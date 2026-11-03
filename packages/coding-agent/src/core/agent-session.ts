@@ -149,7 +149,15 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
-import { type SystemPromptDocument, systemPromptDocumentFromState } from "./system-prompt-document.ts";
+import {
+	renderSystemPromptDocument,
+	SAVED_SYSTEM_PROMPT_ENTRY,
+	type SaveSystemPromptInput,
+	type SystemPromptBuilder,
+	systemPromptBuilderForOutput,
+	systemPromptDocumentFromState,
+	systemPromptOutputMatches,
+} from "./system-prompt-document.ts";
 import { isDiscoveryOnlyChange, promptCandidateKey, type SystemPromptPolicy } from "./system-prompt-policy.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
@@ -490,7 +498,6 @@ export class AgentSession {
 	/** Prompt options after before_agent_start mutations for the active run. */
 	private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions;
 	private _webPromptSections?: Record<string, string>;
-	private _promptDocuments = new Map<string, SystemPromptDocument>();
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -1495,6 +1502,25 @@ export class AgentSession {
 		return !this._isAgentRunActive && !this.isCompacting;
 	}
 
+	/** Save the editable source and its output together, without running the model. */
+	saveSystemPrompt(input: SaveSystemPromptInput) {
+		if (!this.isIdle) throw new Error("Stop the agent before saving a system prompt");
+		if (!input.title?.trim()) throw new Error("Enter a name");
+		if (
+			!Array.isArray(input.document?.parts) ||
+			!Array.isArray(input.excludedIds) ||
+			!Array.isArray(input.toolsAdded)
+		)
+			throw new Error("Invalid system prompt document");
+		const data = {
+			...input,
+			title: input.title.trim(),
+			output: renderSystemPromptDocument(input.document, input.excludedIds),
+		};
+		const id = this.sessionManager.appendCustomEntry(SAVED_SYSTEM_PROMPT_ENTRY, data);
+		return { ...data, id };
+	}
+
 	/** Read-only editor source. No hooks, transcript writes, or tool changes. */
 	getSystemPromptDocument() {
 		const current = getCurrentSystemMessage(this.agent.state.messages);
@@ -1503,18 +1529,24 @@ export class AgentSession {
 				(entry): entry is [string, string] => typeof entry[1] === "string",
 			),
 		);
+		const recordedBuilder = current?.promptBuilder as SystemPromptBuilder | undefined;
+		const builder = recordedBuilder ? systemPromptBuilderForOutput(recordedBuilder, { sections: current?.sections }) : undefined;
 		const document =
-			this._promptDocuments.get(promptCandidateKey(sections)) ??
+			builder?.document ??
 			(current
 				? systemPromptDocumentFromState({ content: contentText(current.content), sections })
 				: buildSystemPromptDocument(this._baseSystemPromptOptions));
-		const parts = new Map(document.parts.map((part) => [part.id, part]));
-		for (const source of Object.values(this._baseSystemPromptOptions.sectionPartSources ?? {})) {
-			const part = source();
-			if (part) parts.set(part.id, part);
-		}
 		return {
-			document: { ...document, parts: [...parts.values()] },
+			document,
+			excludedIds: builder?.excludedIds,
+			currentBuilder: builder,
+			diagnostic: builder
+				? systemPromptOutputMatches(builder, { content: contentText(current?.content ?? ""), sections: current?.sections })
+					? undefined
+					: "Builder output differs from the saved prompt."
+				: current
+					? "Original Builder data is missing. Loaded the saved text."
+					: undefined,
 			toolSources: Object.fromEntries(
 				this.getAllTools().map(({ name, sourceInfo, namespace }) => [
 					name,
@@ -1530,6 +1562,7 @@ export class AgentSession {
 				...(namespace ? { namespace } : {}),
 			})),
 			current: {
+				systemPromptKey: current?.systemPromptKey,
 				content: current ? contentText(current.content) : "",
 				sections,
 				toolsAdded: current
@@ -1835,7 +1868,6 @@ export class AgentSession {
 		// The tool list and rules must match the declarations the request carries.
 		options.hiddenTools = [...this._hiddenDeclarations];
 		const proposed = buildSystemPromptSections(options);
-		this._promptDocuments.set(promptCandidateKey(proposed), buildSystemPromptDocument(options));
 		const toolChanges = getToolStateChanges(getCurrentTools(messages), this.agent.state.tools.map(toToolDeclaration));
 		if (
 			!selected &&
@@ -1853,10 +1885,16 @@ export class AgentSession {
 		if (selected) return createSystemPromptSnapshot(selected);
 		const current = getCurrentSystemMessage(messages);
 		const sections = this._webPromptSections ?? proposed;
-		if (current && JSON.stringify(current.sections ?? {}) === JSON.stringify(sections)) return undefined;
+		const unchanged = current && JSON.stringify(current.sections ?? {}) === JSON.stringify(sections);
+		if (unchanged) return undefined;
+		const promptBuilder =
+			JSON.stringify(sections) === JSON.stringify(proposed)
+				? { document: buildSystemPromptDocument({ ...options, forceSystemPrompt: undefined }), excludedIds: [] }
+				: undefined;
 		return createSystemPromptSnapshot({
 			content: typeof current?.content === "string" ? current.content : "",
 			sections,
+			promptBuilder,
 		});
 	}
 

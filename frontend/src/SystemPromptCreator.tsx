@@ -107,6 +107,7 @@ export default function SystemPromptCreator() {
   const [saveError, setSaveError] = createSignal('');
   const [separateRules, setSeparateRules] = createSignal(false);
   const [error, setError] = createSignal('');
+  const [diagnostic, setDiagnostic] = createSignal('');
   const [showDiff, setShowDiff] = createSignal(false);
   const [comparison, setComparison] = createSignal('');
   const [startingSource, setStartingSource] = createSignal('');
@@ -116,8 +117,9 @@ export default function SystemPromptCreator() {
     return source ? { ...renderSystemPromptDocument(source.document, source.excludedIds), toolsAdded: source.toolsAdded }
       : snapshot()?.current || { content: '' };
   });
-  function loadDocument(value: SystemPromptDocument, excludedIds?: string[]) {
-    setDocument({ ...value, forced: undefined });
+  function loadDocument(value: SystemPromptDocument, excludedIds?: string[], diagnostic?: string) {
+    setDiagnostic(diagnostic || '');
+    setDocument(value);
     const defaults: string[] = [];
     const collect = (part: SystemPromptPart) => {
       if (part.defaultIncluded === false) defaults.push(part.id);
@@ -125,6 +127,7 @@ export default function SystemPromptCreator() {
     };
     value.parts.forEach(collect);
     if (value.content) collect(value.content);
+    if (value.forced) collect(value.forced);
     const next = new Set(excludedIds ?? defaults);
     const inheritExclusion = (part: SystemPromptPart, parentExcluded = false) => {
       const disabled = parentExcluded || next.has(part.id);
@@ -133,6 +136,7 @@ export default function SystemPromptCreator() {
     };
     value.parts.forEach(part => inheritExclusion(part));
     if (value.content) inheritExclusion(value.content);
+    if (value.forced) inheritExclusion(value.forced);
     setExcluded(next);
   }
   onMount(() => {
@@ -140,7 +144,7 @@ export default function SystemPromptCreator() {
       setSnapshot(value);
       setStartingSource(value.currentSourceId || '');
       setComparison(value.currentSourceId || '');
-      loadDocument(value.document);
+      loadDocument(value.document, value.excludedIds, value.diagnostic);
       loadTools(value.current.toolsAdded || []);
     }).catch(failure => setError(String(failure)));
   });
@@ -174,13 +178,13 @@ export default function SystemPromptCreator() {
       saveDialog.showModal();
     } catch (failure) { setError(String(failure)); }
   }
-  function save(event: SubmitEvent) {
+  async function save(event: SubmitEvent) {
     event.preventDefault();
     const value = composedDocument();
     if (!value || !api) return;
     if (!promptName().trim()) { setSaveError('Enter a name.'); return; }
     try {
-      api.save({ title: promptName().trim(), document: value, excludedIds: [...excluded()], toolsAdded: tools() });
+      await api.save({ title: promptName().trim(), document: value, excludedIds: [...excluded()], toolsAdded: tools() });
       saveDialog.close();
     } catch (failure) { setSaveError(String(failure)); }
   }
@@ -197,8 +201,10 @@ export default function SystemPromptCreator() {
       <CodeLinewrapOption />
       <label><span><Checkbox checked={separateRules()} onChange={event => setSeparateRules(event.currentTarget.checked)} /> Separate rules with empty lines</span></label>
     </Dialog>
-    <Show when={error()}><p role="alert">{error()}</p></Show>
-    <Show when={document()} fallback={<Show when={!error()}><p>Loading prompt parts…</p></Show>}>{value => <div class="creator-columns">
+    <Show when={document()} fallback={<>
+      <Show when={error()}><p role="alert">{error()}</p></Show>
+      <Show when={!error()}><p>Loading prompt parts…</p></Show>
+    </>}>{value => <div class="creator-columns">
       <ScrollArea class="system-prompts-scroll-area creator-switchboard" vertical
         viewportRef={element => { switchboardViewport = element; }}
         events={{ ...switchboardInteraction.handlers, onKeyDown: switchboardInteraction.keydown,
@@ -209,14 +215,19 @@ export default function SystemPromptCreator() {
             <SelectWithDialog class="text-action" label="Load" value={startingSource()} options={promptOptions()} onChange={id => {
               setStartingSource(id);
               const source = snapshot()?.sources?.find(item => item.id === id);
-              if (source) { loadDocument(source.document, source.excludedIds); loadTools(source.toolsAdded || []); }
-              else if (snapshot()) { loadDocument(snapshot()!.document); loadTools(snapshot()!.current.toolsAdded || []); }
+              if (source) { loadDocument(source.document, source.excludedIds, source.diagnostic); loadTools(source.toolsAdded || []); }
+              else if (snapshot()) { loadDocument(snapshot()!.document, snapshot()!.excludedIds, snapshot()!.diagnostic); loadTools(snapshot()!.current.toolsAdded || []); }
             }}>Load</SelectWithDialog>
           </Show>
           <button class="text-action" disabled={!document()} onClick={openSave}>Save as</button>
         </div>
-        <ul><Show when={value().content}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Show>
-          <Index each={value().parts}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Index>
+        <Show when={error()}><p role="alert">{error()}</p></Show>
+        <Show when={diagnostic()}><p role="status">{diagnostic()}</p></Show>
+        <ul>
+          <Show when={value().forced} fallback={<>
+            <Show when={value().content}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Show>
+            <Index each={value().parts}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Index>
+          </>}>{part => <PartEditor part={part()} excluded={excluded()} onToggle={toggle} />}</Show>
         </ul>
         <Show when={toolChoices().length}>
           <div class="creator-tree-group">
