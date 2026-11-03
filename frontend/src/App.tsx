@@ -12,7 +12,7 @@ import {
   type ParentProps,
 } from "solid-js";
 import { useLocation, useNavigate } from '@solidjs/router';
-import { openModal, closeModal, trackModal } from './modal-state';
+import Dialog from './Dialog';
 import Conversation, { type ConversationController, type ViewOptions } from './Conversation';
 import { createConversationGraph, continuationTarget } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
@@ -98,10 +98,6 @@ export default function App(props: ParentProps) {
   let chatDialog!: HTMLDialogElement;
   let resumeDialog!: HTMLDialogElement;
   let optionsDialog!: HTMLDialogElement;
-  onMount(() => {
-    const dispose = [chatDialog, resumeDialog, optionsDialog].map(trackModal);
-    onCleanup(() => dispose.forEach(cleanup => cleanup()));
-  });
   const [viewOptions, setViewOptions] = createSignal<ViewOptions | null>(null);
   const [codeLinewrap, setCodeLinewrap] = createSignal(false);
 
@@ -452,8 +448,7 @@ export default function App(props: ParentProps) {
       </SystemPromptContext.Provider>
       </SystemPromptCreatorContext.Provider>
       </ToolbarActionsContext.Provider>
-      <dialog ref={optionsDialog} class="chat-dialog options-dialog" aria-label="Options">
-        <div class="chat-dialog-heading"><span>Options</span><button onClick={() => optionsDialog.close()}>Close</button></div>
+      <Dialog ref={optionsDialog} class="chat-dialog options-dialog" title="Options">
         <For each={['focused', 'side'] as const}>{mode =>
           <label class="width-option">
             <span>{mode === 'focused' ? 'Focused' : 'Side by side'}</span>
@@ -469,8 +464,8 @@ export default function App(props: ParentProps) {
           <span>Code linewrap</span>
           <Checkbox checked={codeLinewrap()} onChange={event => setCodeLinewrap(event.currentTarget.checked)} />
         </label>
-      </dialog>
-      <dialog
+      </Dialog>
+      <Dialog
         ref={resumeDialog}
         class="chat-dialog resume-dialog"
         aria-label="Sessions"
@@ -497,8 +492,8 @@ export default function App(props: ParentProps) {
             </For>
           </div>
         </Show>
-      </dialog>
-      <dialog
+      </Dialog>
+      <Dialog
         ref={chatDialog}
         class="chat-dialog"
         aria-label="Pi chat controls"
@@ -602,7 +597,7 @@ export default function App(props: ParentProps) {
             </label>
           </Show>
         </Show>
-      </dialog>
+      </Dialog>
       <For each={extensionDialogs()}>
         {(dialog) => (
           <ExtensionDialog
@@ -639,12 +634,9 @@ function ExtensionDialog(props: {
   reply: (response: Wire) => void;
 }) {
   const [value, setValue] = createSignal(untrack(() => props.dialog.prefill || ""));
-  let element!: HTMLDialogElement;
-  onMount(() => openModal(element));
-  onCleanup(() => closeModal(element));
   return (
-    <dialog
-      ref={element}
+    <Dialog
+      open
       class="chat-dialog"
       aria-label={props.dialog.title}
       onCancel={(event) => {
@@ -688,6 +680,6 @@ function ExtensionDialog(props: {
         </button>
       </Show>
       <button onClick={() => props.reply({ cancelled: true })}>Cancel</button>
-    </dialog>
+    </Dialog>
   );
 }

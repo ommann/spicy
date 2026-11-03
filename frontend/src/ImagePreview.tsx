@@ -1,5 +1,5 @@
-import { openModal, closeModal } from './modal-state';
-import { onCleanup, onMount } from 'solid-js';
+import Dialog from './Dialog';
+import { onCleanup } from 'solid-js';
 
 export interface PreviewImage {
   src: string;
@@ -11,14 +11,11 @@ export interface PreviewImage {
 export default function ImagePreview(props: { image: PreviewImage; onClose: () => void }) {
   let dialog!: HTMLDialogElement;
 
-  onMount(() => openModal(dialog));
-
   onCleanup(() => {
-    closeModal(dialog);
     props.image.opener.focus({ preventScroll: true });
   });
 
-  return <dialog id="image-preview" ref={dialog} aria-label="Image preview" onClose={() => props.onClose()}
+  return <Dialog open class="" id="image-preview" ref={dialog} aria-label="Image preview" onClose={() => props.onClose()}
     onClick={event => {
       if (event.target !== dialog) return;
 
@@ -30,5 +27,5 @@ export default function ImagePreview(props: { image: PreviewImage; onClose: () =
       <button onClick={() => props.onClose()}>Close</button>
     </div>
     <img class="image-preview-image" src={props.image.src} alt={props.image.alt} />
-  </dialog>;
+  </Dialog>;
 }

@@ -1,5 +1,6 @@
 import { For, Show, createContext, createEffect, createMemo, createResource, createSignal, onCleanup, useContext, type ParentProps } from 'solid-js';
 import { contentText, handoffId, handoffResultData, handoffUrl } from './handoffs.mjs';
+import Dialog from './Dialog';
 import { closeModal, openModal } from './modal-state';
 import { SectionContext } from './conversation-dom';
 import type { Wire } from './types';
@@ -130,7 +131,7 @@ function HandoffDialog(props: ParentProps) {
 
   return <HandoffContext.Provider value={context}>
     {props.children}
-    <dialog id="handoff-overlay" ref={dialog} class={mode()} aria-label="Tool UI"
+    <Dialog id="handoff-overlay" ref={dialog} class={mode()} aria-label="Tool UI"
       onCancel={event => { event.preventDefault(); close(); }}
       onPointerDown={event => { backdropPress = onBackdrop(event); }}
       onPointerCancel={() => { backdropPress = false; }}
@@ -145,6 +146,6 @@ function HandoffDialog(props: ParentProps) {
       </header>
       <Show when={metadata.error}><div id="handoff-connection" role="status">Could not open handoff: {metadata.error.message}</div></Show>
       <Show when={framePage()} keyed>{page => <iframe id="handoff-frame" title="Tool UI" sandbox="allow-scripts allow-forms allow-same-origin allow-downloads" src={page.url} />}</Show>
-    </dialog>
+    </Dialog>
   </HandoffContext.Provider>;
 }

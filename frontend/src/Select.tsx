@@ -1,5 +1,6 @@
-import { For, createSignal, onCleanup, type JSX } from 'solid-js';
+import { For, createSignal, type JSX } from 'solid-js';
 import ScrollArea from './ScrollArea';
+import Dialog from './Dialog';
 
 export interface SelectOption {
   value: string;
@@ -37,18 +38,16 @@ export default function Select(props: {
       : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
     buttons[next].focus();
   }
-  onCleanup(() => dialog?.close());
   return <>
     <button type="button" class={props.class || 'select-choice'} style={props.style} aria-label={`${props.label}: ${selected()}`}
       aria-haspopup="dialog" aria-expanded={open()} onClick={show}>{props.children ?? selected()}</button>
-    <dialog ref={dialog} class="chat-dialog select-dialog" aria-label={props.label} onClose={() => setOpen(false)}>
-      <div class="chat-dialog-heading"><span>{props.label}</span><button type="button" onClick={() => dialog.close()}>Close</button></div>
+    <Dialog ref={dialog} class="chat-dialog select-dialog" title={props.label} onClose={() => setOpen(false)}>
       <ScrollArea class="select-options" vertical>
         <div role="listbox" aria-label={props.label} onKeyDown={navigate}>
           <For each={props.options}>{option => <button type="button" class="select-choice" role="option"
             aria-selected={option.value === props.value} onClick={() => choose(option.value)}>{option.label}</button>}</For>
         </div>
       </ScrollArea>
-    </dialog>
+    </Dialog>
   </>;
 }

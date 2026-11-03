@@ -6,6 +6,7 @@ import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
 import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
+import Dialog from './Dialog';
 import Select from './Select';
 import ToolbarActions from './ToolbarActions';
 import type { Wire } from './types';
@@ -172,19 +173,17 @@ export default function SystemPromptCreator() {
     <div class="creator-actions">
       <button class="text-action" disabled={!document()} onClick={openSave}>Save as</button>
     </div>
-    <dialog ref={saveDialog} class="chat-dialog" aria-label="Save as">
-      <div class="chat-dialog-heading"><span>Save as</span><button onClick={() => saveDialog.close()}>Cancel</button></div>
+    <Dialog ref={saveDialog} title="Save as" closeLabel="Cancel">
       <form onSubmit={save}>
         <label>Name<input autofocus required value={promptName()} onInput={event => setPromptName(event.currentTarget.value)} /></label>
         <label>Shorthand<input required pattern="System Prompt [1-9][0-9]*" value={shorthand()} onInput={event => setShorthand(event.currentTarget.value)} /></label>
         <Show when={saveError()}><div role="alert">{saveError()}</div></Show>
         <button type="submit">Save</button>
       </form>
-    </dialog>
-    <dialog ref={optionsDialog} class="chat-dialog" aria-label="Options">
-      <div class="chat-dialog-heading"><span>Options</span><button onClick={() => optionsDialog.close()}>Close</button></div>
+    </Dialog>
+    <Dialog ref={optionsDialog} title="Options">
       <label><span><Checkbox checked={separateRules()} onChange={event => setSeparateRules(event.currentTarget.checked)} /> Separate rules with empty lines</span></label>
-    </dialog>
+    </Dialog>
     <Show when={error()}><p role="alert">{error()}</p></Show>
     <Show when={document()} fallback={<Show when={!error()}><p>Loading prompt parts…</p></Show>}>{value => <div class="creator-columns">
       <ScrollArea class="system-prompts-scroll-area creator-switchboard" vertical
