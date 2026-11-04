@@ -28,7 +28,7 @@ export function projectChatParts(entries) {
     if (message.role === 'user') add(entry, { kind: 'user', content: message.content, canBranch: !entry.optimistic && !entry.id.startsWith('stream-') });
     if (message.role === 'assistant') for (const block of message.content || []) {
       if (block.type === 'toolCall') add(entry, { kind: 'tool', call: block, result: results.get(block.id) });
-      if (block.type === 'text') add(entry, { kind: 'message', text: (block.text || '').replace(/^\n+|\n+$/g, ''), summary: summaries.has(entry.id) });
+      if (block.type === 'text' && block.text?.trim()) add(entry, { kind: 'message', text: block.text.replace(/^\n+|\n+$/g, ''), summary: summaries.has(entry.id) });
       if (block.type === 'thinking') add(entry, {
         kind: 'thinking',
         encrypted: !!(block.redacted || (!block.thinking?.trim() && block.thinkingSignature)),
@@ -37,6 +37,9 @@ export function projectChatParts(entries) {
             ? ` (${message.usage.reasoning.toLocaleString('en-US')} tokens)`
             : ''}` : block.thinking?.trim() ? block.thinking.trim() : 'Thinking...',
       });
+    }
+    if (message.role === 'assistant' && ['stop', 'toolUse'].includes(message.stopReason) && !parts.get(entry.id)?.length) {
+      add(entry, { kind: 'message', text: '<EOS>', eos: true });
     }
     if (message.role === 'assistant' && message.stopReason === 'error') add(entry, {
       kind: 'error', text: message.errorMessage || 'The reply failed.',

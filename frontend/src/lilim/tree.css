@@ -411,7 +411,7 @@
 }
 .tree-card .real-message,
 .tree-card .real-thinking {
-  padding: 0 8px;
+  padding: 0 1ch;
 }
 .thinking-text {
   color: var(--thinking);

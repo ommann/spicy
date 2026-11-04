@@ -268,9 +268,10 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
     </Match>
     <Match when={['message', 'summary', 'thinking'].includes(props.part.kind)}>
       <section ref={useContext(SectionContext)} class={props.part.kind === 'thinking' ? 'thinking real-thinking' : 'message real-message'}
-        classList={{ 'summary-content': props.part.kind === 'summary' || props.part.summary }} data-entry-id={props.part.entryId}>
+        classList={{ 'summary-content': props.part.kind === 'summary' || props.part.summary }}
+        style={props.part.eos ? { color: 'var(--muted)' } : undefined} data-entry-id={props.part.entryId}>
         <ExpandableContent measureKey={props.part.text} initialOpen={props.part.kind === 'summary' || props.part.summary} expandRequest={props.expandRequest}>
-          <Show when={props.part.kind === 'thinking'} fallback={<SourceText text={props.part.text} language="markdown" />}>
+          <Show when={props.part.kind === 'thinking'} fallback={props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" />}>
             <Thinking text={props.part.text} />
           </Show>
         </ExpandableContent>
