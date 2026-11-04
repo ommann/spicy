@@ -6,6 +6,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { AgentRegistry } from './agents.mjs';
+import { LoginBridge } from './auth.mjs';
 import { proxyUtw, utwBase } from './utw.mjs';
 import { createServer } from 'vite';
 
@@ -17,6 +18,7 @@ const cwd = path.resolve(process.env.PI_CWD || repository);
 const port = Number(process.env.PORT || 5174);
 const managed = process.env.PI_SESSION_DIR ? path.resolve(process.env.PI_SESSION_DIR) : fileURLToPath(new URL('./.sessions', import.meta.url));
 const token = randomUUID();
+const login = new LoginBridge();
 const utw = utwBase();
 const agents = new AgentRegistry({
   cwd, managed, cli, resolver,
@@ -80,6 +82,8 @@ const server = http.createServer(async (req, res) => {
       const host = req.headers.host;
       if (host !== `localhost:${port}` && host !== `127.0.0.1:${port}`) return json(res, { error: 'Invalid host' }, 403);
       if (req.method === 'GET') {
+        if (url.pathname === '/api/auth/providers') return json(res, await login.providers());
+        if (url.pathname === '/api/auth/state') return json(res, login.state());
         if (url.pathname === '/api/agents') return json(res, [...agents.agents.values()].map(agent => {
           const { agentId, cwd, connected, running, state, source } = agent.payload();
           return { agentId, cwd, connected, running, state, source };
@@ -113,6 +117,9 @@ const server = http.createServer(async (req, res) => {
       if (req.method !== 'POST') return json(res, { error: 'Not found' }, 404);
       if (!authorized(req)) return json(res, { error: 'Invalid token' }, 403);
       const { agentId, ...command } = await body(req);
+      if (url.pathname === '/api/auth/login') return json(res, await login.start(command.providerId, command.type));
+      if (url.pathname === '/api/auth/reply') return json(res, login.reply(command.id, command.promptId, command.value));
+      if (url.pathname === '/api/auth/cancel') return json(res, await login.cancel(command.id));
       if (url.pathname === '/api/agents') {
         if (command.openSessionId !== undefined) {
           const session = (await allSessions()).find(session => Buffer.from(session.path).toString('base64url') === command.openSessionId);
@@ -200,5 +207,5 @@ const server = http.createServer(async (req, res) => {
 });
 const vite = await createServer({ root, server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
 server.listen(port, '127.0.0.1', () => console.log(`Spicy: http://localhost:${port}\nWorking directory: ${cwd}\nAgent starts only when requested in the UI.`));
-async function shutdown() { await agents.shutdown(); await vite.close(); server.close(); }
+async function shutdown() { await login.cancel(); await agents.shutdown(); await vite.close(); server.close(); }
 process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);

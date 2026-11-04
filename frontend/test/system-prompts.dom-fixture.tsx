@@ -1,6 +1,7 @@
 export { createColumnInteraction } from '../src/column-interaction';
 import { createSignal, type JSX } from 'solid-js';
 import Input from '../src/Input';
+import Login from '../src/Login';
 import { render } from 'solid-js/web';
 import { MemoryRouter, Route, createMemoryHistory } from '@solidjs/router';
 import SystemPromptRoute from '../src/SystemPromptRoute';
@@ -18,6 +19,10 @@ export function mountCreator(root: HTMLElement, snapshot: PromptDocumentSnapshot
   return render(() => <MemoryRouter root={props => <SystemPromptCreatorContext.Provider value={{ load: async () => snapshot, save }}>{props.children}</SystemPromptCreatorContext.Provider>}>
     <Route path="/" component={SystemPromptCreator} />
   </MemoryRouter>, root);
+}
+
+export function mountLogin(root: HTMLElement, request: Parameters<typeof Login>[0]['request']) {
+  return render(() => <Login request={request} />, root);
 }
 
 export function mountInput(root: HTMLElement, props: JSX.InputHTMLAttributes<HTMLInputElement>) {

@@ -1,0 +1,28 @@
+.chat-dialog.login-dialog {
+  width: min(72ch, calc(100vw - 4ch));
+}
+
+.login-providers > .scroll-area-viewport {
+  max-height: 40dvh;
+}
+
+.login-providers button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.login-providers button + button {
+  margin-top: 1lh;
+}
+
+.login-events,
+.login-events > div {
+  display: grid;
+  gap: 1lh;
+  overflow-wrap: anywhere;
+}
+
+.login-events a {
+  color: var(--text);
+}

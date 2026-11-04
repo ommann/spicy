@@ -1,5 +1,6 @@
 import ScrollableTextarea from './ScrollableTextarea';
 import Input from './Input';
+import Login from './Login';
 import { ChatRouteContext } from './ChatRoute';
 import Sessions, { SessionsRouteContext } from './Sessions';
 import { setViewMode } from './view-mode';
@@ -574,6 +575,7 @@ export default function App(props: ParentProps) {
           <button class="state-toggle" aria-pressed={viewPath().startsWith('/system-prompts')} onClick={() => navigateView('/system-prompts')}>System prompts</button>
           <button class="state-toggle" aria-pressed={viewPath() === '/system-prompt-creator'} onClick={() => navigateView('/system-prompt-creator')}>Editor</button>
         </div>
+        <Login request={async (endpoint, data) => { await bridgeReady; return post(endpoint, data); }} />
       </>}>
       <SystemPromptCreatorContext.Provider value={{
         load: async () => {

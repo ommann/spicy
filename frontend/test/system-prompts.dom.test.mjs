@@ -89,6 +89,53 @@ test('creator selects parts and saves a named prompt without sending a chat mess
   } finally { dispose(); }
 });
 
+test('in-app login shows OAuth navigation, retains typed redirects while polling, and cancels on close', async () => {
+  const previousFetch = globalThis.fetch;
+  const requests = [];
+  let state = { status: 'idle', events: [] };
+  globalThis.fetch = async url => new Response(JSON.stringify(String(url).endsWith('/providers')
+    ? [{ id: 'example', name: 'Example', methods: [{ type: 'oauth', name: 'Example OAuth' }] }]
+    : state), { status: 200 });
+  const dispose = components.mountLogin(root, async (endpoint, data) => {
+    requests.push({ endpoint, data });
+    if (endpoint === 'auth/login') state = { id: 'login1', status: 'pending',
+      events: [{ type: 'auth_url', url: 'https://example.com/oauth' }],
+      prompt: { id: 'prompt1', type: 'manual_code', message: 'Paste redirect URL' } };
+    if (endpoint === 'auth/reply') state = { id: 'login1', status: 'success', events: [] };
+    if (endpoint === 'auth/cancel') state = { id: 'login1', status: 'cancelled', events: [] };
+    return state;
+  });
+  try {
+    button(root, 'Login').click();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    button(root, 'Example OAuth').click();
+    await flush();
+    const link = root.querySelector('a');
+    assert.equal(link.href, 'https://example.com/oauth');
+    assert.equal(link.target, '_blank');
+    const input = root.querySelector('input');
+    input.focus();
+    input.value = 'redirect-code';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 600));
+    assert.equal(root.querySelector('input'), input);
+    assert.equal(input.value, 'redirect-code');
+    assert.equal(document.activeElement, input);
+    root.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await flush();
+    assert.equal(requests[1].data.value, 'redirect-code');
+    assert.match(root.textContent, /Logged in\./);
+    button(root, 'Example OAuth').click();
+    await flush();
+    root.querySelector('dialog').close();
+    assert.equal(requests.at(-1).endpoint, 'auth/cancel');
+    assert.equal(root.querySelector('input'), null);
+  } finally {
+    dispose();
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('shared Input forwards native attributes, refs and events and updates without replacing the element', async () => {
   let referenced;
   let typed;

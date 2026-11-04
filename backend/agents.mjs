@@ -154,6 +154,7 @@ export class AgentRegistry {
     const agent = new AgentConnection(randomUUID(), path.resolve(cwd));
     agent.rpc.on('exit', () => this.release(agent));
     let branch;
+    let sourceModel;
     if (sourceAgentId !== undefined || selected) {
       let entries, parentSession, sourceCwd, leafId;
       const owner = selected && this.owners.get(path.resolve(selected.file));
@@ -165,12 +166,15 @@ export class AgentRegistry {
         entries = history.entries;
         leafId = history.leafId;
         parentSession = state.sessionFile;
+        sourceModel = state.model;
         sourceCwd = source.cwd;
       } else {
         // Migrate in memory only: forking must not rewrite the source file.
         const session = SessionManager.inMemory(selected.cwd, undefined, parseSessionEntries(await readFile(selected.file, 'utf8')));
         entries = session.getEntries();
         leafId = session.getLeafId();
+        const model = session.buildSessionContext().model;
+        if (model) sourceModel = { provider: model.provider, id: model.modelId };
         parentSession = selected.file;
         sourceCwd = selected.cwd;
       }
@@ -199,6 +203,15 @@ export class AgentRegistry {
     this.agents.set(agent.id, agent);
     try {
       await this.start(agent, branch);
+
+      // Copy history from the selected point, but keep the source's current model.
+      // An older model_change entry must not resurrect obsolete credentials.
+      const restoredModel = agent.snapshot.state?.model;
+      if (sourceModel && (restoredModel?.provider !== sourceModel.provider || restoredModel?.id !== sourceModel.id)) {
+        await agent.rpc.command({ type: 'set_model', provider: sourceModel.provider, modelId: sourceModel.id });
+        await agent.refresh();
+      }
+
       return agent;
     } catch (error) {
       await agent.rpc.stop();
