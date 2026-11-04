@@ -1,4 +1,5 @@
 import { promptLabel } from './prompt-numbers';
+import AgentHealth from './AgentHealth';
 
 interface Props {
   entryId: string;
@@ -20,7 +21,8 @@ export default function SystemPromptReference(props: Props) {
         event.stopPropagation();
         props.onOpen(props.promptId);
       }}>
-      {promptLabel(props.number, props.title)}
+      <span>{promptLabel(props.number, props.title)}</span>
+      <AgentHealth />
     </section>
   );
 }

@@ -3,6 +3,7 @@ import { render } from 'solid-js/web';
 import Navigation, { NavigationLinksContext } from './Navigation';
 import MessageComposer from './MessageComposer';
 import Input from './Input';
+import AgentHealth from './AgentHealth';
 import ScrollArea from './ScrollArea';
 import './style.css';
 import './sessions.css';
@@ -39,7 +40,7 @@ render(() => <div class="startup-preview">
   <ScrollArea class="startup-session-scroll" vertical>
   <main class="startup-sessions" aria-label="Sessions — visual mock with sample data">
     <section class="startup-empty-chat" aria-label="New chat">
-      <button class="branch-draft system-prompt-reference empty-placeholder" aria-label="Edit system prompt">#1</button>
+      <button class="branch-draft system-prompt-reference empty-placeholder" aria-label="Edit system prompt"><span>#1</span><AgentHealth placeholder /></button>
       <section class="branch-draft" />
       <MessageComposer value={draft()} onChange={setDraft} />
     </section>

@@ -723,6 +723,11 @@
 }
 
 .system-prompt-reference {
+  padding-right: 2ch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1ch;
   cursor: pointer;
 }
 

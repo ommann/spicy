@@ -2,6 +2,7 @@ import { For, Show, createContext, createMemo, createSignal, onCleanup, onMount,
 import Navigation from './Navigation';
 import MessageComposer from './MessageComposer';
 import Input from './Input';
+import AgentHealth from './AgentHealth';
 import ScrollArea from './ScrollArea';
 import type { Wire } from './types';
 import './sessions.css';
@@ -60,7 +61,7 @@ export default function Sessions(props: {
     <ScrollArea class="startup-session-scroll" vertical>
     <main class="startup-sessions" aria-label="Sessions">
       <section class="startup-empty-chat" aria-label="New chat">
-        <button class="branch-draft system-prompt-reference empty-placeholder" aria-label="Edit system prompt" disabled={props.busy} onClick={props.onEditPrompt}>#1</button>
+        <button class="branch-draft system-prompt-reference empty-placeholder" aria-label="Edit system prompt" disabled={props.busy} onClick={props.onEditPrompt}><span>#1</span><AgentHealth placeholder /></button>
         <section class="branch-draft" />
         <MessageComposer value={props.draft} onChange={props.onDraft} onSubmit={props.onSubmit} busy={props.busy} />
       </section>

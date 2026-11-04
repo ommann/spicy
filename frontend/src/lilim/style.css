@@ -26,7 +26,7 @@ body {
 }
 .message {
   margin: 0;
-  padding: 20px 8px;
+  padding: 1lh 1ch;
 }
 .user {
   padding: var(--block-padding);
@@ -35,7 +35,7 @@ body {
   margin-bottom: 20px;
 }
 .thinking {
-  padding: 0 8px;
+  padding: 0 1ch;
   color: var(--thinking);
   font-style: italic;
 }
@@ -62,8 +62,8 @@ code {
   color: var(--purple);
 }
 .response {
-  padding-top: 20px;
-  padding-bottom: 20px;
+  padding-top: 1lh;
+  padding-bottom: 1lh;
 }
 .tool {
   background: var(--tool);
@@ -157,7 +157,7 @@ pre {
   border-radius: 0;
   background: var(--user);
   color: var(--text-emphasis);
-  padding: 0 8px;
+  padding: 0 1ch;
   font: inherit;
   white-space: nowrap;
   cursor: pointer;
@@ -214,7 +214,7 @@ pre {
   margin: 0 0 20px;
 }
 .real-thinking {
-  padding-bottom: 20px;
+  padding-bottom: 1lh;
 }
 .real-thinking p,
 .real-thinking p:last-child {
@@ -327,7 +327,7 @@ pre {
   padding: 10px 0;
 }
 .session-summary {
-  padding: 20px 8px;
+  padding: 1lh 1ch;
   color: var(--muted);
 }
 .session-summary summary {

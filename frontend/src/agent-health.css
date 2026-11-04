@@ -1,0 +1,13 @@
+.agent-health {
+  display: inline-block;
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: var(--status-success);
+}
+
+.agent-health-placeholder {
+  border: 1px dashed var(--focus-border);
+  background: transparent;
+}

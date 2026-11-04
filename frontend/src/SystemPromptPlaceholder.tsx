@@ -3,6 +3,7 @@ import { sessionPath, sessionUrlIdFromPath } from './session-urls';
 import { promptLabel } from './prompt-numbers';
 import { Show, type JSX } from 'solid-js';
 import SelectWithDialog, { type SelectOption } from './SelectWithDialog';
+import AgentHealth from './AgentHealth';
 
 export default function SystemPromptPlaceholder(props: {
   number?: number;
@@ -21,8 +22,8 @@ export default function SystemPromptPlaceholder(props: {
   const label = () => promptLabel(props.number ?? 1, props.title);
   return <Show when={props.selection} fallback={
     <A class="branch-draft system-prompt-reference empty-placeholder" style={style()}
-      href={sessionPath('/system-prompt-creator', sessionUrlIdFromPath(location.pathname))} aria-label={`Edit ${label()}`}>{label()}</A>
+      href={sessionPath('/system-prompt-creator', sessionUrlIdFromPath(location.pathname))} aria-label={`Edit ${label()}`}><span>{label()}</span><AgentHealth placeholder /></A>
   }>{selection => <SelectWithDialog label="Select system prompt" value={selection().value} options={selection().options}
-    onChange={value => selection().onChange(value)} class="branch-draft system-prompt-reference empty-placeholder" style={style()}>{label()}</SelectWithDialog>}
+    onChange={value => selection().onChange(value)} class="branch-draft system-prompt-reference empty-placeholder" style={style()}><span>{label()}</span><AgentHealth placeholder /></SelectWithDialog>}
   </Show>;
 }
