@@ -371,17 +371,28 @@ export default function Conversation(props: Props) {
     updateScroll();
   });
 
+  const latestMessage = createMemo(() => {
+    let latest: Wire | undefined;
+    let timestamp = -Infinity;
+    for (const node of props.graph.nodes.values()) {
+      if (!['user', 'assistant'].includes(node.entry.message?.role)) continue;
+      const time = Number(node.entry.message.timestamp) || Date.parse(node.entry.timestamp) || 0;
+      if (time >= timestamp) { latest = node; timestamp = time; }
+    }
+    return latest;
+  });
+
   const jumps = createMemo(() => {
-    const branchHidden = mode() === 'side' && focused() === lanes().length - 1;
+    const latestLane = latestMessage()?.first ?? 0;
+    const branchHidden = mode() === 'side' && focused() === latestLane;
     const origin = layout().inset - scroll().left;
-    const latestLane = props.graph.leaves.findIndex((leaf: Wire) => leaf.id === props.graph.activeLeaf?.id);
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
     const latest = clamp(origin + (layout().starts[Math.max(0, latestLane)] || 0) + workingWidth() / 2 - jumpSizes().latest / 2,
-      branchHidden ? 8 : jumpSizes().branch + 16, window.innerWidth - jumpSizes().latest - 8);
-    const right = mode() === 'focused' ? window.innerWidth - jumpSizes().branch - 8 : latest - jumpSizes().branch - 8;
+      8, window.innerWidth - jumpSizes().latest - 8);
 
     return { branchHidden, latestHidden: mode() === 'focused', latest,
-      branch: clamp(origin + (layout().starts[focused()] || 0) + workingWidth() / 2 - jumpSizes().branch / 2, 8, right) };
+      branch: clamp(origin + (layout().starts[focused()] || 0) + workingWidth() / 2 - jumpSizes().branch / 2,
+        8, window.innerWidth - jumpSizes().branch - 8) };
   });
 
   const canvas = <ImageContext.Provider value={props.onImage}><div class="canvas-scroll-shell" classList={{ 'no-horizontal': !layout().hasHorizontal }}>
@@ -435,7 +446,7 @@ export default function Conversation(props: Props) {
       <button ref={jumpUp} class="jump-up" hidden={jumps().branchHidden} style={{ left: `${jumps().branch}px` }}
         onClick={() => { const leaf = props.graph.leaves[focused()]; if (leaf) focus(leaf.id, true); }}>Jump to branch’s last message</button>
       <button ref={jumpLatest} id="jump" hidden={jumps().latestHidden} style={{ left: `${jumps().latest}px` }}
-        onClick={() => { if (props.graph.activeLeaf) focus(props.graph.activeLeaf.id, true); }}>Jump to last message</button>
+        onClick={() => { const latest = latestMessage(); if (latest) focus(latest.id, true); }}>Jump to last message</button>
     </div></div>
     <div ref={composerRow} class="composer-row" style={{ height: layout().inlineComposers ? '0px' : `${composerHeights[lanes()[focused()].key] || 40}px` }} />
   </div>;
