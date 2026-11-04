@@ -15,7 +15,7 @@ import SystemPromptReference from './SystemPromptReference';
 import type { AgentHealthStatus } from './AgentHealth';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createColumnShortcuts } from './column-shortcuts';
-import { layoutConversation } from './conversation-model.mjs';
+import { isUnstartedCompaction, layoutConversation } from './conversation-model.mjs';
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
@@ -52,6 +52,7 @@ interface Props {
   onDismissBranch: (id: string) => void;
   prompts: PromptVersion[];
   onSelectBranchPrompt: (id: string, key?: string) => void;
+  pendingPromptKey?: (id: string) => string | undefined;
   onOpenSystemPrompt: (id: string) => void;
   onImage: (image: PreviewImage) => void;
   onAbort: (leafId: string) => void;
@@ -375,8 +376,8 @@ export default function Conversation(props: Props) {
     let latest: Wire | undefined;
     let timestamp = -Infinity;
     for (const node of props.graph.nodes.values()) {
-      if (!['user', 'assistant'].includes(node.entry.message?.role)) continue;
-      const time = Number(node.entry.message.timestamp) || Date.parse(node.entry.timestamp) || 0;
+      if (node.entry.type !== 'compaction' && !['user', 'assistant'].includes(node.entry.message?.role)) continue;
+      const time = Number(node.entry.message?.timestamp) || Date.parse(node.entry.timestamp) || 0;
       if (time >= timestamp) { latest = node; timestamp = time; }
     }
     return latest;
@@ -422,9 +423,21 @@ export default function Conversation(props: Props) {
         <For each={props.graph.leaves}>{(leaf: Wire, index) => <Show when={leaf.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf.id).captured}>
           <article class="tree-node" hidden={mode() === 'focused' && index() !== focused()}
             style={{ ...tracks().place(layout().inset + layout().starts[index()], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
-            <Card><SystemPromptReference entryId={leaf.id} promptId={versionFor(leaf.id)?.full?.id || ''}
-              title={versionFor(leaf.id)?.title} number={versionFor(leaf.id)?.number || 1}
-              health={props.health(leaf.id)} onOpen={props.onOpenSystemPrompt} /></Card>
+            <Card><Show when={isUnstartedCompaction(props.graph, leaf.id)} fallback={
+              <SystemPromptReference entryId={leaf.id} promptId={versionFor(leaf.id)?.full?.id || ''}
+                title={versionFor(leaf.id)?.title} number={versionFor(leaf.id)?.number || 1}
+                health={props.health(leaf.id)} onOpen={props.onOpenSystemPrompt} />
+            }>
+              <SystemPromptPlaceholder
+                number={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf.id)) ?? versionFor(leaf.id))?.number}
+                title={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf.id)) ?? versionFor(leaf.id))?.title}
+                selection={{
+                  value: props.pendingPromptKey?.(leaf.id) ?? versionFor(leaf.id)?.key ?? '',
+                  options: props.prompts.map(prompt => ({ value: prompt.key,
+                    label: `${promptLabel(prompt.number, prompt.title)}${prompt.key === versionFor(leaf.id)?.key ? ' (inherited)' : ''}` })),
+                  onChange: key => props.onSelectBranchPrompt(leaf.id, key === versionFor(leaf.id)?.key ? undefined : key),
+                }} />
+            </Show></Card>
           </article>
         </Show>}</For>
         <For each={nodeIds()}>{id => {

@@ -16,6 +16,12 @@ intentionally follow the same connection.
 - Each tab remembers its own selection. A fresh tab starts independently; select
   an existing agent explicitly to follow the same work in another tab.
 
+`/compact [instructions]` summarizes the selected column's entire active context
+and starts a new column. The summary is an independent root in the same JSONL,
+with the inherited full system prompt saved as its immediate child—not embedded
+in the summary. The prompt remains selectable until the first message. No reply
+starts automatically, and the original history stays untouched.
+
 ## API
 
 Mutations require the existing `X-Lilim-Token` from `GET /api/info`.

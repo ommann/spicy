@@ -863,13 +863,16 @@ function findProjectedCutPoint(
 export function prepareCompaction(
 	pathEntries: SessionEntry[],
 	settings: CompactionSettings,
+	options?: { retainRecent?: boolean; omitEntryIds?: ReadonlySet<string> },
 ): CompactionPreparation | undefined {
 	if (pathEntries.length > 0 && pathEntries[pathEntries.length - 1].type === "compaction") {
 		return undefined;
 	}
 
 	const projection = buildSessionProjection(pathEntries);
-	const projectedEntries = projection.entries;
+	const projectedEntries = projection.entries.map((entry) =>
+		options?.omitEntryIds?.has(entry.sourceEntry.id) ? { ...entry, messages: [] } : entry,
+	);
 	const sourceEntries = projectedEntries.map((entry) => entry.sourceEntry);
 	// The newest compaction is projected first. Older compaction entries can still
 	// occur in its retained raw range, but their projected contribution is empty.
@@ -885,10 +888,24 @@ export function prepareCompaction(
 		boundaryStart = prevCompactionIndex + 1;
 	}
 	const boundaryEnd = projectedEntries.length;
-	const tokensBefore = estimateProjectedContextTokens(projection, pathEntries).tokens;
-	const cutPoint = findProjectedCutPoint(projectedEntries, boundaryStart, boundaryEnd, settings.keepRecentTokens);
+	const tokensBefore = estimateProjectedContextTokens(
+		{
+			...projection,
+			entries: projectedEntries,
+			messages: projectedEntries.flatMap((entry) => entry.messages),
+		},
+		pathEntries,
+	).tokens;
+	const cutPoint =
+		options?.retainRecent === false
+			? { firstKeptEntryIndex: boundaryEnd, turnStartIndex: -1, isSplitTurn: false }
+			: findProjectedCutPoint(projectedEntries, boundaryStart, boundaryEnd, settings.keepRecentTokens);
 
-	const firstKeptEntry = projectedEntries[cutPoint.firstKeptEntryIndex]?.sourceEntry;
+	// A detached summary keeps no old entries; its persisted boundary will be its new root ID.
+	const firstKeptEntry =
+		options?.retainRecent === false
+			? pathEntries.at(-1)
+			: projectedEntries[cutPoint.firstKeptEntryIndex]?.sourceEntry;
 	if (!firstKeptEntry?.id) return undefined;
 	const firstKeptEntryId = firstKeptEntry.id;
 	const historyEnd = cutPoint.isSplitTurn ? cutPoint.turnStartIndex : cutPoint.firstKeptEntryIndex;

@@ -23,7 +23,7 @@ import { createStore } from 'solid-js/store';
 import Dialog from './Dialog';
 import SelectWithDialog from './SelectWithDialog';
 import Conversation, { type ConversationController, type ViewOptions } from './Conversation';
-import { createConversationGraph, continuationTarget, matchConversationLanes } from './conversation-model.mjs';
+import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
 import { agentForEntry, agentForLeaf, mergeAgentEntries } from './agent-conversations.mjs';
 import { hasCommittedDraft } from "./branch-drafts.mjs";
@@ -109,6 +109,7 @@ export default function App(props: ParentProps) {
     .filter(entry => entry.type === 'custom' && entry.customType === SAVED_SYSTEM_PROMPT_ENTRY)
     .map(entry => ({ ...entry.data, id: entry.id })));
   const [homeDraft, setHomeDraft] = createSignal('');
+  const [pendingPrompts, setPendingPrompts] = createSignal<Record<string, DraftBranch['prompt']>>({});
   const [projectQuery, setProjectQuery] = createSignal('');
   const [sessionNameQuery, setSessionNameQuery] = createSignal('');
   let homeAgent: Snapshot | undefined;
@@ -213,6 +214,10 @@ export default function App(props: ParentProps) {
       sections: Object.fromEntries(Object.entries(message.sections || {}).filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
       promptBuilder: message.promptBuilder,
     } : undefined;
+    if (isUnstartedCompaction(graph(), id)) {
+      setPendingPrompts(previous => ({ ...previous, [id]: prompt }));
+      return;
+    }
     const key = branchKey();
     setDraftBranches(previous => ({ ...previous, [key]: (previous[key] || []).map(draft =>
       draft.id === id && draft.text === undefined ? { ...draft, prompt } : draft) }));
@@ -282,13 +287,22 @@ export default function App(props: ParentProps) {
     events.addEventListener('record', event => {
       const record = JSON.parse((event as MessageEvent).data);
       updateAgent(id, previous => {
-        const live = applyRecord(previous.live, record);
-        const running = record.type === 'agent_start' ? true : record.type === 'agent_settled' ? false : previous.running;
+        const live = record.type === 'history_root' ? [] : applyRecord(previous.live, record);
+        const generating = record.type === 'agent_start' ? true : record.type === 'agent_settled' ? false
+          : previous.generating ?? (previous.running && !previous.compacting);
+        const compacting = record.type === 'compaction_start' ? true : record.type === 'compaction_end' ? false : !!previous.compacting;
+        const running = generating || compacting;
         const dialogs = record.type === 'extension_ui_request' && ['confirm', 'select', 'input', 'editor'].includes(record.method)
           ? [...previous.dialogs.filter(dialog => dialog.id !== record.id), record] : previous.dialogs;
         const providerConnection = record.type === 'provider_connection' ? record.state : previous.providerConnection;
-        return { ...previous, live, running, dialogs, providerConnection };
+        return { ...previous, live, running, generating, compacting, dialogs, providerConnection,
+          ...(record.type === 'history_root' ? { entries: record.entries, leafId: record.leafId } : {}),
+        };
       });
+      if (record.type === 'history_root' && id === selectedAgentId()) {
+        setFocusRequest(previous => ({ id: record.rootId, revision: (previous?.revision || 0) + 1 }));
+      }
+      if (record.type === 'compaction_end' && record.errorMessage) setNotification({ message: record.errorMessage, isError: true });
       if (record.type === 'auto_retry_start') setNotification({ message: `Connection failed. Retrying in ${Math.ceil(record.delayMs / 1000)} seconds…`, isError: true });
       if (record.type === 'auto_retry_end') setNotification({ message: record.success ? '' : record.finalError || 'Reply failed.', isError: !record.success });
       if (record.type === 'extension_ui_request') {
@@ -490,6 +504,7 @@ export default function App(props: ParentProps) {
     }
 
     const key = branchKey();
+    const compact = /^\/compact(?:\s|$)/.test(message.trim());
     const draft = (draftBranches()[key] || []).find(item => item.id === leafId);
     let agent = !draft ? leafAgent(leafId) : undefined;
     const target = !draft && !agent && leafId !== 'empty-chat-draft' ? continuationTarget(graph(), leafId) : undefined;
@@ -498,7 +513,7 @@ export default function App(props: ParentProps) {
     let sendingAgentId = agent?.agentId;
     setSending(previous => [...previous, leafId, ...(sendingAgentId ? [sendingAgentId] : [])]);
 
-    if (draft) setDraftBranches(previous => ({ ...previous, [key]: previous[key].map(item =>
+    if (draft && !compact) setDraftBranches(previous => ({ ...previous, [key]: previous[key].map(item =>
       item.id === draft.id ? { ...item, text: message, sentAt: Date.now() } : item) }));
 
     try {
@@ -518,9 +533,20 @@ export default function App(props: ParentProps) {
         agent = await post('start', { agentId: agent.agentId });
         accept(agent!);
       }
-      const systemPrompt = { choice: 'current', ...(draft?.prompt ? { selected: draft.prompt } : {}) };
-      await post('command', { agentId: agent!.agentId, type: 'prompt', message, systemPrompt,
-        ...(agent!.running ? { streamingBehavior: 'steer' } : {}) });
+      if (!agent?.agentId) throw new Error('Agent did not start');
+      if (compact) {
+        const result = await post('command', { agentId: agent.agentId, type: 'compact',
+          customInstructions: message.trim().slice('/compact'.length).trim() || undefined });
+        accept(result.snapshot);
+        const targetId = graph().ancestors(result.snapshot.leafId).find((id: string) => graph().nodes.has(id));
+        if (targetId) setFocusRequest(previous => ({ id: targetId, revision: (previous?.revision || 0) + 1 }));
+        if (draft) setDraftBranches(previous => ({ ...previous, [key]: previous[key].filter(item => item.id !== draft.id) }));
+      } else {
+        const prompt = draft?.prompt ?? pendingPrompts()[leafId];
+        const systemPrompt = { choice: 'current', ...(prompt ? { selected: prompt } : {}) };
+        await post('command', { agentId: agent.agentId, type: 'prompt', message, systemPrompt,
+          ...(agent.running ? { streamingBehavior: 'steer' } : {}) });
+      }
       accepted = true;
     } catch (failure) {
       if (draft) batch(() => {
@@ -657,7 +683,7 @@ export default function App(props: ParentProps) {
             drafts={composerState().drafts} onDraftChange={composerState().setDraft}
             running={id => !!leafAgent(id)?.running} health={agentHealth} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
-            prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt}
+            prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt} pendingPromptKey={id => pendingPrompts()[id]?.key}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}
             onOptions={openOptions} />
         )}</Show>;

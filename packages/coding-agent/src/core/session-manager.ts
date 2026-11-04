@@ -1347,6 +1347,30 @@ export class SessionManager {
 		return entry.id;
 	}
 
+	/** Start independent history with only a summary. Prompt state belongs in a separate child entry. */
+	appendCompactionRoot<T = unknown>(
+		summary: string,
+		tokensBefore: number,
+		details?: T,
+		fromHook?: boolean,
+		usage?: Usage,
+	): string {
+		const id = generateId(this.byId);
+		this._appendEntry({
+			type: "compaction",
+			id,
+			parentId: null,
+			timestamp: new Date().toISOString(),
+			summary,
+			firstKeptEntryId: id,
+			tokensBefore,
+			details,
+			fromHook,
+			usage,
+		});
+		return id;
+	}
+
 	/** Append a custom entry (for extensions) as child of current leaf, then advance leaf. Returns entry id. */
 	appendCustomEntry(customType: string, data?: unknown): string {
 		const entry: CustomEntry = {

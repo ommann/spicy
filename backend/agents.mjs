@@ -26,6 +26,10 @@ export class AgentConnection {
       // A retry also emits agent_start. Keep the visible turn until its saved
       // snapshot arrives rather than erasing the user's message between attempts.
       this.live = applyRecord(this.live, record);
+      if (record.type === 'history_root') {
+        this.snapshot = { ...this.snapshot, entries: record.entries, leafId: record.leafId };
+        this.live = [];
+      }
       if (record.type === 'provider_connection') this.providerConnection = record.state;
       if (record.type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(record.method)) {
         this.dialogs.set(record.id, record);
@@ -42,7 +46,7 @@ export class AgentConnection {
   }
 
   payload() {
-    return { agentId: this.id, ...this.snapshot, live: this.live, dialogs: [...this.dialogs.values()], connected: !!this.rpc.child, running: this.rpc.running, cwd: this.cwd, diagnostic: this.diagnostic, source: this.source, connectionError: this.connectionError, providerConnection: this.providerConnection };
+    return { agentId: this.id, ...this.snapshot, live: this.live, dialogs: [...this.dialogs.values()], connected: !!this.rpc.child, running: this.rpc.running, generating: this.rpc.generating, compacting: this.rpc.compacting, cwd: this.cwd, diagnostic: this.diagnostic, source: this.source, connectionError: this.connectionError, providerConnection: this.providerConnection };
   }
 
   broadcast(type, data) {

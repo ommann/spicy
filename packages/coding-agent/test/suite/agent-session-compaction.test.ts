@@ -13,6 +13,7 @@ import {
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { estimateTokens } from "../../src/core/compaction/index.ts";
+import { SessionManager } from "../../src/core/session-manager.ts";
 import { createHarness, getUserTexts, type Harness } from "./harness.ts";
 
 type SessionWithCompactionInternals = {
@@ -131,6 +132,65 @@ describe("AgentSession compaction characterization", () => {
 		while (harnesses.length > 0) {
 			harnesses.pop()?.cleanup();
 		}
+	});
+
+	it("starts independent compacted history with a separate inherited prompt and no retained messages", async () => {
+		const harness = await createHarness();
+		harnesses.push(harness);
+		harness.sessionManager.appendMessage({
+			role: "system",
+			content: "Inherited instructions",
+			sections: { rules: "Preserve these rules" },
+			timestamp: Date.now() - 2000,
+		});
+		seedCompactableSession(harness);
+		harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 20000 } });
+		const before = structuredClone(harness.sessionManager.getEntries());
+		const oldLeaf = harness.sessionManager.getLeafId();
+		const model = harness.getModel();
+		let summaryInput = "";
+		const calls = useSummaryStreamFn(harness, "Independent summary", (context) => {
+			summaryInput = JSON.stringify(context.messages);
+		});
+
+		const result = await harness.session.compact();
+		const entries = harness.sessionManager.getEntries();
+		expect(entries.slice(0, before.length)).toEqual(before);
+		const root = entries[before.length];
+		expect(root).toMatchObject({ type: "compaction", parentId: null, summary: "Independent summary" });
+		expect(root).not.toHaveProperty("systemMessage");
+		expect(result.firstKeptEntryId).toBe(root.id);
+		expect(entries[before.length + 1]).toMatchObject({
+			parentId: root.id,
+			message: { role: "system", content: "Inherited instructions", systemPromptSnapshot: true },
+		});
+		expect(calls()).toBe(1);
+		expect(summaryInput).toContain("message to compact");
+		expect(summaryInput).toContain("assistant response to compact");
+		expect(summaryInput).not.toContain("Inherited instructions");
+		expect(harness.session.messages.map((message) => message.role)).toEqual(["compactionSummary", "system"]);
+		expect(harness.sessionManager.getBranch().some((entry) => before.some((old) => old.id === entry.id))).toBe(false);
+
+		const reopened = SessionManager.inMemory(undefined, undefined, [harness.sessionManager.getHeader()!, ...entries]);
+		expect(reopened.buildSessionContext().model).toEqual({ provider: model.provider, modelId: model.id });
+		expect(reopened.buildSessionContext().messages.map((message) => message.role)).toEqual([
+			"compactionSummary",
+			"system",
+		]);
+		expect(reopened.getBranch(oldLeaf!).map((entry) => entry.id)).toEqual(before.map((entry) => entry.id));
+	});
+
+	it("leaves original history untouched when new-root compaction is cancelled", async () => {
+		const { harness, compactionStarted } = await createAbortableCompactionHarness();
+		harnesses.push(harness);
+		const before = structuredClone(harness.sessionManager.getEntries());
+		const leaf = harness.sessionManager.getLeafId();
+		const compacting = harness.session.compact();
+		await compactionStarted;
+		harness.session.abortCompaction();
+		await expect(compacting).rejects.toThrow("Compaction cancelled");
+		expect(harness.sessionManager.getEntries()).toEqual(before);
+		expect(harness.sessionManager.getLeafId()).toBe(leaf);
 	});
 
 	it("manually compacts using an extension-provided summary", async () => {

@@ -6,7 +6,9 @@ import { EventEmitter } from 'node:events';
 export class PiRpc extends EventEmitter {
   pending = new Map();
   child = null;
-  running = false;
+  generating = false;
+  compacting = false;
+  get running() { return this.generating || this.compacting; }
   stderr = '';
   async start(command, args, cwd) {
     if (this.child) throw new Error('Pi is already connected');
@@ -32,8 +34,10 @@ export class PiRpc extends EventEmitter {
             else request.reject(new Error(record.error || 'Pi command failed'));
           }
         } else {
-          if (record.type === 'agent_start') this.running = true;
-          if (record.type === 'agent_settled') this.running = false;
+          if (record.type === 'agent_start') this.generating = true;
+          if (record.type === 'agent_settled') this.generating = false;
+          if (record.type === 'compaction_start') this.compacting = true;
+          if (record.type === 'compaction_end') this.compacting = false;
           this.emit('record', record);
         }
       }
@@ -42,7 +46,7 @@ export class PiRpc extends EventEmitter {
     child.stderr.on('data', chunk => { this.stderr = (this.stderr + chunk).slice(-8000); this.emit('diagnostic', chunk); });
     const fail = error => {
       if (this.child !== child) return;
-      this.child = null; this.running = false;
+      this.child = null; this.generating = false; this.compacting = false;
       for (const request of this.pending.values()) request.reject(error);
       this.pending.clear();
       this.emit('exit', error.message);

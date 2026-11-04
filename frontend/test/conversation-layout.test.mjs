@@ -1,6 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createConversationGraph, layoutConversation, projectChatParts } from '../src/conversation-model.mjs';
+import { createConversationGraph, isUnstartedCompaction, layoutConversation, projectChatParts } from '../src/conversation-model.mjs';
+
+test('compaction roots get independent columns and a switchable prompt until their first message', () => {
+  const entries = [
+    { id: 'original', parentId: null, type: 'message', message: { role: 'user', content: 'Old history' } },
+    { id: 'summary', parentId: null, type: 'compaction', summary: 'Compact context', firstKeptEntryId: 'summary' },
+    { id: 'prompt', parentId: 'summary', type: 'message', message: {
+      role: 'system', content: 'Inherited prompt', systemPromptSnapshot: true,
+    } },
+  ];
+  const graph = createConversationGraph(entries);
+  assert.deepEqual(graph.roots.map(node => node.id), ['original', 'summary']);
+  assert.deepEqual(graph.leaves.map(node => node.id), ['original', 'prompt']);
+  assert.equal(isUnstartedCompaction(graph, 'prompt'), true);
+  assert.equal(isUnstartedCompaction(graph, 'original'), false);
+  assert.deepEqual(graph.ancestors('prompt'), ['prompt', 'summary']);
+  assert.equal(graph.prefix.get('prompt').content, 'Inherited prompt');
+  const layout = layoutConversation(graph, { mode: 'side', width: 1040, viewportWidth: 1200, viewportHeight: 800, lane: 1 });
+  assert.equal(layout.composers.length, 2);
+  const started = createConversationGraph([...entries, {
+    id: 'new-message', parentId: 'prompt', type: 'message', message: { role: 'user', content: 'Continue' },
+  }]);
+  assert.equal(isUnstartedCompaction(started, 'new-message'), false);
+});
 
 test('empty chats use a normal first column and composer in both modes', () => {
   for (const mode of ['side', 'focused']) {

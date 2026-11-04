@@ -222,6 +222,7 @@ export type AgentSessionEvent =
 	  }
 	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
 	| { type: "entry_appended"; entry: SessionEntry }
+	| { type: "history_root"; rootId: string; entries: SessionEntry[]; leafId: string | null }
 	| { type: "session_info_changed"; name: string | undefined }
 	| { type: "thinking_level_changed"; level: ThinkingLevel }
 	| {
@@ -3018,6 +3019,45 @@ export class AgentSession {
 		this._resolveIdleWaitIfIdle();
 	}
 
+	private _saveCompactedHistory(
+		summary: string,
+		tokensBefore: number,
+		model: Model<any>,
+		details?: unknown,
+		fromExtension?: boolean,
+		usage?: Usage,
+	): string {
+		const inheritedPrompt = getCurrentSystemMessage(this.sessionManager.buildSessionProjection().messages);
+		const rootId = this.sessionManager.appendCompactionRoot(summary, tokensBefore, details, fromExtension, usage);
+		if (inheritedPrompt) {
+			this.sessionManager.appendMessage({
+				...createSystemPromptSnapshot({
+					content: typeof inheritedPrompt.content === "string" ? inheritedPrompt.content : "",
+					sections: Object.fromEntries(
+						Object.entries(inheritedPrompt.sections ?? {}).filter(
+							(entry): entry is [string, string] => typeof entry[1] === "string",
+						),
+					),
+					key: inheritedPrompt.systemPromptKey,
+					promptBuilder: inheritedPrompt.promptBuilder,
+				}),
+				content: inheritedPrompt.content,
+				toolsAdded: inheritedPrompt.toolsAdded ?? [],
+				toolsRemoved: [],
+			});
+		}
+		this.sessionManager.appendModelChange(model.provider, model.id);
+		this.sessionManager.appendThinkingLevelChange(this.thinkingLevel);
+		this._refreshFinalizedContext();
+		this._emit({
+			type: "history_root",
+			rootId,
+			entries: this.sessionManager.getEntries(),
+			leafId: this.sessionManager.getLeafId(),
+		});
+		return rootId;
+	}
+
 	/**
 	 * Manually compact the session context.
 	 *
@@ -3048,8 +3088,7 @@ export class AgentSession {
 
 			const settings = this.settingsManager.getCompactionSettings(model);
 			const pathEntries = this.sessionManager.getBranch();
-
-			const preparation = prepareCompaction(pathEntries, settings);
+			const preparation = prepareCompaction(pathEntries, settings, { retainRecent: false });
 			if (!preparation) {
 				// Check why we can't compact
 				const lastEntry = pathEntries[pathEntries.length - 1];
@@ -3116,7 +3155,7 @@ export class AgentSession {
 				throw new Error("Compaction cancelled");
 			}
 
-			this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension, usage);
+			firstKeptEntryId = this._saveCompactedHistory(summary, tokensBefore, model, details, fromExtension, usage);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
 			const estimatedTokensAfter = estimateMessagesTokens(this.sessionManager.buildSessionProjection().messages);
@@ -3306,10 +3345,9 @@ export class AgentSession {
 				return false;
 			}
 
-			// Persistently omit the selected final attempt before post-run recovery compaction.
+			// Exclude the failed attempt from the summary without editing the original history.
 			this._overflowRecoveryAttempted = true;
-			this._omitRecoveryAttempt(assistantMessage);
-			const retry = await this._runAutoCompaction("overflow", willRetry);
+			const retry = await this._runAutoCompaction("overflow", willRetry, assistantMessage);
 			if (retry) this._failedResponse = assistantMessage;
 			return retry;
 		}
@@ -3362,7 +3400,11 @@ export class AgentSession {
 	 * @param willRetry Whether to continue the interrupted turn after overflow compaction
 	 * @returns Whether the post-run loop should call `agent.continue()`
 	 */
-	private async _runAutoCompaction(reason: "overflow" | "threshold", willRetry: boolean): Promise<boolean> {
+	private async _runAutoCompaction(
+		reason: "overflow" | "threshold",
+		willRetry: boolean,
+		failedAttempt?: AssistantMessage,
+	): Promise<boolean> {
 		const model = this.model;
 		const settings = this.settingsManager.getCompactionSettings(model);
 		let abortController: AbortController | undefined;
@@ -3376,7 +3418,25 @@ export class AgentSession {
 			}
 
 			const pathEntries = this.sessionManager.getBranch();
-			const preparation = prepareCompaction(pathEntries, settings);
+			const omitEntryIds = new Set<string>();
+			if (failedAttempt) {
+				const failedId = this._findPersistedMessageEntryId(failedAttempt);
+				if (!failedId) throw new Error("Cannot resolve failed attempt for compaction");
+				omitEntryIds.add(failedId);
+				const toolCalls = new Set(
+					failedAttempt.content.flatMap((block) => (block.type === "toolCall" ? [block.id] : [])),
+				);
+				for (const entry of pathEntries) {
+					if (
+						entry.type === "message" &&
+						entry.message.role === "toolResult" &&
+						toolCalls.has(entry.message.toolCallId)
+					) {
+						omitEntryIds.add(entry.id);
+					}
+				}
+			}
+			const preparation = prepareCompaction(pathEntries, settings, { retainRecent: false, omitEntryIds });
 			if (!preparation) {
 				return false;
 			}
@@ -3442,7 +3502,7 @@ export class AgentSession {
 			}
 			abortController.signal.throwIfAborted();
 
-			this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension, usage);
+			firstKeptEntryId = this._saveCompactedHistory(summary, tokensBefore, model, details, fromExtension, usage);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
 			const estimatedTokensAfter = estimateMessagesTokens(this.sessionManager.buildSessionProjection().messages);
@@ -3554,10 +3614,7 @@ export class AgentSession {
 			return;
 		}
 
-		const { skillPaths, promptPaths } = await this._extensionRunner.emitResourcesDiscover(
-			this._cwd,
-			reason,
-		);
+		const { skillPaths, promptPaths } = await this._extensionRunner.emitResourcesDiscover(this._cwd, reason);
 
 		if (skillPaths.length === 0 && promptPaths.length === 0) {
 			return;

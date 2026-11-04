@@ -172,6 +172,13 @@ export function matchConversationLanes(graph, previous = []) {
   return lanes;
 }
 
+export function isUnstartedCompaction(graph, id) {
+  const path = graph.ancestors(id).map(entryId => graph.raw.get(entryId));
+  const root = path.at(-1);
+  return root?.type === 'compaction' && root.parentId === null
+    && !path.some(entry => ['user', 'assistant'].includes(entry.message?.role));
+}
+
 export function continuationTarget(graph, id) {
   const seen = new Set([id]);
   let target = id;
@@ -217,8 +224,10 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
     const hidden = system || (mode === 'focused' && !onPath);
     let parent = node.parent;
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
+    const hasPrompt = graph.prefix.get(node.id).captured || (node.entry.type === 'compaction' && node.entry.parentId === null
+      && graph.leaves.slice(node.first, node.last + 1).some(leaf => graph.prefix.get(leaf.id).captured));
     const top = system ? rowGap : parent ? items.get(parent.id).top + items.get(parent.id).height + rowGap
-      : rowGap + (graph.prefix.get(node.id).captured ? prefixHeight + rowGap : 0);
+      : rowGap + (hasPrompt ? prefixHeight + rowGap : 0);
     const height = system ? 0 : heights[node.id] || (pending(node) ? 60 : node.entry.type === 'branch_draft' ? 120 + rowGap
       : node.parts.reduce((sum, part) => sum + (part.kind === 'message' || part.kind === 'thinking' ? 44 : 60), 0));
     const first = Math.min(...range);
