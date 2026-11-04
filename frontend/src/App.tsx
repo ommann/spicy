@@ -1,5 +1,8 @@
 import ScrollableTextarea from './ScrollableTextarea';
+import Input from './Input';
 import { ChatRouteContext } from './ChatRoute';
+import Sessions, { SessionsRouteContext } from './Sessions';
+import { setViewMode } from './view-mode';
 import { sessionPath, sessionUrlIdFromPath, sessionViewPath } from './session-urls';
 import {
   For,
@@ -99,15 +102,13 @@ export default function App(props: ParentProps) {
   const createdPrompts = createMemo<CreatedPrompt[]>(() => sessionEntries()
     .filter(entry => entry.type === 'custom' && entry.customType === SAVED_SYSTEM_PROMPT_ENTRY)
     .map(entry => ({ ...entry.data, id: entry.id })));
-  const [resumeSessions, setResumeSessions] = createSignal<Wire[]>([]);
-  const [resumeSearch, setResumeSearch] = createSignal("");
-  const filteredResumeSessions = createMemo(() => {
-    const query = resumeSearch().trim().toLocaleLowerCase();
-    return resumeSessions().filter(session => !query || session.name.toLocaleLowerCase().includes(query));
-  });
+  const [homeDraft, setHomeDraft] = createSignal('');
+  const [projectQuery, setProjectQuery] = createSignal('');
+  const [sessionNameQuery, setSessionNameQuery] = createSignal('');
+  let homeAgent: Snapshot | undefined;
+  const openFocusedChat = () => navigate(sessionPath('/', selectedSessionUrlId()) === '/' ? '/chat' : sessionPath('/', selectedSessionUrlId()));
 
   let chatDialog!: HTMLDialogElement;
-  let resumeDialog!: HTMLDialogElement;
   let optionsDialog!: HTMLDialogElement;
   const [viewOptions, setViewOptions] = createSignal<ViewOptions | null>(null);
 
@@ -359,13 +360,55 @@ export default function App(props: ParentProps) {
     setViewOptions(conversation.options());
   }
 
-  async function openResume() {
-    await act(async () => {
-      const response = await fetch(`/api/sessions?scope=cwd${selectedAgentId() ? `&agentId=${encodeURIComponent(selectedAgentId())}` : ''}`, { signal: appLifecycle.signal });
-      if (!response.ok) throw new Error("Could not list chats");
-      setResumeSessions(await response.json());
-      setResumeSearch("");
-      resumeDialog.showModal();
+  async function loadHomeSessions() {
+    await bridgeReady;
+    const response = await fetch('/api/sessions?scope=all', { signal: appLifecycle.signal });
+    if (!response.ok) throw new Error('Could not list sessions');
+    const sessions: Wire[] = await response.json();
+    const listed = await fetch('/api/agents', { signal: appLifecycle.signal });
+    if (!listed.ok) throw new Error('Could not list agents');
+    const agents: Wire[] = await listed.json();
+    return sessions.map(session => ({ ...session, running: agents.some(agent =>
+      agent.running && session.urlId && agent.state?.sessionUrlId === session.urlId) }));
+  }
+
+  async function prepareHomeChat() {
+    await bridgeReady;
+    if (!homeAgent) homeAgent = await post('agents', { cwd: sessionCwd() || bridgeCwd() });
+    return homeAgent!;
+  }
+
+  function sendHomeChat() {
+    const message = homeDraft();
+    if (busy() || !message.trim()) return;
+    act(async () => {
+      const agent = await prepareHomeChat();
+      await post('command', { agentId: agent.agentId, type: 'prompt', message, systemPrompt: { choice: 'current' } });
+      showAgent(agent, true);
+      homeAgent = undefined;
+      if (homeDraft() === message) setHomeDraft('');
+      setNotification({ message: '', isError: false });
+      setViewMode('focused');
+      openFocusedChat();
+    });
+  }
+
+  function editHomePrompt() {
+    if (busy()) return;
+    act(async () => {
+      const agent = await prepareHomeChat();
+      showAgent(agent, true);
+      navigateView('/system-prompt-creator');
+    });
+  }
+
+  function openHomeSession(session: Wire) {
+    if (busy()) return;
+    act(async () => {
+      const agent = await post('agents', { openSessionId: session.id });
+      showAgent(agent, true);
+      setViewMode('focused');
+      openFocusedChat();
     });
   }
 
@@ -375,7 +418,6 @@ export default function App(props: ParentProps) {
       const result = await post('agents', { ...(cwd ? { cwd } : {}), ...(sessionId ? { sessionId } : {}) });
       showAgent(result, true);
       chatDialog.close();
-      resumeDialog.close();
       const available = await post('command', { agentId: result.agentId, type: 'get_available_models' });
       setModels(available.models || []);
     });
@@ -466,7 +508,7 @@ export default function App(props: ParentProps) {
   }
 
   createEffect(() => {
-    document.title = `Pi — ${live() ? sessionCwd().split('/').filter(Boolean).at(-1) || 'chat' : 'chat'}`;
+    document.title = `Spicy — ${live() ? sessionCwd().split('/').filter(Boolean).at(-1) || 'chat' : 'chat'}`;
   });
 
   const [sessionRoutingReady, setSessionRoutingReady] = createSignal(false);
@@ -480,8 +522,8 @@ export default function App(props: ParentProps) {
     });
   }));
   createEffect(on([sessionRoutingReady, selectedSessionUrlId], ([ready, urlId]) => {
-    if (!ready || !urlId || routeSessionId() === urlId) return;
-    navigate(sessionPath(location.pathname, urlId) + location.search, { replace: !routeSessionId() });
+    if (!ready || !urlId || location.pathname === '/' || routeSessionId() === urlId) return;
+    navigate(sessionPath(viewPath() === '/chat' ? '/' : location.pathname, urlId) + location.search, { replace: !routeSessionId() });
   }));
 
   onMount(() => {
@@ -526,9 +568,9 @@ export default function App(props: ParentProps) {
     }}>
       <NavigationLinksContext.Provider value={() => <>
         <button class="tree-title" onClick={openChat}>{sessionCwd()}</button>
-        <button onClick={openResume}>Sessions</button>
         <div class="view-switch" role="group" aria-label="Views">
-          <button class="state-toggle" aria-pressed={viewPath() === '/'} onClick={() => navigateView('/')}>Chat</button>
+          <button class="state-toggle" aria-pressed={location.pathname === '/'} onClick={() => navigate('/')}>Sessions</button>
+          <button class="state-toggle" aria-pressed={location.pathname !== '/' && (viewPath() === '/' || viewPath() === '/chat')} onClick={openFocusedChat}>Chat</button>
           <button class="state-toggle" aria-pressed={viewPath().startsWith('/system-prompts')} onClick={() => navigateView('/system-prompts')}>System prompts</button>
           <button class="state-toggle" aria-pressed={viewPath() === '/system-prompt-creator'} onClick={() => navigateView('/system-prompt-creator')}>Editor</button>
         </div>
@@ -574,6 +616,10 @@ export default function App(props: ParentProps) {
       }}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <Handoffs sessionKey={branchKey()}>
+        <SessionsRouteContext.Provider value={() => <Sessions load={loadHomeSessions}
+          draft={homeDraft()} onDraft={setHomeDraft} projectQuery={projectQuery()} onProjectQuery={setProjectQuery}
+          nameQuery={sessionNameQuery()} onNameQuery={setSessionNameQuery} onSubmit={sendHomeChat}
+          onEditPrompt={editHomePrompt} onOpen={openHomeSession} busy={busy()} notification={notification()} />}>
         <ChatRouteContext.Provider value={() => {
           onCleanup(() => { conversation = undefined; });
           return <Show when={composerScope()} keyed>{_sessionKey => (
@@ -588,6 +634,7 @@ export default function App(props: ParentProps) {
         }}>
           {props.children}
         </ChatRouteContext.Provider>
+        </SessionsRouteContext.Provider>
         </Handoffs>
       </SystemPromptContext.Provider>
       </SystemPromptCreatorContext.Provider>
@@ -608,34 +655,6 @@ export default function App(props: ParentProps) {
         <CodeLinewrapOption />
       </Dialog>
       <Dialog
-        ref={resumeDialog}
-        class="chat-dialog resume-dialog"
-        aria-label="Sessions"
-      >
-        <div class="chat-dialog-heading">
-          <span>Sessions</span>
-          <button disabled={busy()} onClick={newSession}>New session</button>
-          <button onClick={() => resumeDialog.close()}>Close</button>
-        </div>
-        <input class="resume-search" aria-label="Search chats" value={resumeSearch()} onInput={event => setResumeSearch(event.currentTarget.value)} />
-        <Show
-          when={resumeSessions().length}
-          fallback={<p>No chats in this directory.</p>}
-        >
-          <div class="resume-list">
-            <For each={filteredResumeSessions()}>
-              {(session) => (
-                <button disabled={busy()} onClick={() => start(session.id)}>
-                  <span class="resume-title">{session.name}</span>
-                  <span class="chat-muted">{session.messageCount}</span>
-                  <span class="chat-muted resume-age">{relativeAge(session.modified)}</span>
-                </button>
-              )}
-            </For>
-          </div>
-        </Show>
-      </Dialog>
-      <Dialog
         ref={chatDialog}
         class="chat-dialog"
         aria-label="Pi chat controls"
@@ -651,7 +670,7 @@ export default function App(props: ParentProps) {
             disabled={busy()} onChange={chooseAgent} />
         </label>
         <label>Project directory
-          <input aria-label="Project directory" value={projectCwd()} onInput={event => setProjectCwd(event.currentTarget.value)} />
+          <Input aria-label="Project directory" value={projectCwd()} onInput={event => setProjectCwd(event.currentTarget.value)} />
         </label>
         <div class="chat-actions">
           <button disabled={busy() || !projectCwd().trim()} onClick={() => start(undefined, projectCwd().trim())}>Open project</button>
@@ -750,15 +769,6 @@ export default function App(props: ParentProps) {
       )}</Show>
     </div>
   );
-}
-
-function relativeAge(modified: number) {
-  const seconds = Math.max(0, (Date.now() - modified) / 1000);
-  if (seconds < 60) return 'now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d`;
-  return `${Math.floor(seconds / 604800)}w`;
 }
 
 function ExtensionDialog(props: {

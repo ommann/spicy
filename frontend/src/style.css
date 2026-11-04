@@ -62,6 +62,11 @@
   display: none;
 }
 
+.editor:focus-within {
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
+}
+
 .editor:has(.scroll-area-vertical) .composer-measure {
   width: calc(100% - 14px);
 }
@@ -122,8 +127,9 @@
   position: absolute;
   visibility: hidden;
   pointer-events: none;
-  width: 6ch;
-  height: 1lh;
+  width: var(--chat-column-gap);
+  height: var(--chat-row-gap);
+  padding-left: var(--chat-edge-gap);
 }
 
 .trace-text,
@@ -230,8 +236,9 @@
  * The established tree canvas keeps its own branch/connector layout engine.
  */
 .app-toolbar {
+  font: inherit;
   display: grid;
-  grid-template-columns: max-content max-content max-content max-content minmax(0, 1fr);
+  grid-template-columns: max-content max-content max-content minmax(0, 1fr);
   align-items: center;
   position: fixed;
   inset: 0 0 auto;
@@ -242,11 +249,16 @@
   z-index: 10;
 }
 
+.app-toolbar button {
+  padding: 0 1ch;
+}
+
 .app-toolbar > .tree-title {
   margin-right: 0;
 }
 
 .app-toolbar-actions {
+  grid-column: -2 / -1;
   display: grid;
   align-items: center;
   justify-self: end;
@@ -364,7 +376,7 @@
 }
 
 .branch-draft {
-  min-height: 60px;
+  min-height: var(--chat-placeholder-height);
   border: 1px dashed var(--focus-border);
 }
 
@@ -403,7 +415,6 @@
 }
 
 .chat-dialog button,
-.chat-dialog input,
 .chat-dialog select,
 .chat-dialog textarea {
   background: transparent;
@@ -454,12 +465,6 @@
 .chat-dialog form {
   display: grid;
   gap: 1lh;
-}
-
-.chat-dialog input {
-  min-width: 0;
-  border: 1px solid var(--dialog-border);
-  padding: 0 1ch;
 }
 
 .chat-dialog select {

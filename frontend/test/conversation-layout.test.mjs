@@ -11,6 +11,8 @@ test('empty chats use a normal first column and composer in both modes', () => {
     });
     assert.deepEqual(layout.starts, [0]);
     assert.equal(layout.composers.length, 1);
+    assert.equal(layout.inlineComposers, true, 'Empty focused chat keeps the input next to its placeholders');
+    assert.ok(layout.height >= layout.composers[0].top + layout.composers[0].height);
     assert.equal(layout.composers[0].left, layout.inset);
     assert.ok(layout.width >= 720);
     assert.ok(layout.composers[0].top > 84, 'input sits below the separate 60px draft placeholder');

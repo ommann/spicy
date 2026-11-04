@@ -184,6 +184,7 @@ export function continuationTarget(graph, id) {
 // This function has no browser or rendering dependency.
 export function layoutConversation(graph, { mode, width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {},
   rowGap = CHAT_BLOCK_GAP, columnGap = 48, edgeGap = 24 }) {
+  const inlineComposers = mode === 'side' || graph.leaves.length === 1 && graph.leaves[0].id === 'empty-chat-draft';
   const focused = Math.max(0, Math.min(lane, graph.leaves.length - 1));
   const gap = columnGap;
   const inset = mode === 'focused' ? Math.max(edgeGap, (viewportWidth - width) / 2) : Math.max(edgeGap, viewportWidth / 2);
@@ -229,7 +230,7 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
     return { left: inset + starts[index], top: bottom + rowGap, height: composerHeights[index] || 40 };
   });
   const height = Math.max(rowGap + prefixHeight,
-    ...(mode === 'side' ? composers.map(composer => composer.top + composer.height) : []),
+    ...(inlineComposers ? composers.map(composer => composer.top + composer.height) : []),
     ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden).map(node => items.get(node.id).top + items.get(node.id).height))
     + Math.max(80, viewportHeight * .75);
   const paths = [];
@@ -246,6 +247,6 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
       d: `M ${inset + starts[previous.column] + rowGap} ${previous.top + previous.height} V ${position.top - rowGap / 2} H ${inset + starts[position.column] + rowGap} V ${position.top}` });
   }
 
-  return { items, composers, paths, inset, starts, width: totalWidth, height, lane: focused,
+  return { items, composers, inlineComposers, paths, inset, starts, width: totalWidth, height, lane: focused,
     hasHorizontal: mode !== 'focused' || width + edgeGap * 2 > viewportWidth };
 }

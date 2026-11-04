@@ -1,10 +1,12 @@
 export { createColumnInteraction } from '../src/column-interaction';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
+import Input from '../src/Input';
 import { render } from 'solid-js/web';
 import { MemoryRouter, Route, createMemoryHistory } from '@solidjs/router';
 import SystemPromptRoute from '../src/SystemPromptRoute';
 import App from '../src/App';
 import ChatRoute from '../src/ChatRoute';
+import { SessionsRoute } from '../src/Sessions';
 import SystemPrompts from '../src/SystemPrompts';
 import SystemPromptContent from '../src/SystemPromptContent';
 import ChatContent from '../src/ChatContent';
@@ -18,16 +20,23 @@ export function mountCreator(root: HTMLElement, snapshot: PromptDocumentSnapshot
   </MemoryRouter>, root);
 }
 
+export function mountInput(root: HTMLElement, props: JSX.InputHTMLAttributes<HTMLInputElement>) {
+  const [value, setValue] = createSignal('initial');
+  const dispose = render(() => <Input {...props} value={value()} />, root);
+  return Object.assign(dispose, { setValue });
+}
+
 export function mountScrollArea(root: HTMLElement) {
   return render(() => <ScrollArea vertical><pre>Wide content</pre></ScrollArea>, root);
 }
 
-export function mountApp(root: HTMLElement, path = '/') {
+export function mountApp(root: HTMLElement, path = '/chat') {
   const history = createMemoryHistory();
   history.set({ value: path, replace: true });
 
   const dispose = render(() => <MemoryRouter root={App} history={history}>
-    <Route path="/" component={ChatRoute} />
+    <Route path="/" component={SessionsRoute} />
+    <Route path="/chat" component={ChatRoute} />
     <Route path="/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/system-prompt-creator" component={SystemPromptCreator} />
     <Route path="/:sessionUrlId" component={ChatRoute} />

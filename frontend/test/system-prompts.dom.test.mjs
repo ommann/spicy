@@ -89,6 +89,31 @@ test('creator selects parts and saves a named prompt without sending a chat mess
   } finally { dispose(); }
 });
 
+test('shared Input forwards native attributes, refs and events and updates without replacing the element', async () => {
+  let referenced;
+  let typed;
+  const dispose = components.mountInput(root, { class: 'custom-input', required: true, maxlength: 32,
+    'aria-label': 'Example input', ref: element => { referenced = element; },
+    onInput: event => { typed = event.currentTarget.value; } });
+  try {
+    const input = root.querySelector('input');
+    assert.equal(input, referenced);
+    assert.equal(input.type, 'text');
+    assert.equal(input.required, true);
+    assert.equal(input.maxLength, 32);
+    assert.equal(input.getAttribute('aria-label'), 'Example input');
+    assert.ok(input.classList.contains('text-input'));
+    assert.ok(input.classList.contains('custom-input'));
+    input.value = 'typed';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(typed, 'typed');
+    dispose.setValue('updated');
+    await flush();
+    assert.equal(root.querySelector('input'), input);
+    assert.equal(input.value, 'updated');
+  } finally { dispose(); }
+});
+
 test('shared custom scroll areas use their own viewport for both scrollbar axes', () => {
   const dispose = components.mountScrollArea(root);
   try {
@@ -432,6 +457,105 @@ test('session URLs override tab selection, preserve deep links and restore on br
     assert.equal(dispose.history.get(), '/k7m3xqa9');
     assert.deepEqual(requests.filter(item => item.body).map(item => item.body.sessionUrlId), ['k7m3xqa9', 'v8n4zrc2', 'k7m3xqa9']);
     assert.ok(requests.filter(item => item.body).every(item => item.url === '/api/agents'));
+  } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
+});
+
+test('default Sessions view groups and filters real sessions and opens without branching', async () => {
+  window.sessionStorage.removeItem('pi-agent-view');
+  const requests = [];
+  const empty = { entries: [], leafId: null, state: null, live: [], dialogs: [], connected: false, running: false, cwd: '/work/spicy', token: 'test' };
+  const saved = [
+    { id: 'first-file', urlId: 'k7m3xqa9', cwd: '/work/spicy', name: 'Prompt history', modified: Date.now() },
+    { id: 'second-file', cwd: '/work/spicy', name: 'Branch tests', modified: Date.now() },
+    { id: 'third-file', cwd: '/work/extensions', name: 'Prompt loading', modified: Date.now() },
+  ];
+  globalThis.fetch = async (url, options) => {
+    const body = options?.body && JSON.parse(options.body);
+    requests.push({ url, body });
+    return { ok: true, json: async () => body?.openSessionId ? { ...empty, agentId: 'opened', connected: true, entries, leafId: 'user2', state: { sessionId: 'uuid', sessionUrlId: 'k7m3xqa9' } }
+      : url.startsWith('/api/sessions') ? saved : url === '/api/agents' ? [] : empty };
+  };
+  globalThis.EventSource = class { addEventListener() {} close() {} };
+  const dispose = components.mountApp(root, '/');
+  try {
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(dispose.history.get(), '/');
+    assert.equal(root.querySelectorAll('.startup-project').length, 2);
+    assert.equal(root.querySelectorAll('.startup-session').length, 3);
+    assert.equal(root.querySelectorAll('.startup-empty-chat .branch-draft').length, 2);
+    assert.ok(root.querySelector('.startup-empty-chat .editor textarea'));
+    assert.equal(requests.filter(request => request.body).length, 0, 'Listing does not start agents or send prompts');
+    const path = root.querySelector('[aria-label="Search project paths"]');
+    path.value = 'spicy';
+    path.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const name = root.querySelector('[aria-label="Search session names"]');
+    name.value = 'prompt';
+    name.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await flush();
+    assert.equal(root.querySelectorAll('.startup-project').length, 1);
+    assert.equal(root.querySelectorAll('.startup-session').length, 1);
+    root.querySelector('.startup-session').click();
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.ok(root.querySelector('.lilim-host'));
+    assert.deepEqual(requests.filter(request => request.body).map(request => request.body), [{ openSessionId: 'first-file' }]);
+  } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
+});
+
+test('Sessions composer keeps failed drafts, opens focused chat on success and opens the prompt editor', async () => {
+  window.sessionStorage.removeItem('pi-agent-view');
+  const requests = [];
+  let fail = true;
+  let created = 0;
+  const empty = { entries: [], leafId: null, state: null, live: [], dialogs: [], connected: false, running: false, cwd: '/work/spicy', token: 'test' };
+  globalThis.fetch = async (url, options) => {
+    const body = options?.body && JSON.parse(options.body);
+    requests.push({ url, body });
+    if (body?.type === 'prompt') return { ok: !fail, json: async () => fail ? { error: 'Send failed' } : { disposition: 'started' } };
+    if (body?.type === 'get_system_prompt_document') return { ok: true, json: async () => ({
+      document: { version: 1, parts: [{ id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Instructions' }] },
+      current: { content: 'Instructions', sections: {}, toolsAdded: [] },
+    }) };
+    if (url === '/api/agents' && body) {
+      created++;
+      return { ok: true, json: async () => ({ ...empty, agentId: `new-${created}`, connected: true,
+        state: { sessionId: `uuid-${created}`, sessionUrlId: created === 1 ? 'k7m3xqa9' : 'v8n4zrc2' } }) };
+    }
+    return { ok: true, json: async () => url.startsWith('/api/sessions') || url === '/api/agents' ? [] : empty };
+  };
+  globalThis.EventSource = class { addEventListener() {} close() {} };
+  const dispose = components.mountApp(root, '/');
+  try {
+    for (let i = 0; i < 6; i++) await flush();
+    let input = root.querySelector('.startup-empty-chat textarea');
+    input.value = 'Start this conversation';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(dispose.history.get(), '/');
+    assert.equal(input.value, 'Start this conversation');
+    assert.match(root.querySelector('[role="alert"]').textContent, /Send failed/);
+    fail = false;
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(created, 1, 'Retry uses the same new session');
+    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.equal(button(root, 'Focused').getAttribute('aria-pressed'), 'true');
+    button(root, 'Sessions').click();
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(dispose.history.get(), '/');
+    input = root.querySelector('.startup-empty-chat textarea');
+    assert.equal(input.value, '');
+    input.value = 'Keep while editing';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    root.querySelector('[aria-label="Edit system prompt"]').click();
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(dispose.history.get(), '/v8n4zrc2/system-prompt-creator');
+    assert.ok(root.querySelector('.system-prompt-creator'));
+    assert.equal(requests.filter(request => request.body?.type === 'prompt').length, 2);
+    button(root, 'Sessions').click();
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(root.querySelector('.startup-empty-chat textarea').value, 'Keep while editing');
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 

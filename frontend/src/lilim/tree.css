@@ -113,7 +113,7 @@
 }
 .canvas-scroll-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 14px;
+  grid-template-columns: minmax(0, 1fr) var(--chat-scrollbar-width);
   grid-template-rows: minmax(0, 1fr);
 }
 .canvas-scroll-shell > .transcript {
@@ -386,7 +386,7 @@
   grid-auto-rows: max-content;
   align-content: start;
   min-width: 0;
-  gap: var(--chat-block-gap, 1lh);
+  gap: var(--chat-row-gap);
 }
 .chat-part-body {
   max-height: 440px;

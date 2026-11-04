@@ -25,6 +25,11 @@ const agents = new AgentRegistry({
   extraExtension: process.env.UTW_EXTENSION && path.resolve(process.env.UTW_EXTENSION),
 });
 
+async function allSessions() {
+  return [...new Map([...await SessionManager.listAll(), ...await SessionManager.listAll(managed)]
+    .map(session => [path.resolve(session.path), session])).values()];
+}
+
 async function catalog(projectCwd = cwd) {
   const projects = [projectCwd];
   const directories = [...new Set(projects)].map(project => ({
@@ -83,7 +88,13 @@ const server = http.createServer(async (req, res) => {
         const agent = agents.get(url.searchParams.get('agentId') ?? undefined);
         if (url.pathname === '/api/info') return json(res, { token, ...agent.payload() });
         if (url.pathname === '/api/sessions') {
-          const available = await catalog(agent.cwd);
+          const available = url.searchParams.get('scope') === 'all'
+            ? (await allSessions()).map(session => ({
+              id: Buffer.from(session.path).toString('base64url'), urlId: session.urlId,
+              cwd: session.cwd, name: session.name || session.firstMessage || 'Empty chat',
+              modified: session.modified.getTime(),
+            })).sort((a, b) => b.modified - a.modified)
+            : await catalog(agent.cwd);
           return json(res, available.filter(entry => url.searchParams.get('scope') !== 'cwd' || entry.cwd === agent.cwd).map(({ file: _file, ...entry }) => entry));
         }
         if (url.pathname === '/api/session') {
@@ -104,12 +115,18 @@ const server = http.createServer(async (req, res) => {
       if (!authorized(req)) return json(res, { error: 'Invalid token' }, 403);
       const { agentId, ...command } = await body(req);
       if (url.pathname === '/api/agents') {
+        if (command.openSessionId !== undefined) {
+          const session = (await allSessions()).find(session => Buffer.from(session.path).toString('base64url') === command.openSessionId);
+          if (!session) return json(res, { error: 'Session not found' }, 404);
+          const opened = await agents.openSession({ file: session.path, cwd: session.cwd });
+          return json(res, opened.payload());
+        }
         if (command.sessionUrlId !== undefined) {
           if (typeof command.sessionUrlId !== 'string' || !/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/.test(command.sessionUrlId)) {
             return json(res, { error: 'Invalid session URL ID' }, 400);
           }
           const active = [...agents.agents.values()].filter(agent => agent.snapshot.state?.sessionUrlId === command.sessionUrlId);
-          const sessions = [...await SessionManager.listAll(), ...await SessionManager.listAll(managed)];
+          const sessions = await allSessions();
           const matches = [...new Map(sessions.filter(session => session.urlId === command.sessionUrlId).map(session => [path.resolve(session.path), session])).values()];
           const files = new Set([...matches.map(session => path.resolve(session.path)), ...active.map(agent => path.resolve(agent.snapshot.state.sessionFile))]);
           if (files.size > 1) return json(res, { error: 'Session URL ID is ambiguous' }, 409);

@@ -3,6 +3,13 @@
   color-scheme: dark;
   --background: #181a1a;
   --app-toolbar-height: 2lh;
+  --chat-row-gap: 1lh;
+  --chat-column-gap: 6ch;
+  --chat-edge-gap: 3ch;
+  --chat-placeholder-height: 3lh;
+  --chat-scrollbar-width: 14px;
+  --input-padding-block: calc(0.5lh - 1px);
+  --input-padding-inline: calc(1ch - 1px);
   --utw-background: #191a1b;
   --utw-text: #ccc;
   --utw-tool-background: #254131;

@@ -1,0 +1,100 @@
+.startup-preview {
+  font: inherit;
+}
+
+.startup-session-scroll {
+  margin-top: var(--app-toolbar-height);
+  height: calc(100dvh - var(--app-toolbar-height));
+  padding-right: var(--chat-scrollbar-width);
+}
+
+.startup-session-scroll > .scroll-area-viewport {
+  height: 100%;
+}
+
+.startup-sessions {
+  padding: var(--chat-row-gap) var(--chat-edge-gap);
+}
+
+.startup-empty-chat {
+  display: grid;
+  gap: var(--chat-row-gap);
+  width: 100%;
+  margin-bottom: 2lh;
+}
+
+.startup-empty-chat .editor {
+  margin: 0;
+}
+
+.startup-searches {
+  display: flex;
+  gap: 2ch;
+  margin-bottom: 1lh;
+}
+
+.startup-search {
+  width: 38ch;
+  max-width: 100%;
+}
+
+.startup-project + .startup-project {
+  margin-top: 2lh;
+}
+
+.startup-project-path {
+  display: flex;
+  align-items: center;
+  gap: 2ch;
+  margin: 0 0 1lh;
+  color: var(--text-secondary);
+  font: inherit;
+}
+
+.startup-project-path::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+.startup-session-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 32ch), 1fr));
+  gap: 1lh 2ch;
+}
+
+.startup-session {
+  display: grid;
+  grid-template-rows: 2lh 1lh;
+  gap: 1lh;
+  padding: calc(1lh - 1px) calc(2ch - 1px);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-name {
+  overflow: hidden;
+}
+
+.session-activity {
+  color: var(--muted);
+}
+
+.session-running {
+  color: var(--status-running);
+}
+
+.startup-session:hover,
+.startup-session:focus-visible {
+  border-color: var(--focus-border);
+}
+
+.startup-session:focus-visible {
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
+}

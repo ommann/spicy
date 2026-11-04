@@ -6,6 +6,7 @@ import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
 import TreeDisclosure from './TreeDisclosure';
 import Checkbox from './Checkbox';
+import Input from './Input';
 import Dialog from './Dialog';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import SelectWithDialog from './SelectWithDialog';
@@ -192,7 +193,7 @@ export default function SystemPromptCreator() {
     <Navigation options={<button onClick={() => optionsDialog.showModal()}>Options</button>} />
     <Dialog ref={saveDialog} title="Save as" closeLabel="Cancel">
       <form onSubmit={save}>
-        <label>Name<input autofocus required value={promptName()} onInput={event => setPromptName(event.currentTarget.value)} /></label>
+        <label>Name<Input autofocus required value={promptName()} onInput={event => setPromptName(event.currentTarget.value)} /></label>
         <Show when={saveError()}><div role="alert">{saveError()}</div></Show>
         <button type="submit">Save</button>
       </form>

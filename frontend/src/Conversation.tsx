@@ -89,7 +89,8 @@ export default function Conversation(props: Props) {
   onMount(() => {
     const measureSpacing = () => {
       const { width, height } = spacingProbe.getBoundingClientRect();
-      if (width && height) setSpacing({ row: height, column: width, edge: width / 2 });
+      const edge = parseFloat(getComputedStyle(spacingProbe).paddingLeft);
+      if (width && height) setSpacing({ row: height, column: width, edge });
     };
     const observer = new ResizeObserver(measureSpacing);
     observer.observe(spacingProbe);
@@ -385,7 +386,7 @@ export default function Conversation(props: Props) {
     <main ref={viewport} id="trace-viewport" class="transcript" aria-label="Conversation tree — scroll vertically through time, horizontally between branches"
       classList={{ 'pan-ready': interaction.space(), panning: interaction.dragging() }}
       {...interaction.handlers}>
-      <div ref={stage} class="tree-stage" style={{ '--chat-block-gap': '1lh', width: `${layout().width}px`, height: `${layout().height}px`,
+      <div ref={stage} class="tree-stage" style={{ width: `${layout().width}px`, height: `${layout().height}px`,
         'grid-template-columns': tracks().columns, 'grid-template-rows': tracks().rows }}>
         <svg class="tree-connections" aria-hidden="true" width={layout().width} height={layout().height}>
           <For each={layout().paths}>{path => <path d={path.d} classList={{ 'fork-connection': path.fork }} />}</For>
@@ -434,7 +435,7 @@ export default function Conversation(props: Props) {
       <button ref={jumpLatest} id="jump" hidden={jumps().latestHidden} style={{ left: `${jumps().latest}px` }}
         onClick={() => { if (props.graph.activeLeaf) focus(props.graph.activeLeaf.id, true); }}>Jump to last message</button>
     </div></div>
-    <div ref={composerRow} class="composer-row" style={{ height: mode() === 'side' ? '0px' : `${composerHeights[lanes()[focused()].key] || 40}px` }} />
+    <div ref={composerRow} class="composer-row" style={{ height: layout().inlineComposers ? '0px' : `${composerHeights[lanes()[focused()].key] || 40}px` }} />
   </div>;
 
   return <div class="lilim-host" classList={{ 'route-hidden': !props.active, 'tree-mode': true, 'has-horizontal-scrollbar': layout().hasHorizontal }}
@@ -452,7 +453,7 @@ export default function Conversation(props: Props) {
       let input!: HTMLTextAreaElement;
       const index = () => lanes().findIndex(lane => lane.key === key);
       const lane = () => lanes()[index()];
-      const inline = () => mode() === 'side';
+      const inline = () => layout().inlineComposers;
       onMount(() => { observe(key, element, 'composer'); inputElements.set(key, input); });
       onCleanup(() => { unobserve(element); inputElements.delete(key); });
 
