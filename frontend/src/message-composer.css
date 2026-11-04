@@ -1,0 +1,39 @@
+.message-composer {
+  position: relative;
+  margin: 0 1ch;
+}
+.composer-row > .message-composer {
+  position: absolute;
+  top: 0;
+  margin-right: 0;
+}
+.composer-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1ch 1lh;
+}
+.composer-working {
+  --working-color: var(--status-busy);
+  color: var(--working-color);
+}
+.composer-working[data-status='ready'] {
+  --working-color: var(--status-success);
+}
+.composer-working svg {
+  width: 1ch;
+  height: 1ch;
+  margin-right: 1ch;
+  vertical-align: .075em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  animation: working-pulse 1.6s ease-in-out infinite;
+}
+@keyframes working-pulse {
+  0%, 100% { color: color-mix(in srgb, var(--working-color) 45%, var(--background)); }
+  50% { color: var(--working-color); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer-working svg { animation: none; }
+}

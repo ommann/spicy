@@ -1,5 +1,7 @@
 import { Show, createEffect, createSignal, on, onCleanup, onMount, type JSX } from 'solid-js';
 import ScrollableTextarea from './ScrollableTextarea';
+import type { AgentHealthStatus } from './AgentHealth';
+import './message-composer.css';
 
 interface Props {
   value: string;
@@ -10,6 +12,7 @@ interface Props {
   label?: string;
   leafId?: string;
   running?: boolean;
+  health?: AgentHealthStatus;
   busy?: boolean;
   class?: string;
   hidden?: boolean;
@@ -51,9 +54,16 @@ export default function MessageComposer(props: Props) {
     });
   });
 
-  return <div class={`editor${props.class ? ` ${props.class}` : ''}`}
-    data-leaf-id={props.leafId} hidden={props.hidden} style={props.style}
+  return <div class={`message-composer${props.class ? ` ${props.class}` : ''}`}
+    hidden={props.hidden} style={props.style}
     ref={element => { editor = element; props.ref?.(element); }}>
+    <Show when={props.running}><div class="composer-status">
+      <span class="composer-working" role="status" data-status={props.health || 'ready'}>
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 0v12M1 3l10 6M1 9l10-6" /></svg>Working
+      </span>
+      <button class="composer-stop text-action" type="button" disabled={props.busy} onClick={props.onAbort}>Stop</button>
+    </div></Show>
+    <div class="editor" data-leaf-id={props.leafId} style={{ position: 'relative', top: 'auto', margin: '0' }}>
     <ScrollableTextarea ref={element => { input = element; props.inputRef?.(element); }}
       aria-label={props.label || 'Message draft (not sent)'} rows="1" wrap="soft" spellcheck={false}
       value={props.value} style={{ height: `${size().height}px`, 'overflow-y': size().scrollable ? 'auto' : 'hidden' }}
@@ -62,7 +72,7 @@ export default function MessageComposer(props: Props) {
         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); props.onSubmit?.(); }
         if (event.key === 'Escape') { event.preventDefault(); props.onAbort?.(); }
       }} />
-    <Show when={props.running}><button class="composer-stop" type="button" disabled={props.busy} onClick={props.onAbort}>Stop this agent</button></Show>
     <div ref={measure} class="composer-measure" aria-hidden="true">{props.value + '\u200b'}</div>
+    </div>
   </div>;
 }

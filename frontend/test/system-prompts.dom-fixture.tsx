@@ -1,6 +1,7 @@
 export { createColumnInteraction } from '../src/column-interaction';
 import { createSignal, type JSX } from 'solid-js';
 import Input from '../src/Input';
+import MessageComposer from '../src/MessageComposer';
 import Login from '../src/Login';
 import { render } from 'solid-js/web';
 import { MemoryRouter, Route, createMemoryHistory } from '@solidjs/router';
@@ -29,6 +30,14 @@ export function mountInput(root: HTMLElement, props: JSX.InputHTMLAttributes<HTM
   const [value, setValue] = createSignal('initial');
   const dispose = render(() => <Input {...props} value={value()} />, root);
   return Object.assign(dispose, { setValue });
+}
+
+export function mountComposer(root: HTMLElement) {
+  const [running, setRunning] = createSignal(false);
+  const [health, setHealth] = createSignal<'ready' | 'socket-lost'>('ready');
+  const [value, setValue] = createSignal('');
+  const dispose = render(() => <MessageComposer value={value()} onChange={setValue} running={running()} health={health()} />, root);
+  return Object.assign(dispose, { setRunning, setHealth });
 }
 
 export function mountScrollArea(root: HTMLElement) {

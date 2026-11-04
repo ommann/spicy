@@ -41,8 +41,8 @@ export function projectChatParts(entries) {
     if (message.role === 'assistant' && ['stop', 'toolUse'].includes(message.stopReason) && !parts.get(entry.id)?.length) {
       add(entry, { kind: 'message', text: '<EOS>', eos: true });
     }
-    if (message.role === 'assistant' && message.stopReason === 'error') add(entry, {
-      kind: 'error', text: message.errorMessage || 'The reply failed.',
+    if (message.role === 'assistant' && ['error', 'aborted'].includes(message.stopReason)) add(entry, {
+      kind: 'error', text: message.stopReason === 'aborted' ? 'Operation aborted' : message.errorMessage || 'The reply failed.',
     });
     if (message.role === 'bashExecution') add(entry, {
       kind: 'tool', call: { name: 'bash', arguments: { command: message.command } },

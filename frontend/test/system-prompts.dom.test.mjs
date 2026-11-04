@@ -50,6 +50,31 @@ const root = window.document.getElementById('root');
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 const button = (parent, text) => [...parent.querySelectorAll('button')].find(element => element.textContent.trim() === text);
 
+test('working status and Stop stay outside the input without replacing it or losing its draft', async () => {
+  const dispose = components.mountComposer(root);
+  try {
+    const input = root.querySelector('textarea');
+    input.value = 'Keep this draft';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    dispose.setRunning(true);
+    await flush();
+    const status = root.querySelector('.composer-status');
+    assert.equal(status.nextElementSibling, root.querySelector('.editor'));
+    assert.equal(status.querySelector('[role="status"]').textContent.trim(), 'Working');
+    assert.ok(status.querySelector('.composer-stop'));
+    assert.equal(root.querySelector('.editor .composer-working, .editor .composer-stop'), null);
+    assert.equal(root.querySelector('.composer-working').dataset.status, 'ready');
+    dispose.setHealth('socket-lost');
+    await flush();
+    assert.equal(root.querySelector('.composer-working').dataset.status, 'socket-lost');
+    dispose.setRunning(false);
+    await flush();
+    assert.equal(root.querySelector('.composer-status'), null);
+    assert.equal(root.querySelector('textarea'), input);
+    assert.equal(input.value, 'Keep this draft');
+  } finally { dispose(); }
+});
+
 test('creator selects parts and saves a named prompt without sending a chat message', async () => {
   const selections = [];
   const dispose = components.mountCreator(root, {

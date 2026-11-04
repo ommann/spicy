@@ -468,7 +468,7 @@ export default function Conversation(props: Props) {
             left: `${inline() ? layout().composers[index()]?.left || 0 : layout().inset - scroll().left}px`,
             top: inline() ? `${layout().composers[index()]?.top || 0}px` : '0px' }}
           onFocus={() => selectLane(index(), false)} onSubmit={() => submit(key, lane().leafId)}
-          running={props.running(lane()?.leafId)} busy={props.busy(lane()?.leafId)}
+          running={props.running(lane()?.leafId)} health={props.health(lane()?.leafId)} busy={props.busy(lane()?.leafId)}
           onAbort={() => { if (props.running(lane()?.leafId)) props.onAbort(lane().leafId); }} />
       </Portal>;
     }}</For>
