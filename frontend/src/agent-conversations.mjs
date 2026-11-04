@@ -4,6 +4,7 @@ export function agentStreamEntries(agent) {
   const saved = new Set(agent.entries.filter(entry => Number.isFinite(entry.message?.timestamp))
     .map(entry => `${entry.message.role}:${entry.message.timestamp}`));
   return (agent.live || []).flatMap((message, index) => {
+    if (agent.streamUserOnly && message.role !== 'user') return [];
     if (Number.isFinite(message.timestamp) && saved.has(`${message.role}:${message.timestamp}`)) return [];
     const entry = { type: 'message', id: `stream-${agent.agentId}-${index}`, parentId, message };
     parentId = entry.id;
@@ -29,7 +30,7 @@ export function mergeAgentEntries(agents, origins = {}) {
 
 export function agentForLeaf(graph, agents, leafId, preferredId) {
   const matches = agents.filter(agent => {
-    const head = agentStreamEntries(agent).at(-1)?.id ?? agent.leafId;
+    const head = agentStreamEntries(agent).findLast(entry => graph.nodes.has(entry.id))?.id ?? agent.leafId;
     return graph.ancestors(head).find(id => graph.nodes.has(id)) === leafId;
   });
   return matches.find(agent => agent.agentId === preferredId) ?? matches[0];

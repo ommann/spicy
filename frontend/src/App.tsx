@@ -36,6 +36,8 @@ import ImagePreview, { type PreviewImage } from './ImagePreview';
 import Handoffs from './Handoffs';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import CodeLinewrapOption from './CodeLinewrapOption';
+import StreamingContentOption from './StreamingContentOption';
+import { streamingContent } from './streaming-content';
 import { codeLinewrap } from './code-linewrap';
 import { NavigationLinksContext } from './Navigation';
 import { SAVED_SYSTEM_PROMPT_ENTRY, type SystemPromptBuilder, systemPromptDocumentFromState, systemPromptOutputMatches, systemPromptBuilderForOutput } from '../../packages/coding-agent/src/core/system-prompt-document';
@@ -123,7 +125,8 @@ export default function App(props: ParentProps) {
   const actualEntries = createMemo<Wire[]>(() => {
     if (!live()) return [];
 
-    return [{ type: 'session', cwd: sessionCwd() }, ...mergeAgentEntries(visibleAgents(), laneOrigins())];
+    const agents = visibleAgents().map(agent => ({ ...agent, streamUserOnly: !streamingContent() }));
+    return [{ type: 'session', cwd: sessionCwd() }, ...mergeAgentEntries(agents, laneOrigins())];
   });
 
   const viewEntries = createMemo<Wire[]>(() => {
@@ -655,6 +658,7 @@ export default function App(props: ParentProps) {
           </label>
         }</For>
         <CodeLinewrapOption />
+        <StreamingContentOption />
       </Dialog>
       <Dialog
         ref={chatDialog}
