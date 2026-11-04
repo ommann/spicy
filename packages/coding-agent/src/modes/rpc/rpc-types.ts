@@ -112,6 +112,7 @@ export interface RpcSessionState {
 	followUpMode: "all" | "one-at-a-time";
 	sessionFile?: string;
 	sessionId: string;
+	sessionUrlId?: string;
 	sessionName?: string;
 	autoCompactionEnabled: boolean;
 	messageCount: number;

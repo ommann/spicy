@@ -11,5 +11,8 @@ render(() => (
     <Route path="/" component={ChatRoute} />
     <Route path="/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/system-prompt-creator" component={SystemPromptCreator} />
+    <Route path="/:sessionUrlId" component={ChatRoute} />
+    <Route path="/:sessionUrlId/system-prompts/:id?" component={SystemPromptRoute} />
+    <Route path="/:sessionUrlId/system-prompt-creator" component={SystemPromptCreator} />
   </Router>
 ), document.getElementById('root')!);

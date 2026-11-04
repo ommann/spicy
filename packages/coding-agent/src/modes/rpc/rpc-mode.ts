@@ -398,6 +398,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 					followUpMode: session.followUpMode,
 					sessionFile: session.sessionFile,
 					sessionId: session.sessionId,
+					sessionUrlId: session.sessionManager.getHeader()?.urlId,
 					sessionName: session.sessionName,
 					autoCompactionEnabled: session.autoCompactionEnabled,
 					messageCount: session.messages.length,

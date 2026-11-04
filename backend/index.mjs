@@ -41,7 +41,7 @@ async function catalog(projectCwd = cwd) {
       const title = (session.name || session.firstMessage || 'Empty chat').replace(/\s+/g, ' ').trim();
       found.push({
         id: Buffer.from(session.path).toString('base64url'), file: session.path,
-        cwd: sessionCwd, project, label: title, name: title,
+        cwd: sessionCwd, project, label: title, name: title, urlId: session.urlId,
         messageCount: session.messageCount, modified: session.modified.getTime(),
         managed: location.managed,
       });
@@ -104,6 +104,21 @@ const server = http.createServer(async (req, res) => {
       if (!authorized(req)) return json(res, { error: 'Invalid token' }, 403);
       const { agentId, ...command } = await body(req);
       if (url.pathname === '/api/agents') {
+        if (command.sessionUrlId !== undefined) {
+          if (typeof command.sessionUrlId !== 'string' || !/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/.test(command.sessionUrlId)) {
+            return json(res, { error: 'Invalid session URL ID' }, 400);
+          }
+          const active = [...agents.agents.values()].filter(agent => agent.snapshot.state?.sessionUrlId === command.sessionUrlId);
+          const sessions = [...await SessionManager.listAll(), ...await SessionManager.listAll(managed)];
+          const matches = [...new Map(sessions.filter(session => session.urlId === command.sessionUrlId).map(session => [path.resolve(session.path), session])).values()];
+          const files = new Set([...matches.map(session => path.resolve(session.path)), ...active.map(agent => path.resolve(agent.snapshot.state.sessionFile))]);
+          if (files.size > 1) return json(res, { error: 'Session URL ID is ambiguous' }, 409);
+          if (active.length) return json(res, active[0].payload());
+          if (!matches.length) return json(res, { error: 'Session not found' }, 404);
+          const session = matches[0];
+          const created = await agents.openSession({ file: session.path, cwd: session.cwd });
+          return json(res, created.payload(), 201);
+        }
         const source = command.sourceAgentId !== undefined ? agents.get(command.sourceAgentId) : null;
         const projectCwd = path.resolve(command.cwd ?? source?.cwd ?? cwd);
         const selected = command.sessionId ? (await catalog(projectCwd)).find(entry => entry.id === command.sessionId) : null;

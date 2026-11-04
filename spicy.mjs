@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +18,13 @@ if (args.includes('--tui')) {
     ? join(homedir(), '.pi', 'agent')
     : process.env.PI_CODING_AGENT_DIR || fileURLToPath(new URL('./.pi-user/', import.meta.url));
   await mkdir(agentDir, { recursive: true });
+  const pidFile = new URL('./.pid', import.meta.url);
+  writeFileSync(pidFile, `${process.pid}\n`);
+  process.on('exit', () => {
+    try {
+      if (readFileSync(pidFile, 'utf8').trim() === String(process.pid)) unlinkSync(pidFile);
+    } catch (error) { if (error.code !== 'ENOENT') console.error(error.message); }
+  });
   const child = spawn(process.execPath, [entry, ...args.filter(arg => arg !== '--global-user-dir')], {
     stdio: 'inherit',
     env: { ...process.env, PI_CWD: process.env.PI_CWD || process.cwd(), PI_CODING_AGENT_DIR: agentDir },

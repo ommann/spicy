@@ -1,5 +1,6 @@
 import ScrollableTextarea from './ScrollableTextarea';
 import { ChatRouteContext } from './ChatRoute';
+import { sessionPath, sessionUrlIdFromPath, sessionViewPath } from './session-urls';
 import {
   For,
   Show,
@@ -7,6 +8,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   untrack,
@@ -63,7 +65,10 @@ interface DraftBranch {
 export default function App(props: ParentProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const openSystemPrompt = (id: string) => navigate(`/system-prompts/${encodeURIComponent(id)}`);
+  const routeSessionId = createMemo(() => sessionUrlIdFromPath(location.pathname));
+  const viewPath = () => sessionViewPath(location.pathname);
+  const navigateView = (path: string) => navigate(sessionPath(path, snapshot().state?.sessionUrlId || routeSessionId()));
+  const openSystemPrompt = (id: string) => navigateView(`/system-prompts/${encodeURIComponent(id)}`);
 
   let saved: { agents?: string[]; selected?: string } = {};
   try { saved = JSON.parse(window.sessionStorage.getItem('pi-agent-view') || '{}'); } catch { /* Start with an empty selection. */ }
@@ -76,6 +81,7 @@ export default function App(props: ParentProps) {
   const [sending, setSending] = createSignal<string[]>([]);
   const visibleAgents = createMemo(() => visibleAgentIds().map(id => agentSnapshots()[id]).filter((value): value is Snapshot => !!value));
   const snapshot = createMemo(() => agentSnapshots()[selectedAgentId()] ?? { ...empty, cwd: bridgeCwd() });
+  const selectedSessionUrlId = createMemo(() => snapshot().state?.sessionUrlId);
   const sessionEntries = createMemo(() => mergeAgentEntries(visibleAgents().map(agent => ({ ...agent, live: [] }))));
   const sessionCwd = createMemo(() => snapshot().cwd);
 
@@ -463,6 +469,21 @@ export default function App(props: ParentProps) {
     document.title = `Pi — ${live() ? sessionCwd().split('/').filter(Boolean).at(-1) || 'chat' : 'chat'}`;
   });
 
+  const [sessionRoutingReady, setSessionRoutingReady] = createSignal(false);
+  createEffect(on([sessionRoutingReady, routeSessionId], ([ready, urlId]) => {
+    if (!ready || !urlId || snapshot().state?.sessionUrlId === urlId) return;
+    let cancelled = false;
+    onCleanup(() => { cancelled = true; });
+    act(async () => {
+      const value = await post('agents', { sessionUrlId: urlId }) as Snapshot;
+      if (!cancelled) showAgent(value, true);
+    });
+  }));
+  createEffect(on([sessionRoutingReady, selectedSessionUrlId], ([ready, urlId]) => {
+    if (!ready || !urlId || routeSessionId() === urlId) return;
+    navigate(sessionPath(location.pathname, urlId) + location.search, { replace: !routeSessionId() });
+  }));
+
   onMount(() => {
     act(async () => {
       const response = await fetch('/api/info', { signal: appLifecycle.signal });
@@ -474,6 +495,12 @@ export default function App(props: ParentProps) {
       if (!listed.ok) throw new Error('Could not list agents');
       const agents: Wire[] = await listed.json();
       setAvailableAgents(agents);
+      // A copied link takes precedence over the tab's previous agent selection.
+      if (routeSessionId()) {
+        setVisibleAgentIds([]);
+        setSelectedAgentId('');
+        return;
+      }
       const ids = visibleAgentIds().filter(id => agents.some(agent => agent.agentId === id));
       setVisibleAgentIds(ids);
       if (!ids.includes(selectedAgentId())) setSelectedAgentId(ids[0] || '');
@@ -484,7 +511,7 @@ export default function App(props: ParentProps) {
         watchAgent(id);
       }));
       if (ids.length) setLive(true);
-    }).finally(markBridgeReady);
+    }).finally(() => { markBridgeReady(); setSessionRoutingReady(true); });
   });
   onCleanup(() => {
     appLifecycle.abort();
@@ -501,9 +528,9 @@ export default function App(props: ParentProps) {
         <button class="tree-title" onClick={openChat}>{sessionCwd()}</button>
         <button onClick={openResume}>Sessions</button>
         <div class="view-switch" role="group" aria-label="Views">
-          <button class="state-toggle" aria-pressed={location.pathname === '/'} onClick={() => navigate('/')}>Chat</button>
-          <button class="state-toggle" aria-pressed={location.pathname.startsWith('/system-prompts')} onClick={() => navigate('/system-prompts')}>System prompts</button>
-          <button class="state-toggle" aria-pressed={location.pathname === '/system-prompt-creator'} onClick={() => navigate('/system-prompt-creator')}>Editor</button>
+          <button class="state-toggle" aria-pressed={viewPath() === '/'} onClick={() => navigateView('/')}>Chat</button>
+          <button class="state-toggle" aria-pressed={viewPath().startsWith('/system-prompts')} onClick={() => navigateView('/system-prompts')}>System prompts</button>
+          <button class="state-toggle" aria-pressed={viewPath() === '/system-prompt-creator'} onClick={() => navigateView('/system-prompt-creator')}>Editor</button>
         </div>
       </>}>
       <SystemPromptCreatorContext.Provider value={{

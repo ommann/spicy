@@ -19,7 +19,7 @@ process.stdin.on('data', chunk => {
   while ((end = buffer.indexOf('\n')) >= 0) {
     const command = JSON.parse(buffer.slice(0, end)); buffer = buffer.slice(end + 1);
     const response = data => send({ type: 'response', id: command.id, command: command.type, success: true, data });
-    if (command.type === 'get_state') response({ sessionId: session.getSessionId(), sessionFile: session.getSessionFile(), isStreaming: running, model: { provider: 'test', id: 'fake' } });
+    if (command.type === 'get_state') response({ sessionId: session.getSessionId(), sessionUrlId: session.getHeader()?.urlId, sessionFile: session.getSessionFile(), isStreaming: running, model: { provider: 'test', id: 'fake' } });
     else if (command.type === 'get_entries') response({ entries: session.getEntries(), leafId: session.getLeafId() });
     else if (command.type === 'get_available_models') response({ models: [{ provider: 'test', id: 'fake', name: 'Fake model' }] });
     else if (command.type === 'get_available_thinking_levels') response({ levels: ['off'] });

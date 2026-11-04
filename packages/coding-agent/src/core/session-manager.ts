@@ -19,9 +19,13 @@ import {
 	mkdirSync,
 	openSync,
 	readdirSync,
+	readFileSync,
 	readSync,
+	renameSync,
 	type Stats,
 	statSync,
+	unlinkSync,
+	utimesSync,
 	writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
@@ -37,11 +41,14 @@ import {
 	createCompactionSummaryMessage,
 	createCustomMessage,
 } from "./messages.ts";
+import { createSessionUrlId } from "./session-url-id.ts";
 import { SAVED_SYSTEM_PROMPT_ENTRY } from "./system-prompt-document.ts";
 export const CURRENT_SESSION_VERSION = 3;
 
 export interface SessionHeader {
 	type: "session";
+	/** Permanent short URL identity, independent of the session UUID. */
+	urlId?: string;
 	version?: number; // v1 sessions don't have this
 	id: string;
 	timestamp: string;
@@ -229,6 +236,7 @@ export interface SessionContext {
 export interface SessionInfo {
 	path: string;
 	id: string;
+	urlId?: string;
 	/** Working directory where the session was started. Empty string for old sessions. */
 	cwd: string;
 	/** User-defined display name from session_info entries. */
@@ -736,6 +744,31 @@ function readSessionHeaderForDiscovery(filePath: string): SessionHeader | null {
 	}
 }
 
+const reservedSessionUrlIds = new Set<string>();
+
+function allocateSessionUrlId(sessionDir?: string): string {
+	if (sessionDir) {
+		const directories = new Set([sessionDir]);
+		const root = getSessionsDir();
+		if (existsSync(root)) {
+			for (const entry of readdirSync(root, { withFileTypes: true })) {
+				if (entry.isDirectory()) directories.add(join(root, entry.name));
+			}
+		}
+		for (const directory of directories) {
+			if (!existsSync(directory)) continue;
+			for (const file of readdirSync(directory)) {
+				if (!file.endsWith(".jsonl")) continue;
+				const header = readSessionHeaderForDiscovery(join(directory, file));
+				if (header?.urlId) reservedSessionUrlIds.add(header.urlId);
+			}
+		}
+	}
+	const id = createSessionUrlId(reservedSessionUrlIds);
+	reservedSessionUrlIds.add(id);
+	return id;
+}
+
 function getSessionHeaderCwd(header: SessionHeader): string | undefined {
 	const cwd = (header as { cwd?: unknown }).cwd;
 	return typeof cwd === "string" ? cwd : undefined;
@@ -866,6 +899,7 @@ async function buildSessionInfo(
 		return {
 			path: filePath,
 			id: header.id,
+			urlId: header.urlId,
 			cwd,
 			name,
 			parentSessionPath,
@@ -1064,6 +1098,7 @@ export class SessionManager {
 			type: "session",
 			version: CURRENT_SESSION_VERSION,
 			id: this.sessionId,
+			urlId: allocateSessionUrlId(this.persist ? this.sessionDir : undefined),
 			timestamp,
 			cwd: this.cwd,
 			parentSession: options?.parentSession,
@@ -1089,9 +1124,33 @@ export class SessionManager {
 			this.fileEntries = entries;
 			this.sessionId = header.id;
 
-			if (migrateToCurrentVersion(this.fileEntries)) {
-				this._rewriteFile();
+			const migrated = migrateToCurrentVersion(this.fileEntries);
+			if (!header.urlId) {
+				header.urlId = allocateSessionUrlId(this.persist ? this.sessionDir : undefined);
+				if (this.persist && this.sessionFile && !migrated) {
+					// Preserve transcript bytes and modification time when adding metadata.
+					const original = readFileSync(this.sessionFile);
+					const newline = original.indexOf(10);
+					const stats = statSync(this.sessionFile);
+					const temporary = `${this.sessionFile}.${randomUUID()}.tmp`;
+					try {
+						writeFileSync(
+							temporary,
+							Buffer.concat([
+								Buffer.from(`${JSON.stringify(header)}\n`),
+								newline < 0 ? Buffer.alloc(0) : original.subarray(newline + 1),
+							]),
+							{ flag: "wx", mode: stats.mode & 0o777 },
+						);
+						utimesSync(temporary, stats.atime, stats.mtime);
+						renameSync(temporary, this.sessionFile);
+					} finally {
+						if (existsSync(temporary)) unlinkSync(temporary);
+					}
+				}
 			}
+			reservedSessionUrlIds.add(header.urlId);
+			if (migrated) this._rewriteFile();
 		} else {
 			this.newSession(options);
 			this.fileEntries = this.fileEntries.concat(entries);
@@ -1678,6 +1737,7 @@ export class SessionManager {
 			type: "session",
 			version: CURRENT_SESSION_VERSION,
 			id: newSessionId,
+			urlId: allocateSessionUrlId(this.persist ? this.sessionDir : undefined),
 			timestamp,
 			cwd: this.cwd,
 			parentSession: this.persist ? previousSessionFile : undefined,
@@ -1851,6 +1911,7 @@ export class SessionManager {
 			type: "session",
 			version: CURRENT_SESSION_VERSION,
 			id: newSessionId,
+			urlId: allocateSessionUrlId(dir),
 			timestamp,
 			cwd: resolvedTargetCwd,
 			parentSession: resolvedSourcePath,

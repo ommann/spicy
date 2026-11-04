@@ -65,6 +65,7 @@ export class AgentRegistry {
   // Reserve session files before awaiting startup/switching: never give two
   // processes independent in-memory indexes over the same writable JSONL.
   owners = new Map();
+  opening = new Map();
 
   constructor({ cwd, managed, cli, resolver, extension, fixture, extraExtension }) {
     Object.assign(this, { cwd, managed, cli, resolver, extension, fixture, extraExtension });
@@ -123,6 +124,26 @@ export class AgentRegistry {
       if (agent.rpc.child) this.claim(agent, previousFile);
       throw error;
     } finally { agent.mutating = false; }
+  }
+
+  async openSession(selected) {
+    const file = path.resolve(selected.file);
+    const pending = this.opening.get(file);
+    if (pending) return pending;
+    const owner = this.owners.get(file);
+    if (owner) return this.get(owner);
+    const agent = new AgentConnection(randomUUID(), selected.cwd);
+    agent.rpc.on('exit', () => this.release(agent));
+    this.agents.set(agent.id, agent);
+    const opening = this.start(agent, selected).then(() => agent).catch(async error => {
+      await agent.rpc.stop();
+      this.release(agent);
+      this.agents.delete(agent.id);
+      throw error;
+    });
+    this.opening.set(file, opening);
+    try { return await opening; }
+    finally { this.opening.delete(file); }
   }
 
   async create(options, selected) {

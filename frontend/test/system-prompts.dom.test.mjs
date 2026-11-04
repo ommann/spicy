@@ -306,7 +306,7 @@ test('chat references open the Solid view without creating a model request or mo
     content: [{ type: 'text', text: 'Hello' }, { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
   } } : entry);
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
-  const snapshot = { agentId: 'default', entries: imageEntries, leafId: 'user2', state: { sessionId: 'test' }, live: [], dialogs: [],
+  const snapshot = { agentId: 'default', entries: imageEntries, leafId: 'user2', state: { sessionId: 'test', sessionUrlId: 'k7m3xqa9' }, live: [], dialogs: [],
     connected: true, running: false, cwd: '/test/project', token: 'test' };
   globalThis.fetch = async (url, options) => {
     requests.push({ url, options });
@@ -381,13 +381,13 @@ test('chat references open the Solid view without creating a model request or mo
     await flush();
     const dialog = root.querySelector('.system-prompts-view');
     assert.ok(dialog);
-    assert.equal(dispose.history.get(), '/system-prompts/system2');
+    assert.equal(dispose.history.get(), '/k7m3xqa9/system-prompts/system2');
     assert.match(dialog.textContent, /Original instructions/);
     button(root, 'Chat').click();
     await flush();
     assert.equal(root.querySelector('.system-prompts-view'), null);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft', 'Returning to Chat preserves the unsent draft');
-    assert.equal(dispose.history.get(), '/');
+    assert.equal(dispose.history.get(), '/k7m3xqa9');
     dispose.history.back();
     await flush();
     assert.ok(root.querySelector('.system-prompts-view'), 'History back restores the prompt route');
@@ -398,6 +398,41 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(JSON.stringify(entries), before);
     assert.ok(requests.every(request => !request.options?.method || request.options.method === 'GET'));
   } finally { dispose(); }
+});
+
+test('session URLs override tab selection, preserve deep links and restore on browser navigation', async () => {
+  const requests = [];
+  const makeSnapshot = urlId => ({ agentId: urlId, entries, leafId: 'user2',
+    state: { sessionId: `uuid-${urlId}`, sessionUrlId: urlId }, live: [], dialogs: [],
+    connected: true, running: false, cwd: '/test/project', token: 'test' });
+  const stale = makeSnapshot('stale');
+  window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['stale'], selected: 'stale' }));
+  globalThis.fetch = async (url, options) => {
+    const body = options?.body && JSON.parse(options.body);
+    requests.push({ url, body });
+    return { ok: true, json: async () => body?.sessionUrlId ? makeSnapshot(body.sessionUrlId)
+      : url === '/api/agents' ? [stale] : stale };
+  };
+  globalThis.EventSource = class { addEventListener() {} close() {} };
+  const dispose = components.mountApp(root, '/k7m3xqa9/system-prompts/system2');
+  try {
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(dispose.history.get(), '/k7m3xqa9/system-prompts/system2');
+    assert.ok(root.querySelector('.system-prompts-view'));
+    assert.deepEqual(requests.filter(item => item.body).map(item => item.body.sessionUrlId), ['k7m3xqa9']);
+    assert.ok(!requests.some(item => item.url.includes('agentId=stale')));
+    button(root, 'Chat').click();
+    await flush();
+    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    dispose.history.set({ value: '/v8n4zrc2' });
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(dispose.history.get(), '/v8n4zrc2');
+    dispose.history.back();
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.deepEqual(requests.filter(item => item.body).map(item => item.body.sessionUrlId), ['k7m3xqa9', 'v8n4zrc2', 'k7m3xqa9']);
+    assert.ok(requests.filter(item => item.body).every(item => item.url === '/api/agents'));
+  } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
 test('side-by-side chats send and stop independently while both agents stream', async () => {
