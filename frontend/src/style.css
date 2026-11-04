@@ -312,6 +312,10 @@
   min-width: 0;
 }
 
+.lilim-host:not(:has(.inline-composer)) > .bottom {
+  padding-bottom: 1lh;
+}
+
 .lilim-host:has(.inline-composer) > .bottom {
   position: absolute;
   bottom: 14px;
