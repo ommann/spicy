@@ -2,6 +2,21 @@ import { For, Show, createMemo, type JSX } from 'solid-js';
 import { highlightTokens } from './syntax.mjs';
 import ScrollArea from './ScrollArea';
 import { createAnsiTokenizer } from './lilim/ansi.mjs';
+import { Lexer, type Tokens } from 'marked';
+import './markdown-table.css';
+
+type SourceChunk = { text: string; language?: string; code?: boolean; table?: Tokens.Table };
+
+function MarkdownTable(props: { table: Tokens.Table }) {
+  return <ScrollArea><table class="markdown-table">
+    <thead><tr><For each={props.table.header}>{cell => <th scope="col" style={{ 'text-align': cell.align || undefined }}>
+      <HighlightedText text={cell.text} language="markdown" />
+    </th>}</For></tr></thead>
+    <tbody><For each={props.table.rows}>{row => <tr><For each={row}>{cell => <td style={{ 'text-align': cell.align || undefined }}>
+      <HighlightedText text={cell.text} language="markdown" />
+    </td>}</For></tr>}</For></tbody>
+  </table></ScrollArea>;
+}
 
 export function AnsiText(props: { text: string }) {
   const runs = createMemo(() => createAnsiTokenizer()(props.text));
@@ -21,27 +36,47 @@ export default function SourceText(props: { text: string; language?: string }) {
   const chunks = createMemo(() => {
     if (props.language !== 'markdown') return [{ text: props.text, language: props.language }];
 
-    const parts: { text: string; language?: string }[] = [];
+    const parts: SourceChunk[] = [];
     const fences = /(^[ \t]*)(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)(^[ \t]*\2[ \t]*(?:\n|$))/gm;
     let offset = 0;
 
     for (const match of props.text.matchAll(fences)) {
       parts.push({ text: props.text.slice(offset, match.index), language: 'markdown' });
       parts.push({ text: match[1] + match[2] + match[3] + '\n', language: 'markdown' });
-      parts.push({ text: match[4], language: match[3].trim().split(/\s+/)[0] || undefined });
+      parts.push({ text: match[4], language: match[3].trim().split(/\s+/)[0] || undefined, code: true });
       parts.push({ text: match[5], language: 'markdown' });
       offset = match.index! + match[0].length;
     }
     parts.push({ text: props.text.slice(offset), language: 'markdown' });
 
-    return parts;
+    return parts.flatMap(part => {
+      if (part.code || part.language !== 'markdown') return [part];
+      const chunks: SourceChunk[] = [];
+      let text = '';
+      const flushText = () => {
+        if (!text) return;
+        // A block table already supplies the line break after its last row.
+        chunks.push({ text: chunks.at(-1)?.table ? text.replace(/^\n/, '') : text, language: 'markdown' });
+        text = '';
+      };
+      for (const token of Lexer.lex(part.text, { gfm: true })) {
+        if (token.type === 'table') {
+          flushText();
+          chunks.push({ text: token.raw, table: token as Tokens.Table, language: 'markdown' });
+        } else text += token.raw;
+      }
+      flushText();
+      return chunks.some(chunk => chunk.table) ? chunks : [part];
+    });
   });
 
   return <div class={`trace-text syntax-highlighted ${props.language === 'markdown' ? 'markdown-source' : props.language ? 'source-code' : ''}`}>
     <Show when={!props.text.includes('\x1b')} fallback={<AnsiText text={props.text} />}>
-      <For each={chunks()}>{chunk => <Show when={props.language === 'markdown' && chunk.language !== 'markdown'}
+      <For each={chunks()}>{chunk => <Show when={chunk.table} fallback={<Show when={props.language === 'markdown' && chunk.language !== 'markdown'}
         fallback={<HighlightedText text={chunk.text} language={chunk.language} />}>
         <ScrollArea contentClass="source-code"><HighlightedText text={chunk.text} language={chunk.language} /></ScrollArea>
+      </Show>}>
+        {table => <MarkdownTable table={table()} />}
       </Show>}</For>
     </Show>
   </div>;

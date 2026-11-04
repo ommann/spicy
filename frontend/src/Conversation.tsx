@@ -99,7 +99,7 @@ export default function Conversation(props: Props) {
     measureSpacing();
     onCleanup(() => observer.disconnect());
   });
-  const [widths, setWidths] = createStore({ focused: 720, side: 720 });
+  const [widths, setWidths] = createStore({ focused: 720, side: 1040 });
   const [focusedFitsWindow, setFocusedFitsWindow] = createSignal(true);
   const [selectedLane, setSelectedLane] = createSignal(0);
   const [dimensions, setDimensions] = createSignal({ width: window.innerWidth, height: Math.max(0, window.innerHeight - 42) });

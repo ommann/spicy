@@ -241,6 +241,9 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
 export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequest; onBranch?: (id: string) => void }) {
   const textBlocks = () => typeof props.part.content === 'string' ? props.part.content
     : (props.part.content || []).filter((block: Wire) => block.type === 'text');
+  const responseBody = () => <Show when={props.part.kind === 'thinking'} fallback={props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" />}>
+    <Thinking text={props.part.text} />
+  </Show>;
 
   return <Switch>
     <Match when={props.part.kind === 'error'}>
@@ -258,7 +261,7 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
     </Match>
     <Match when={props.part.kind === 'user' || props.part.kind === 'custom'}>
       <section ref={useContext(SectionContext)} class={props.part.kind === 'user' ? 'user' : 'message'} data-entry-id={props.part.entryId}>
-        <ExpandableContent measureKey={props.part.content} expandRequest={props.expandRequest}><MessageBody content={textBlocks()} /></ExpandableContent>
+        <MessageBody content={textBlocks()} />
         <Images blocks={Array.isArray(props.part.content) ? props.part.content : []} />
         <Show when={props.part.canBranch}>
           <button type="button" class="branch-trigger" data-branch-source={props.part.entryId} aria-label="New branch"
@@ -270,11 +273,11 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
       <section ref={useContext(SectionContext)} class={props.part.kind === 'thinking' ? 'thinking real-thinking' : 'message real-message'}
         classList={{ 'summary-content': props.part.kind === 'summary' || props.part.summary }}
         style={props.part.eos ? { color: 'var(--muted)' } : undefined} data-entry-id={props.part.entryId}>
-        <ExpandableContent measureKey={props.part.text} initialOpen={props.part.kind === 'summary' || props.part.summary} expandRequest={props.expandRequest}>
-          <Show when={props.part.kind === 'thinking'} fallback={props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" />}>
-            <Thinking text={props.part.text} />
-          </Show>
-        </ExpandableContent>
+        <Show when={props.part.kind === 'message'} fallback={
+          <ExpandableContent measureKey={props.part.text} initialOpen={props.part.kind === 'summary' || props.part.summary} expandRequest={props.expandRequest}>
+            {responseBody()}
+          </ExpandableContent>
+        }>{responseBody()}</Show>
       </section>
     </Match>
   </Switch>;
