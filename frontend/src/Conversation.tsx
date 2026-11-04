@@ -382,6 +382,21 @@ export default function Conversation(props: Props) {
     return latest;
   });
 
+  let initialScrollPending = true;
+  createEffect(() => {
+    const latest = latestMessage();
+    if (!initialScrollPending || !latest || !props.active) return;
+    const frame = requestAnimationFrame(() => {
+      initialScrollPending = false;
+      batch(() => {
+        for (const element of observed.keys()) measure(element);
+        updateViewport();
+      });
+      focus(latest.id, true, false);
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
+
   const jumps = createMemo(() => {
     const latestLane = latestMessage()?.first ?? 0;
     const branchHidden = mode() === 'side' && focused() === latestLane;
