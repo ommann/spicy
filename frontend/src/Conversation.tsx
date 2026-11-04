@@ -494,7 +494,7 @@ export default function Conversation(props: Props) {
       let input!: HTMLTextAreaElement;
       const index = () => lanes().findIndex(lane => lane.key === key);
       const lane = () => lanes()[index()];
-      const inline = () => layout().inlineComposers;
+      const inline = createMemo(() => layout().inlineComposers);
       onMount(() => { observe(key, element, 'composer'); inputElements.set(key, input); });
       onCleanup(() => { unobserve(element); inputElements.delete(key); });
 
