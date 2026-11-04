@@ -38,6 +38,7 @@ import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnap
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
 import { streamingContent } from './streaming-content';
+import type { AgentHealthStatus } from './AgentHealth';
 import { codeLinewrap } from './code-linewrap';
 import { NavigationLinksContext } from './Navigation';
 import { SAVED_SYSTEM_PROMPT_ENTRY, type SystemPromptBuilder, systemPromptDocumentFromState, systemPromptOutputMatches, systemPromptBuilderForOutput } from '../../packages/coding-agent/src/core/system-prompt-document';
@@ -81,6 +82,7 @@ export default function App(props: ParentProps) {
   const [visibleAgentIds, setVisibleAgentIds] = createSignal<string[]>(Array.isArray(saved.agents) ? saved.agents.filter(id => typeof id === 'string') : []);
   const [selectedAgentId, setSelectedAgentId] = createSignal(typeof saved.selected === 'string' ? saved.selected : '');
   const [agentSnapshots, setAgentSnapshots] = createSignal<Record<string, Snapshot>>({});
+  const [disconnectedStreams, setDisconnectedStreams] = createSignal<string[]>([]);
   const [bridgeCwd, setBridgeCwd] = createSignal('');
   const [availableAgents, setAvailableAgents] = createSignal<Wire[]>([]);
   const [projectCwd, setProjectCwd] = createSignal('');
@@ -257,7 +259,10 @@ export default function App(props: ParentProps) {
   }
 
   function accept(value: Snapshot) {
-    if (value.agentId) setAgentSnapshots(previous => ({ ...previous, [value.agentId!]: value }));
+    if (value.agentId) {
+      setAgentSnapshots(previous => ({ ...previous, [value.agentId!]: value }));
+      if (value.connected) watchAgent(value.agentId);
+    }
   }
 
   function updateAgent(id: string, update: (previous: Snapshot) => Snapshot) {
@@ -280,7 +285,8 @@ export default function App(props: ParentProps) {
         const running = record.type === 'agent_start' ? true : record.type === 'agent_settled' ? false : previous.running;
         const dialogs = record.type === 'extension_ui_request' && ['confirm', 'select', 'input', 'editor'].includes(record.method)
           ? [...previous.dialogs.filter(dialog => dialog.id !== record.id), record] : previous.dialogs;
-        return { ...previous, live, running, dialogs };
+        const providerConnection = record.type === 'provider_connection' ? record.state : previous.providerConnection;
+        return { ...previous, live, running, dialogs, providerConnection };
       });
       if (record.type === 'auto_retry_start') setNotification({ message: `Connection failed. Retrying in ${Math.ceil(record.delayMs / 1000)} seconds…`, isError: true });
       if (record.type === 'auto_retry_end') setNotification({ message: record.success ? '' : record.finalError || 'Reply failed.', isError: !record.success });
@@ -290,12 +296,18 @@ export default function App(props: ParentProps) {
       }
     });
     events.addEventListener('disconnected', event => {
-      updateAgent(id, previous => ({ ...previous, connected: false, running: false, dialogs: [] }));
+      updateAgent(id, previous => ({ ...previous, connected: false, running: false, dialogs: [], connectionError: JSON.parse((event as MessageEvent).data) }));
       setNotification({ message: JSON.parse((event as MessageEvent).data), isError: true });
     });
-    events.onerror = () => setNotification({ message: 'Local bridge disconnected; reconnecting…', isError: true });
-    events.onopen = () => setNotification(previous => previous.message === 'Local bridge disconnected; reconnecting…'
-      ? { message: '', isError: false } : previous);
+    events.onerror = () => {
+      setDisconnectedStreams(previous => [...new Set([...previous, id])]);
+      setNotification({ message: 'Local bridge disconnected; reconnecting…', isError: true });
+    };
+    events.onopen = () => {
+      setDisconnectedStreams(previous => previous.filter(agentId => agentId !== id));
+      setNotification(previous => previous.message === 'Local bridge disconnected; reconnecting…'
+        ? { message: '', isError: false } : previous);
+    };
   }
 
   function showAgent(value: Snapshot & { relatedAgents?: Snapshot[] }, replace: boolean) {
@@ -312,7 +324,6 @@ export default function App(props: ParentProps) {
     if (replace) for (const [id, stream] of streams) {
       if (!ids.includes(id)) { stream.close(); streams.delete(id); }
     }
-    for (const id of ids) watchAgent(id);
   }
 
   async function openChat() {
@@ -438,6 +449,14 @@ export default function App(props: ParentProps) {
     return agentForLeaf(graph(), visibleAgents(), leafId, selectedAgentId()) as Snapshot | undefined;
   }
 
+  function agentHealth(leafId: string): AgentHealthStatus {
+    const agent = leafAgent(leafId);
+    if (agent && disconnectedStreams().includes(agent.agentId!)) return 'disconnected';
+    if (agent?.connectionError) return 'error';
+    if (!agent?.connected) return 'inactive';
+    return agent.providerConnection || 'ready';
+  }
+
   function focusLeaf(leafId: string) {
     const agent = leafAgent(leafId);
     if (agent?.agentId) setSelectedAgentId(agent.agentId);
@@ -494,6 +513,7 @@ export default function App(props: ParentProps) {
       }
       if (!agent?.agentId) throw new Error('No agent selected');
       if (!agent.connected) {
+        watchAgent(agent.agentId);
         agent = await post('start', { agentId: agent.agentId });
         accept(agent!);
       }
@@ -559,7 +579,6 @@ export default function App(props: ParentProps) {
         const response = await fetch(infoUrl(id), { signal: appLifecycle.signal });
         if (!response.ok) throw new Error('Could not restore the selected agent');
         accept(await response.json());
-        watchAgent(id);
       }));
       if (ids.length) setLive(true);
     }).finally(() => { markBridgeReady(); setSessionRoutingReady(true); });
@@ -635,7 +654,7 @@ export default function App(props: ParentProps) {
           return <Show when={composerScope()} keyed>{_sessionKey => (
           <Conversation graph={graph()} active lanes={composerLanes()}
             drafts={composerState().drafts} onDraftChange={composerState().setDraft}
-            running={id => !!leafAgent(id)?.running} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
+            running={id => !!leafAgent(id)?.running} health={agentHealth} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}

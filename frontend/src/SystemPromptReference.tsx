@@ -1,11 +1,12 @@
 import { promptLabel } from './prompt-numbers';
-import AgentHealth from './AgentHealth';
+import AgentHealth, { type AgentHealthStatus } from './AgentHealth';
 
 interface Props {
   entryId: string;
   promptId: string;
   number: number;
   title?: string;
+  health: AgentHealthStatus;
   onOpen: (id: string) => void;
 }
 
@@ -22,7 +23,7 @@ export default function SystemPromptReference(props: Props) {
         props.onOpen(props.promptId);
       }}>
       <span>{promptLabel(props.number, props.title)}</span>
-      <AgentHealth />
+      <AgentHealth status={props.health} />
     </section>
   );
 }

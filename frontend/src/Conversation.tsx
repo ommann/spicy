@@ -12,6 +12,7 @@ import { ChatEntryPart } from './ChatContent';
 import MessageComposer from './MessageComposer';
 import ScrollBar from './ScrollBar';
 import SystemPromptReference from './SystemPromptReference';
+import type { AgentHealthStatus } from './AgentHealth';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createColumnShortcuts } from './column-shortcuts';
 import { layoutConversation } from './conversation-model.mjs';
@@ -40,6 +41,7 @@ interface Props {
   onDraftChange: (key: string, text: string) => void;
   active: boolean;
   running: (leafId: string) => boolean;
+  health: (leafId: string) => AgentHealthStatus;
   busy: (leafId: string) => boolean;
   onFocusLeaf: (leafId: string) => void;
   focusRequest?: { id: string; revision: number };
@@ -396,7 +398,7 @@ export default function Conversation(props: Props) {
             style={{ ...tracks().place(layout().inset + layout().starts[index()], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
             <Card><SystemPromptReference entryId={leaf.id} promptId={versionFor(leaf.id)?.full?.id || ''}
               title={versionFor(leaf.id)?.title} number={versionFor(leaf.id)?.number || 1}
-              onOpen={props.onOpenSystemPrompt} /></Card>
+              health={props.health(leaf.id)} onOpen={props.onOpenSystemPrompt} /></Card>
           </article>
         </Show>}</For>
         <For each={nodeIds()}>{id => {

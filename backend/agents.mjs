@@ -15,6 +15,9 @@ export class AgentConnection {
   diagnostic = '';
   source = null;
   historySnapshot = null;
+  connectionError = '';
+  providerConnection = 'ready';
+  stopping = false;
 
   constructor(id, cwd) {
     this.id = id;
@@ -23,6 +26,7 @@ export class AgentConnection {
       // A retry also emits agent_start. Keep the visible turn until its saved
       // snapshot arrives rather than erasing the user's message between attempts.
       this.live = applyRecord(this.live, record);
+      if (record.type === 'provider_connection') this.providerConnection = record.state;
       if (record.type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(record.method)) {
         this.dialogs.set(record.id, record);
       }
@@ -30,11 +34,15 @@ export class AgentConnection {
       if (record.type === 'agent_settled') this.refresh().catch(error => this.broadcast('error', error.message));
     });
     this.rpc.on('diagnostic', text => { this.diagnostic = (this.diagnostic + text).slice(-4000); });
-    this.rpc.on('exit', message => { this.dialogs.clear(); this.broadcast('disconnected', message); });
+    this.rpc.on('exit', message => {
+      this.dialogs.clear();
+      if (!this.stopping) this.connectionError = message;
+      this.broadcast('snapshot', this.payload());
+    });
   }
 
   payload() {
-    return { agentId: this.id, ...this.snapshot, live: this.live, dialogs: [...this.dialogs.values()], connected: !!this.rpc.child, running: this.rpc.running, cwd: this.cwd, diagnostic: this.diagnostic, source: this.source };
+    return { agentId: this.id, ...this.snapshot, live: this.live, dialogs: [...this.dialogs.values()], connected: !!this.rpc.child, running: this.rpc.running, cwd: this.cwd, diagnostic: this.diagnostic, source: this.source, connectionError: this.connectionError, providerConnection: this.providerConnection };
   }
 
   broadcast(type, data) {
@@ -42,9 +50,29 @@ export class AgentConnection {
     for (const client of this.clients) client.write(wire);
   }
 
+  async loadSession(selected) {
+    const session = SessionManager.open(selected.file, undefined, selected.cwd);
+    const context = session.buildSessionContext();
+    this.live = [];
+    this.dialogs.clear();
+    this.snapshot = {
+      entries: session.getEntries(), leafId: session.getLeafId(),
+      state: {
+        sessionId: session.getSessionId(), sessionUrlId: session.getHeader()?.urlId,
+        sessionFile: path.resolve(selected.file), isStreaming: false,
+        model: context.model?.provider && context.model.modelId ? { provider: context.model.provider, id: context.model.modelId } : null,
+        thinkingLevel: context.thinkingLevel,
+      },
+    };
+  }
+
   async captureHistory() {
     if (this.historySnapshot) return this.historySnapshot;
-    if (this.mutating || !this.rpc.child) throw new Error('Source agent is not ready');
+    if (this.mutating) throw new Error('Source agent is not ready');
+    if (!this.rpc.child) {
+      await this.loadSession({ file: this.snapshot.state.sessionFile, cwd: this.cwd });
+      return [{ entries: this.snapshot.entries, leafId: this.snapshot.leafId }, this.snapshot.state];
+    }
     this.mutating = true;
     this.historySnapshot = Promise.all([this.rpc.command({ type: 'get_entries' }), this.rpc.command({ type: 'get_state' })]);
     try { return await this.historySnapshot; }
@@ -115,6 +143,8 @@ export class AgentRegistry {
         await agent.rpc.start(process.execPath, this.fixture ? ['--import', this.resolver, this.fixture, ...args] : ['--import', this.resolver, this.cli, ...args], agent.cwd);
       }
       await agent.refresh();
+      agent.connectionError = '';
+      agent.broadcast('snapshot', agent.payload());
       this.release(agent);
       this.claim(agent, agent.snapshot.state?.sessionFile || selected?.file);
       return agent.payload();
@@ -122,6 +152,8 @@ export class AgentRegistry {
       if (starting || switching) await agent.rpc.stop();
       this.release(agent);
       if (agent.rpc.child) this.claim(agent, previousFile);
+      agent.connectionError = error.message;
+      agent.broadcast('snapshot', agent.payload());
       throw error;
     } finally { agent.mutating = false; }
   }
@@ -132,10 +164,15 @@ export class AgentRegistry {
     if (pending) return pending;
     const owner = this.owners.get(file);
     if (owner) return this.get(owner);
+    const existing = [...this.agents.values()].find(agent => agent.snapshot.state?.sessionFile === file);
+    if (existing) {
+      await existing.loadSession(selected);
+      return existing;
+    }
     const agent = new AgentConnection(randomUUID(), selected.cwd);
     agent.rpc.on('exit', () => this.release(agent));
     this.agents.set(agent.id, agent);
-    const opening = this.start(agent, selected).then(() => agent).catch(async error => {
+    const opening = agent.loadSession(selected).then(() => agent).catch(async error => {
       await agent.rpc.stop();
       this.release(agent);
       this.agents.delete(agent.id);
@@ -245,8 +282,9 @@ export class AgentRegistry {
   async stop(agent) {
     if (agent.mutating) throw new Error('Agent is busy');
     agent.mutating = true;
+    agent.stopping = true;
     try { await agent.rpc.stop(); this.release(agent); }
-    finally { agent.mutating = false; }
+    finally { agent.stopping = false; agent.mutating = false; }
   }
 
   async shutdown() {

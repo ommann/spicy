@@ -64,6 +64,7 @@
   --status-error: #e88b8b;
   --status-running: #96c8ed;
   --status-success: #61b88c;
+  --status-busy: #d6ba7c;
   --diff-file-text: #a9c7e8;
   --diff-hunk-text: #a4b9ce;
   --diff-context-text: #aeb1ab;

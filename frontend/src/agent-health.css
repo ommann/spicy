@@ -7,6 +7,20 @@
   background: var(--status-success);
 }
 
+.agent-health[data-status='inactive'] {
+  border: 1px solid var(--muted);
+  background: transparent;
+}
+
+.agent-health[data-status='socket-lost'] {
+  background: var(--status-busy);
+}
+
+.agent-health[data-status='error'],
+.agent-health[data-status='disconnected'] {
+  background: var(--status-error);
+}
+
 .agent-health-placeholder {
   border: 1px dashed var(--focus-border);
   background: transparent;
