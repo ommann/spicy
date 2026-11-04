@@ -37,6 +37,7 @@ import Handoffs from './Handoffs';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
+import SyntaxOptions from './SyntaxOptions';
 import { streamingContent } from './streaming-content';
 import type { AgentHealthStatus } from './AgentHealth';
 import { codeLinewrap } from './code-linewrap';
@@ -683,6 +684,7 @@ export default function App(props: ParentProps) {
         }</For>
         <CodeLinewrapOption />
         <StreamingContentOption />
+        <SyntaxOptions />
       </Dialog>
       <Dialog
         ref={chatDialog}

@@ -1,19 +1,20 @@
-import { For, Show, createMemo, type JSX } from 'solid-js';
+import { For, Match, Show, Switch, createMemo, type JSX } from 'solid-js';
 import { highlightTokens } from './syntax.mjs';
 import ScrollArea from './ScrollArea';
 import { createAnsiTokenizer } from './lilim/ansi.mjs';
 import { Lexer, type Tokens } from 'marked';
 import './markdown-table.css';
+import { showBoldSyntax, showItalicSyntax, showInlineCodeSyntax } from './formatting-syntax';
 
 type SourceChunk = { text: string; language?: string; code?: boolean; table?: Tokens.Table };
 
 function MarkdownTable(props: { table: Tokens.Table }) {
   return <ScrollArea><table class="markdown-table">
     <thead><tr><For each={props.table.header}>{cell => <th scope="col" style={{ 'text-align': cell.align || undefined }}>
-      <HighlightedText text={cell.text} language="markdown" />
+      <MarkdownText text={cell.text} />
     </th>}</For></tr></thead>
     <tbody><For each={props.table.rows}>{row => <tr><For each={row}>{cell => <td style={{ 'text-align': cell.align || undefined }}>
-      <HighlightedText text={cell.text} language="markdown" />
+      <MarkdownText text={cell.text} />
     </td>}</For></tr>}</For></tbody>
   </table></ScrollArea>;
 }
@@ -22,6 +23,28 @@ export function AnsiText(props: { text: string }) {
   const runs = createMemo(() => createAnsiTokenizer()(props.text));
 
   return <For each={runs()}>{run => <span style={run.style as JSX.CSSProperties}>{run.text}</span>}</For>;
+}
+
+function MarkdownText(props: { text: string }) {
+  const tokens = createMemo(() => Lexer.lexInline(props.text));
+  return <For each={tokens()}>{token => <Switch fallback={<HighlightedText text={token.raw} language="markdown" />}>
+    <Match when={token.type === 'strong'}>
+      <strong><Show when={showBoldSyntax()}>{token.raw.slice(0, 2)}</Show>
+        <MarkdownText text={(token as Tokens.Strong).text} />
+        <Show when={showBoldSyntax()}>{token.raw.slice(-2)}</Show>
+      </strong>
+    </Match>
+    <Match when={token.type === 'em'}><em>
+      <Show when={showItalicSyntax()}>{token.raw.slice(0, 1)}</Show>
+      <MarkdownText text={(token as Tokens.Em).text} />
+      <Show when={showItalicSyntax()}>{token.raw.slice(-1)}</Show>
+    </em></Match>
+    <Match when={token.type === 'codespan'}><code style={{ color: 'var(--purple)', font: 'inherit' }}>
+      <Show when={showInlineCodeSyntax()}>{token.raw.match(/^`+/)?.[0]}</Show>
+      {(token as Tokens.Codespan).text}
+      <Show when={showInlineCodeSyntax()}>{token.raw.match(/^`+/)?.[0]}</Show>
+    </code></Match>
+  </Switch>}</For>;
 }
 
 function HighlightedText(props: { text: string; language?: string }) {
@@ -73,7 +96,10 @@ export default function SourceText(props: { text: string; language?: string }) {
   return <div class={`trace-text syntax-highlighted ${props.language === 'markdown' ? 'markdown-source' : props.language ? 'source-code' : ''}`}>
     <Show when={!props.text.includes('\x1b')} fallback={<AnsiText text={props.text} />}>
       <For each={chunks()}>{chunk => <Show when={chunk.table} fallback={<Show when={props.language === 'markdown' && chunk.language !== 'markdown'}
-        fallback={<HighlightedText text={chunk.text} language={chunk.language} />}>
+        fallback={<Show when={props.language === 'markdown' && !chunk.code}
+          fallback={<HighlightedText text={chunk.text} language={chunk.language} />}>
+          <MarkdownText text={chunk.text} />
+        </Show>}>
         <ScrollArea contentClass="source-code"><HighlightedText text={chunk.text} language={chunk.language} /></ScrollArea>
       </Show>}>
         {table => <MarkdownTable table={table()} />}
