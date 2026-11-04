@@ -32,6 +32,34 @@ async function allSessions() {
     .map(session => [path.resolve(session.path), session])).values()];
 }
 
+async function openSessionView(session, sessions) {
+  const selectedPath = path.resolve(session.path);
+  const family = new Set([selectedPath]);
+  // Fork headers persist parentSession even after the agent processes are gone.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const candidate of sessions) {
+      if (!candidate.parentSessionPath) continue;
+      const file = path.resolve(candidate.path);
+      const parent = path.resolve(candidate.parentSessionPath);
+      if (!family.has(file) && !family.has(parent)) continue;
+      if (!family.has(file) || !family.has(parent)) changed = true;
+      family.add(file);
+      family.add(parent);
+    }
+  }
+  const opened = await agents.openSession({ file: session.path, cwd: session.cwd });
+  const relatedAgents = [];
+  for (const candidate of sessions) {
+    const file = path.resolve(candidate.path);
+    if (file === selectedPath || !family.has(file)) continue;
+    const related = await agents.openSession({ file: candidate.path, cwd: candidate.cwd });
+    relatedAgents.push(related.payload());
+  }
+  return { ...opened.payload(), relatedAgents };
+}
+
 async function catalog(projectCwd = cwd) {
   const projects = [projectCwd];
   const directories = [...new Set(projects)].map(project => ({
@@ -122,10 +150,10 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname === '/api/auth/cancel') return json(res, await login.cancel(command.id));
       if (url.pathname === '/api/agents') {
         if (command.openSessionId !== undefined) {
-          const session = (await allSessions()).find(session => Buffer.from(session.path).toString('base64url') === command.openSessionId);
+          const sessions = await allSessions();
+          const session = sessions.find(session => Buffer.from(session.path).toString('base64url') === command.openSessionId);
           if (!session) return json(res, { error: 'Session not found' }, 404);
-          const opened = await agents.openSession({ file: session.path, cwd: session.cwd });
-          return json(res, opened.payload());
+          return json(res, await openSessionView(session, sessions));
         }
         if (command.sessionUrlId !== undefined) {
           if (typeof command.sessionUrlId !== 'string' || !/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/.test(command.sessionUrlId)) {
@@ -136,11 +164,9 @@ const server = http.createServer(async (req, res) => {
           const matches = [...new Map(sessions.filter(session => session.urlId === command.sessionUrlId).map(session => [path.resolve(session.path), session])).values()];
           const files = new Set([...matches.map(session => path.resolve(session.path)), ...active.map(agent => path.resolve(agent.snapshot.state.sessionFile))]);
           if (files.size > 1) return json(res, { error: 'Session URL ID is ambiguous' }, 409);
-          if (active.length) return json(res, active[0].payload());
+          if (active.length) return json(res, await openSessionView({ path: active[0].snapshot.state.sessionFile, cwd: active[0].cwd }, sessions));
           if (!matches.length) return json(res, { error: 'Session not found' }, 404);
-          const session = matches[0];
-          const created = await agents.openSession({ file: session.path, cwd: session.cwd });
-          return json(res, created.payload(), 201);
+          return json(res, await openSessionView(matches[0], sessions), 201);
         }
         const source = command.sourceAgentId !== undefined ? agents.get(command.sourceAgentId) : null;
         const projectCwd = path.resolve(command.cwd ?? source?.cwd ?? cwd);

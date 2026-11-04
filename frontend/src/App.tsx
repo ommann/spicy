@@ -298,17 +298,21 @@ export default function App(props: ParentProps) {
       ? { message: '', isError: false } : previous);
   }
 
-  function showAgent(value: Snapshot, replace: boolean) {
+  function showAgent(value: Snapshot & { relatedAgents?: Snapshot[] }, replace: boolean) {
+    const views = [value, ...(value.relatedAgents || [])];
+    const ids = views.map(agent => agent.agentId!);
     batch(() => {
-      accept(value);
+      for (const agent of views) accept(agent);
       setSelectedAgentId(value.agentId!);
-      setVisibleAgentIds(previous => replace ? [value.agentId!] : [...new Set([...previous, value.agentId!])]);
+      setVisibleAgentIds(previous => replace ? ids : [...new Set([...previous, ...ids])]);
       setLive(true);
+      const target = graph().ancestors(value.leafId).find((id: string) => graph().nodes.has(id));
+      if (replace && target) setFocusRequest(previous => ({ id: target, revision: (previous?.revision || 0) + 1 }));
     });
     if (replace) for (const [id, stream] of streams) {
-      if (id !== value.agentId) { stream.close(); streams.delete(id); }
+      if (!ids.includes(id)) { stream.close(); streams.delete(id); }
     }
-    watchAgent(value.agentId!);
+    for (const id of ids) watchAgent(id);
   }
 
   async function openChat() {
@@ -325,8 +329,9 @@ export default function App(props: ParentProps) {
     await act(async () => {
       const response = await fetch(infoUrl(id), { signal: appLifecycle.signal });
       if (!response.ok) throw new Error('Could not load the agent');
-      const value = await response.json();
-      showAgent(value, !visibleAgentIds().includes(id));
+      const info = await response.json();
+      const value = info.state?.sessionUrlId ? await post('agents', { sessionUrlId: info.state.sessionUrlId }) : info;
+      showAgent(value, true);
       setModels([]);
       if (value.connected) {
         const available = await post('command', { agentId: id, type: 'get_available_models' });
@@ -647,8 +652,8 @@ export default function App(props: ParentProps) {
       <Dialog ref={optionsDialog} class="chat-dialog options-dialog" title="Options">
         <For each={['focused', 'side'] as const}>{mode =>
           <label class="width-option">
-            <span>{mode === 'focused' ? 'Focused' : 'Side by side'}</span>
-            <SelectWithDialog label={`${mode === 'focused' ? 'Focused' : 'Side by side'} width`}
+            <span>{mode === 'focused' ? 'Single' : 'Tree'}</span>
+            <SelectWithDialog label={`${mode === 'focused' ? 'Single' : 'Tree'} width`}
               value={mode === 'focused' && viewOptions()?.focusedFitsWindow ? 'auto' : String(viewOptions()?.widths[mode])}
               options={[
                 ...(mode === 'focused' ? [{ value: 'auto', label: 'Fit' }] : []),

@@ -27,8 +27,8 @@ export default function ColumnToolbar(props: Props) {
     {props.children}
     <Show when={props.hasContent}>
       <div class="view-switch" role="group" aria-label="View mode">
-        <button class="view-mode state-toggle" aria-pressed={props.mode === 'focused'} onClick={() => props.onMode('focused')}>Focused</button>
-        <button class="view-mode state-toggle" aria-pressed={props.mode === 'side'} onClick={() => props.onMode('side')}>Side by side</button>
+        <button class="view-mode state-toggle" aria-pressed={props.mode === 'focused'} onClick={() => props.onMode('focused')}>Single</button>
+        <button class="view-mode state-toggle" aria-pressed={props.mode === 'side'} onClick={() => props.onMode('side')}>Tree</button>
       </div>
     </Show>
     {props.actions}
