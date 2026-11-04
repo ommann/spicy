@@ -10,6 +10,7 @@ import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
 import Dialog from './Dialog';
 import CodeLinewrapOption from './CodeLinewrapOption';
+import SelectWithDialog from './SelectWithDialog';
 import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
 import { createColumnShortcuts } from './column-shortcuts';
@@ -24,6 +25,8 @@ interface Props {
 
 export default function SystemPrompts(props: Props) {
   const [expanded, setExpanded] = createSignal(true);
+  const [widths, setWidths] = createSignal({ focused: 'auto', side: '1040' });
+  const widthPresets = [720, 1040, 1280, 1600, 1920, 2240, 2560, 3200];
   const [selection, setSelection] = createSignal(untrack(() => props.selected));
   const sections = new Map<string, HTMLElement>();
   let viewport!: HTMLElement;
@@ -33,7 +36,8 @@ export default function SystemPrompts(props: Props) {
     columns: () => {
       const content = viewport.firstElementChild!;
       const gap = parseFloat(getComputedStyle(content).columnGap) || 0;
-      return { inset: viewport.clientWidth / 2, starts: props.versions.map((_, index) => index * (720 + gap)), width: 720 };
+      const width = Number(widths().side);
+      return { inset: viewport.clientWidth / 2, starts: props.versions.map((_, index) => index * (width + gap)), width };
     },
     onColumn: index => { const version = props.versions[index]; if (version) setSelection(version.key); },
     onScroll: () => {},
@@ -56,7 +60,7 @@ export default function SystemPrompts(props: Props) {
     if (version) select(version.key);
   }
 
-  createEffect(on([navigation, mode, () => props.versions], ([key]) => {
+  createEffect(on([navigation, mode, () => props.versions, widths], ([key]) => {
     const section = sections.get(key);
     section?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }));
@@ -92,12 +96,27 @@ export default function SystemPrompts(props: Props) {
         onOptions={() => optionsDialog.showModal()}>
         {null}
       </ColumnToolbar>
-      <Dialog ref={optionsDialog} title="Options">
+      <Dialog ref={optionsDialog} class="chat-dialog options-dialog" title="Options">
+        <For each={['focused', 'side'] as const}>{target => <label class="width-option">
+          <span>{target === 'focused' ? 'Single' : 'Tree'}</span>
+          <SelectWithDialog label={`${target === 'focused' ? 'Single' : 'Tree'} width`}
+            value={widths()[target]}
+            options={[
+              ...(target === 'focused' ? [{ value: 'auto', label: 'Fit' }] : []),
+              ...widthPresets.map(width => ({ value: String(width), label: `${width}px` })),
+            ]}
+            onChange={value => setWidths(previous => ({ ...previous, [target]: value }))} />
+        </label>}</For>
         <CodeLinewrapOption />
       </Dialog>
       <ScrollArea class="system-prompts-scroll-area" vertical viewportRef={element => { viewport = element; }}
         events={{ ...interaction.handlers, role: 'main' }} contentClass="system-prompts-content"
-        contentStyle={{ 'grid-template-columns': mode() === 'focused' ? 'minmax(0, 1fr)' : `repeat(${Math.max(1, props.versions.length)}, 720px)` }}
+        contentStyle={{
+          'grid-template-columns': mode() === 'focused'
+            ? widths().focused === 'auto' ? 'minmax(0, 1fr)' : `minmax(0, ${widths().focused}px)`
+            : `repeat(${Math.max(1, props.versions.length)}, ${widths().side}px)`,
+          'justify-content': mode() === 'focused' ? 'center' : undefined,
+        }}
         contentClassList={{ 'focused-columns': mode() === 'focused', 'pan-ready': interaction.space(), panning: interaction.dragging(),
           'has-headings': props.versions.length > 0 }}>
         <Show when={props.versions.length} fallback={<Card class="system-prompt-version" ref={element => sections.set('empty', element)}><SystemPromptPlaceholder /></Card>}>
