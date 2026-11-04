@@ -65,7 +65,6 @@ function authorized(req) {
   return typeof value === 'string' && value.length === token.length && timingSafeEqual(Buffer.from(value), Buffer.from(token));
 }
 const allowed = new Set(['prompt', 'abort', 'clear_queue', 'fork', 'new_session', 'set_model', 'set_thinking_level', 'get_available_models', 'get_available_thinking_levels', 'get_system_prompt_document', 'save_system_prompt']);
-const production = process.argv.includes('--production');
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
   try {
@@ -196,17 +195,10 @@ const server = http.createServer(async (req, res) => {
       }
       return json(res, { error: 'Not found' }, 404);
     }
-    if (vite) return vite.middlewares(req, res, () => { res.writeHead(404); res.end(); });
-    const appRoute = url.pathname === '/' || /^\/system-prompts(?:\/[1-9]\d*)?\/?$/.test(url.pathname);
-    const relative = appRoute ? '/index.html' : decodeURIComponent(url.pathname);
-    const filename = path.resolve(root, 'dist', `.${relative}`);
-    if (!filename.startsWith(path.join(root, 'dist') + path.sep)) { res.writeHead(403); return res.end(); }
-    const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.ttf': 'font/ttf', '.svg': 'image/svg+xml' };
-    const content = await readFile(filename);
-    res.writeHead(200, { 'Content-Type': types[path.extname(filename)] || 'application/octet-stream' }); res.end(content);
+    return vite.middlewares(req, res, () => { res.writeHead(404); res.end(); });
   } catch (error) { json(res, { error: error.message }, 400); }
 });
-const vite = production ? null : await createServer({ root, server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
+const vite = await createServer({ root, server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
 server.listen(port, '127.0.0.1', () => console.log(`Spicy: http://localhost:${port}\nWorking directory: ${cwd}\nAgent starts only when requested in the UI.`));
-async function shutdown() { await agents.shutdown(); await vite?.close(); server.close(); }
+async function shutdown() { await agents.shutdown(); await vite.close(); server.close(); }
 process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);

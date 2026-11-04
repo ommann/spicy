@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "cd .. && node spicy.mjs",
-    "start": "cd .. && node spicy.mjs --production",
+    "dev": "npm start",
+    "start": "cd .. && npm start",
     "test": "node --import ../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.mjs"
   },
   "dependencies": {
