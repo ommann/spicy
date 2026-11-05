@@ -42,11 +42,11 @@ export function mountInput(root: HTMLElement, props: JSX.InputHTMLAttributes<HTM
   return Object.assign(dispose, { setValue });
 }
 
-export function mountComposer(root: HTMLElement) {
+export function mountComposer(root: HTMLElement, onSubmit?: Parameters<typeof MessageComposer>[0]['onSubmit']) {
   const [running, setRunning] = createSignal(false);
   const [health, setHealth] = createSignal<'ready' | 'socket-lost'>('ready');
   const [value, setValue] = createSignal('');
-  const dispose = render(() => <MessageComposer value={value()} onChange={setValue} running={running()} health={health()} />, root);
+  const dispose = render(() => <MessageComposer value={value()} onChange={setValue} running={running()} health={health()} onSubmit={onSubmit} />, root);
   return Object.assign(dispose, { setRunning, setHealth });
 }
 

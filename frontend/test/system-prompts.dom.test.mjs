@@ -80,6 +80,32 @@ test('streaming cards preserve historical DOM across fresh snapshots and update 
   } finally { card.dispose(); }
 });
 
+test('pasted images preview, survive failed sends, and clear after accepted sends', async () => {
+  globalThis.FileReader = window.FileReader;
+  let accepted = false;
+  const sent = [];
+  const dispose = components.mountComposer(root, async images => { sent.push(images); return accepted; });
+  try {
+    const input = root.querySelector('textarea');
+    const event = new window.Event('paste', { bubbles: true, cancelable: true });
+    const file = new window.File(['image bytes'], 'clipboard.png', { type: 'image/png' });
+    Object.defineProperty(event, 'clipboardData', { value: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }] } });
+    input.dispatchEvent(event);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    await flush();
+    assert.equal(event.defaultPrevented, true);
+    assert.match(root.querySelector('.composer-attachments img').src, /^data:image\/png;base64,/);
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    assert.equal(sent[0][0].data, Buffer.from('image bytes').toString('base64'));
+    assert.ok(root.querySelector('.composer-attachments img'));
+    accepted = true;
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    assert.equal(root.querySelector('.composer-attachments img'), null);
+  } finally { dispose(); }
+});
+
 test('working status and Stop stay outside the input without replacing it or losing its draft', async () => {
   const dispose = components.mountComposer(root);
   try {

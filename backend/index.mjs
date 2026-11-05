@@ -87,7 +87,7 @@ async function catalog(projectCwd = cwd) {
 const json = (res, data, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 async function body(req) {
   let text = '';
-  for await (const chunk of req) { text += chunk; if (text.length > 1024 * 1024) throw new Error('Request exceeds 1 MB'); }
+  for await (const chunk of req) { text += chunk; if (text.length > 32 * 1024 * 1024) throw new Error('Request exceeds 32 MB'); }
   return JSON.parse(text || '{}');
 }
 function authorized(req) {
@@ -198,9 +198,9 @@ const server = http.createServer(async (req, res) => {
           const source = before.entries.find(entry => entry.id === command.entryId
             && (url.pathname === '/api/continue' || entry.message?.role === 'user'));
           if (!source) throw new Error('Branch entry not found');
-          if (typeof command.message !== 'string' || !command.message.trim()) throw new Error('Message is empty');
+          if (typeof command.message !== 'string' || (!command.message.trim() && !command.images?.length)) throw new Error('Message is empty');
           await agents.navigate(agent, source.id);
-          return json(res, await rpc.command({ type: 'prompt', message: command.message, systemPrompt: command.systemPrompt }));
+          return json(res, await rpc.command({ type: 'prompt', message: command.message, images: command.images, systemPrompt: command.systemPrompt }));
         } finally { agent.mutating = false; }
       }
       if (url.pathname === '/api/command') {

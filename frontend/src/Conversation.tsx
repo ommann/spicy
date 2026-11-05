@@ -2,6 +2,7 @@ import { For, Index, Show, batch, createEffect, createMemo, createSignal, on, on
 import { createStore, reconcile } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import Card from './Card';
+import type { ImageAttachment } from './image-attachments';
 import { createColumnInteraction } from './column-interaction';
 import { ImageContext, SectionContext } from './conversation-dom';
 import type { PreviewImage } from './ImagePreview';
@@ -47,7 +48,7 @@ interface Props {
   focusRequest?: { id: string; revision: number };
   notification: { message: string; isError: boolean };
   onReady: (controller: ConversationController) => void;
-  onSubmit: (text: string, leafId: string) => Promise<boolean>;
+  onSubmit: (text: string, leafId: string, images?: ImageAttachment[]) => Promise<boolean>;
   onBranch: (sourceId: string, anchorId?: string) => void;
   onDismissBranch: (id: string) => void;
   prompts: PromptVersion[];
@@ -66,7 +67,7 @@ export function TreeCard(props: { id: string; node: Wire; position: Wire; gridSt
   let element!: HTMLElement;
   // Graph projections are immutable snapshots. Reconcile them into a persistent
   // store so unchanged historical blocks retain identity across streaming updates.
-  const [content, setContent] = createStore({ parts: props.node.parts });
+  const [content, setContent] = createStore<{ parts: Wire[] }>({ parts: [] });
   createEffect(() => setContent('parts', reconcile(props.node.parts, { key: null, merge: true })));
 
   onMount(() => props.measure(props.id, element));
@@ -297,12 +298,14 @@ export default function Conversation(props: Props) {
     props.onDismissBranch(id);
   }
 
-  async function submit(key: string, leafId: string) {
+  async function submit(key: string, leafId: string, images: ImageAttachment[] = []) {
     const drafts = props.drafts;
     const update = props.onDraftChange;
     const text = drafts[key] || '';
-    if (!text.trim() || props.busy(leafId)) return;
-    if (await props.onSubmit(text, leafId) && drafts[key] === text) update(key, '');
+    if ((!text.trim() && !images.length) || props.busy(leafId)) return false;
+    const accepted = await props.onSubmit(text, leafId, images);
+    if (accepted && drafts[key] === text) update(key, '');
+    return accepted;
   }
 
   const options = (): ViewOptions => ({ widths: { focused: focusedFitsWindow() ? maxWidth() : widths.focused, side: widths.side },
@@ -544,7 +547,7 @@ export default function Conversation(props: Props) {
           style={{ width: `${workingWidth()}px`, 'margin-left': '0',
             left: `${inline() ? layout().composers[index()]?.left || 0 : layout().inset - scroll().left}px`,
             top: inline() ? `${layout().composers[index()]?.top || 0}px` : '0px' }}
-          onFocus={() => selectLane(index(), false)} onSubmit={() => submit(key, lane().leafId)}
+          onFocus={() => selectLane(index(), false)} onSubmit={images => submit(key, lane().leafId, images)}
           running={props.running(lane()?.leafId)} health={props.health(lane()?.leafId)} busy={props.busy(lane()?.leafId)}
           onAbort={() => { if (props.running(lane()?.leafId)) props.onAbort(lane().leafId); }} />
       </Portal>;

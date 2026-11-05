@@ -211,7 +211,7 @@ export class AgentRegistry {
         sourceCwd = source.cwd;
       } else {
         // Migrate in memory only: forking must not rewrite the source file.
-        const session = SessionManager.inMemory(selected.cwd, undefined, parseSessionEntries(await readFile(selected.file, 'utf8')));
+        const session = SessionManager.inMemory(selected.cwd, undefined, parseSessionEntries(await readFile(selected.file, 'utf8'), selected.file));
         entries = session.getEntries();
         leafId = session.getLeafId();
         const model = session.buildSessionContext().model;

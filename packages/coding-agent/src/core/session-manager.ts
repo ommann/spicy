@@ -32,6 +32,7 @@ import { readdir, stat } from "fs/promises";
 import { basename, join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
+import { hydrateSessionEntry, serializeSessionEntry } from './session-attachments.ts';
 import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import {
@@ -360,7 +361,7 @@ export function migrateSessionEntries(entries: FileEntry[]): void {
 }
 
 /** Exported for compaction.test.ts */
-export function parseSessionEntries(content: string): FileEntry[] {
+export function parseSessionEntries(content: string, sessionFile?: string): FileEntry[] {
 	const entries: FileEntry[] = [];
 	const lines = content.trim().split("\n");
 
@@ -374,7 +375,7 @@ export function parseSessionEntries(content: string): FileEntry[] {
 		}
 	}
 
-	return entries;
+	return sessionFile ? entries.map(entry => hydrateSessionEntry(entry, sessionFile)) : entries;
 }
 
 export function getLatestCompactionEntry(entries: SessionEntry[]): CompactionEntry | null {
@@ -674,7 +675,7 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
 	}
 
 	if (pending) appendFileSync(resolvedFilePath, "\n");
-	return entries;
+	return entries.map(entry => hydrateSessionEntry(entry, resolvedFilePath));
 }
 
 /**
@@ -1185,7 +1186,7 @@ export class SessionManager {
 		const fd = openSync(this.sessionFile, "w");
 		try {
 			for (const entry of this.fileEntries) {
-				writeFileSync(fd, `${JSON.stringify(entry)}\n`);
+				writeFileSync(fd, `${serializeSessionEntry(entry, this.sessionFile)}\n`);
 			}
 		} finally {
 			closeSync(fd);
@@ -1238,14 +1239,14 @@ export class SessionManager {
 			const fd = openSync(this.sessionFile, "wx");
 			try {
 				for (const e of this.fileEntries) {
-					writeFileSync(fd, `${JSON.stringify(e)}\n`);
+					writeFileSync(fd, `${serializeSessionEntry(e, this.sessionFile)}\n`);
 				}
 			} finally {
 				closeSync(fd);
 			}
 			this.flushed = true;
 		} else {
-			appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
+			appendFileSync(this.sessionFile, `${serializeSessionEntry(entry, this.sessionFile)}\n`);
 		}
 	}
 
@@ -1945,7 +1946,7 @@ export class SessionManager {
 		// Copy all non-header entries from source
 		for (const entry of sourceEntries) {
 			if (entry.type !== "session") {
-				appendFileSync(newSessionFile, `${JSON.stringify(entry)}\n`);
+				appendFileSync(newSessionFile, `${serializeSessionEntry(entry, newSessionFile)}\n`);
 			}
 		}
 

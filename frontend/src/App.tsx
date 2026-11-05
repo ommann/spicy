@@ -412,20 +412,21 @@ export default function App(props: ParentProps) {
     return homeAgent!;
   }
 
-  async function sendHomeChat() {
+  async function sendHomeChat(images: import('./image-attachments').ImageAttachment[] = []) {
     const message = homeDraft();
-    if (busy() || !message.trim()) return;
+    if (busy() || (!message.trim() && !images.length)) return false;
     setBusy(true);
     try {
       const agent = await prepareHomeChat();
-      await post('command', { agentId: agent.agentId, type: 'prompt', message, systemPrompt: { choice: 'current' } });
+      await post('command', { agentId: agent.agentId, type: 'prompt', message, images, systemPrompt: { choice: 'current' } });
       showAgent(agent, true);
       homeAgent = undefined;
       if (homeDraft() === message) setHomeDraft('');
       setNotification({ message: '', isError: false });
       setViewMode('focused');
       openFocusedChat();
-    } catch (failure) { reportFailure(failure); }
+      return true;
+    } catch (failure) { reportFailure(failure); return false; }
     finally { setBusy(false); }
   }
 
@@ -537,8 +538,8 @@ export default function App(props: ParentProps) {
     finally { setBusy(false); }
   }
 
-  async function send(message: string, leafId: string): Promise<boolean> {
-    if (!message.trim() || leafBusy(leafId)) return false;
+  async function send(message: string, leafId: string, images: import('./image-attachments').ImageAttachment[] = []): Promise<boolean> {
+    if ((!message.trim() && !images.length) || leafBusy(leafId)) return false;
     const originatingConversation = conversation;
     if (!selectedAgentId()) {
       setSending(previous => [...previous, leafId]);
@@ -590,7 +591,7 @@ export default function App(props: ParentProps) {
       } else {
         const prompt = draft?.prompt ?? pendingPrompts()[leafId];
         const systemPrompt = { choice: 'current', ...(prompt ? { selected: prompt } : {}) };
-        await post('command', { agentId: agent.agentId, type: 'prompt', message, systemPrompt,
+        await post('command', { agentId: agent.agentId, type: 'prompt', message, images, systemPrompt,
           ...(agent.running ? { streamingBehavior: 'steer' } : {}) });
       }
       accepted = true;

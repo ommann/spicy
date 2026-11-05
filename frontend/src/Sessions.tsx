@@ -21,7 +21,7 @@ export default function Sessions(props: {
   onProjectQuery: (value: string) => void;
   nameQuery: string;
   onNameQuery: (value: string) => void;
-  onSubmit: () => void;
+  onSubmit: (images?: import('./image-attachments').ImageAttachment[]) => void | boolean | Promise<boolean>;
   onEditPrompt: () => void;
   onOpen: (session: Wire) => void;
   busy: boolean;
