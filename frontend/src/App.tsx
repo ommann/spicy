@@ -15,7 +15,6 @@ import {
   on,
   onCleanup,
   onMount,
-  untrack,
   type ParentProps,
 } from "solid-js";
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -249,19 +248,15 @@ export default function App(props: ParentProps) {
     return result;
   }
 
-  async function act(work: () => Promise<void>) {
-    setBusy(true);
+  function reportFailure(failure: unknown) {
+    if (appLifecycle.signal.aborted) return;
+    const message = failure instanceof Error ? failure.message : String(failure);
+    setNotification({ message, isError: true });
+  }
 
-    try {
-      await work();
-    } catch (failure) {
-      if (appLifecycle.signal.aborted) return;
-
-      const message = failure instanceof Error ? failure.message : String(failure);
-      setNotification({ message, isError: true });
-    } finally {
-      setBusy(false);
-    }
+  async function requestLogin(endpoint: string, data?: Record<string, unknown>) {
+    await bridgeReady;
+    return post(endpoint, data);
   }
 
   function accept(value: Snapshot) {
@@ -344,15 +339,18 @@ export default function App(props: ParentProps) {
   async function openChat() {
     setProjectCwd(sessionCwd());
     chatDialog.showModal();
-    await act(async () => {
+    setBusy(true);
+    try {
       const response = await fetch('/api/agents', { signal: appLifecycle.signal });
       if (!response.ok) throw new Error('Could not list agents');
       setAvailableAgents(await response.json());
-    });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
   }
 
   async function chooseAgent(id: string) {
-    await act(async () => {
+    setBusy(true);
+    try {
       const response = await fetch(infoUrl(id), { signal: appLifecycle.signal });
       if (!response.ok) throw new Error('Could not load the agent');
       const info = await response.json();
@@ -364,7 +362,8 @@ export default function App(props: ParentProps) {
         setModels(available.models || []);
       }
       chatDialog.close();
-    });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
   }
 
   createEffect(() => {
@@ -413,10 +412,11 @@ export default function App(props: ParentProps) {
     return homeAgent!;
   }
 
-  function sendHomeChat() {
+  async function sendHomeChat() {
     const message = homeDraft();
     if (busy() || !message.trim()) return;
-    act(async () => {
+    setBusy(true);
+    try {
       const agent = await prepareHomeChat();
       await post('command', { agentId: agent.agentId, type: 'prompt', message, systemPrompt: { choice: 'current' } });
       showAgent(agent, true);
@@ -425,37 +425,44 @@ export default function App(props: ParentProps) {
       setNotification({ message: '', isError: false });
       setViewMode('focused');
       openFocusedChat();
-    });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
   }
 
-  function editHomePrompt() {
+  async function editHomePrompt() {
     if (busy()) return;
-    act(async () => {
+    setBusy(true);
+    try {
       const agent = await prepareHomeChat();
       showAgent(agent, true);
       navigateView('/system-prompt-creator');
-    });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
   }
 
-  function openHomeSession(session: Wire) {
+  async function openHomeSession(session: Wire) {
     if (busy()) return;
-    act(async () => {
+    setBusy(true);
+    try {
       const agent = await post('agents', { openSessionId: session.id });
       showAgent(agent, true);
       setViewMode('focused');
       openFocusedChat();
-    });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
   }
 
   async function start(sessionId?: string, cwd = sessionCwd()) {
     await bridgeReady;
-    await act(async () => {
+    setBusy(true);
+    try {
       const result = await post('agents', { ...(cwd ? { cwd } : {}), ...(sessionId ? { sessionId } : {}) });
       showAgent(result, true);
       chatDialog.close();
       const available = await post('command', { agentId: result.agentId, type: 'get_available_models' });
       setModels(available.models || []);
-    });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
   }
 
   async function newSession() { await start(); }
@@ -484,11 +491,50 @@ export default function App(props: ParentProps) {
   async function abort(leafId?: string) {
     const id = leafId ? leafAgent(leafId)?.agentId : selectedAgentId();
     if (!id) return;
-    await act(async () => {
+    setBusy(true);
+    try {
       const queue = await post('command', { agentId: id, type: 'clear_queue' });
       if (id === selectedAgentId()) conversation?.setDraft([...(queue.steering || []), ...(queue.followUp || [])].join('\n'));
       await post('command', { agentId: id, type: 'abort' });
-    });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
+  }
+
+  async function forkFromEntry(entryId: string) {
+    if (!entryId) return;
+    const agentId = selectedAgentId();
+    setBusy(true);
+    try {
+      const result = await post('command', { type: 'fork', agentId, entryId });
+      if (!result.cancelled) {
+        const response = await fetch(infoUrl(agentId), { signal: appLifecycle.signal });
+        if (!response.ok) throw new Error('Could not refresh the forked session');
+        accept(await response.json());
+        conversation?.setDraft(result.text || '');
+      }
+      chatDialog.close();
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
+  }
+
+  async function selectModel(value: string) {
+    const model = models().find(model => `${model.provider}/${model.id}` === value);
+    if (!model) return;
+    setBusy(true);
+    try {
+      await post('command', { type: 'set_model', provider: model.provider, modelId: model.id });
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
+  }
+
+  async function replyToDialog(dialog: Wire, response: Wire) {
+    const { agentId, id } = dialog;
+    setBusy(true);
+    try {
+      await post('ui', { agentId, id, ...response });
+      updateAgent(agentId, previous => ({ ...previous, dialogs: previous.dialogs.filter(item => item.id !== id) }));
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
   }
 
   async function send(message: string, leafId: string): Promise<boolean> {
@@ -567,23 +613,30 @@ export default function App(props: ParentProps) {
     document.title = `Spicy — ${live() ? sessionCwd().split('/').filter(Boolean).at(-1) || 'chat' : 'chat'}`;
   });
 
+  async function openSessionUrl(urlId: string, isCancelled: () => boolean) {
+    setBusy(true);
+    try {
+      const value = await post('agents', { sessionUrlId: urlId }) as Snapshot;
+      if (!isCancelled()) showAgent(value, true);
+    } catch (failure) { reportFailure(failure); }
+    finally { setBusy(false); }
+  }
+
   const [sessionRoutingReady, setSessionRoutingReady] = createSignal(false);
   createEffect(on([sessionRoutingReady, routeSessionId], ([ready, urlId]) => {
     if (!ready || !urlId || snapshot().state?.sessionUrlId === urlId) return;
     let cancelled = false;
     onCleanup(() => { cancelled = true; });
-    act(async () => {
-      const value = await post('agents', { sessionUrlId: urlId }) as Snapshot;
-      if (!cancelled) showAgent(value, true);
-    });
+    void openSessionUrl(urlId, () => cancelled);
   }));
   createEffect(on([sessionRoutingReady, selectedSessionUrlId], ([ready, urlId]) => {
     if (!ready || !urlId || location.pathname === '/' || routeSessionId() === urlId) return;
     navigate(sessionPath(viewPath() === '/chat' ? '/' : location.pathname, urlId) + location.search, { replace: !routeSessionId() });
   }));
 
-  onMount(() => {
-    act(async () => {
+  async function restoreBridge() {
+    setBusy(true);
+    try {
       const response = await fetch('/api/info', { signal: appLifecycle.signal });
       if (!response.ok) throw new Error('Could not connect to the local bridge');
       const info = await response.json();
@@ -602,14 +655,23 @@ export default function App(props: ParentProps) {
       const ids = visibleAgentIds().filter(id => agents.some(agent => agent.agentId === id));
       setVisibleAgentIds(ids);
       if (!ids.includes(selectedAgentId())) setSelectedAgentId(ids[0] || '');
-      await Promise.all(ids.map(async id => {
-        const response = await fetch(infoUrl(id), { signal: appLifecycle.signal });
-        if (!response.ok) throw new Error('Could not restore the selected agent');
-        accept(await response.json());
-      }));
+      const pending = [];
+      for (const id of ids) {
+        pending.push(fetch(infoUrl(id), { signal: appLifecycle.signal }).then(async response => {
+          if (!response.ok) throw new Error('Could not restore the selected agent');
+          accept(await response.json());
+        }));
+      }
+      await Promise.all(pending);
       if (ids.length) setLive(true);
-    }).finally(() => { markBridgeReady(); setSessionRoutingReady(true); });
-  });
+    } catch (failure) { reportFailure(failure); }
+    finally {
+      setBusy(false);
+      markBridgeReady();
+      setSessionRoutingReady(true);
+    }
+  }
+  onMount(() => { void restoreBridge(); });
   onCleanup(() => {
     appLifecycle.abort();
     for (const stream of streams.values()) stream.close();
@@ -629,7 +691,7 @@ export default function App(props: ParentProps) {
           <button class="state-toggle" aria-pressed={viewPath().startsWith('/system-prompts')} onClick={() => navigateView('/system-prompts')}>System prompts</button>
           <button class="state-toggle" aria-pressed={viewPath() === '/system-prompt-creator'} onClick={() => navigateView('/system-prompt-creator')}>Editor</button>
         </div>
-        <Login request={async (endpoint, data) => { await bridgeReady; return post(endpoint, data); }} />
+        <Login request={requestLogin} />
       </>}>
       <SystemPromptCreatorContext.Provider value={{
         load: async () => {
@@ -739,12 +801,14 @@ export default function App(props: ParentProps) {
                 </button>
                 <button
                   disabled={busy()}
-                  onClick={() =>
-                    act(async () => {
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
                       await post("stop");
                       chatDialog.close();
-                    })
-                  }
+                    } catch (failure) { reportFailure(failure); }
+                    finally { setBusy(false); }
+                  }}
                 >
                   Disconnect
                 </button>
@@ -764,22 +828,7 @@ export default function App(props: ParentProps) {
                 label: typeof entry.message.content === "string" ? entry.message.content.slice(0, 100) : entry.id,
               }))}
               disabled={busy() || snapshot().running}
-              onChange={entryId => {
-                if (!entryId) return;
-                act(async () => {
-                  const result = await post("command", {
-                    type: "fork",
-                    entryId,
-                  });
-                  if (!result.cancelled) {
-                    const response = await fetch(infoUrl(), { signal: appLifecycle.signal });
-                    if (!response.ok) throw new Error('Could not refresh the forked session');
-                    accept(await response.json());
-                    conversation?.setDraft(result.text || '');
-                  }
-                  chatDialog.close();
-                });
-              }}
+              onChange={forkFromEntry}
             />
           </label>
           <Show when={models().length}>
@@ -793,17 +842,7 @@ export default function App(props: ParentProps) {
                   value: `${model.provider}/${model.id}`,
                   label: `${model.provider}/${model.name || model.id}`,
                 }))}
-                onChange={value => {
-                  const model = models().find(model => `${model.provider}/${model.id}` === value);
-                  if (model)
-                    act(async () => {
-                      await post("command", {
-                        type: "set_model",
-                        provider: model.provider,
-                        modelId: model.id,
-                      });
-                    });
-                }}
+                onChange={selectModel}
               />
             </label>
           </Show>
@@ -813,12 +852,7 @@ export default function App(props: ParentProps) {
         {(dialog) => (
           <ExtensionDialog
             dialog={dialog}
-            reply={(response) =>
-              act(async () => {
-                await post('ui', { agentId: dialog.agentId, id: dialog.id, ...response });
-                updateAgent(dialog.agentId, previous => ({ ...previous, dialogs: previous.dialogs.filter(item => item.id !== dialog.id) }));
-              })
-            }
+            reply={response => { void replyToDialog(dialog, response); }}
           />
         )}
       </For>
@@ -833,7 +867,9 @@ function ExtensionDialog(props: {
   dialog: Wire;
   reply: (response: Wire) => void;
 }) {
-  const [value, setValue] = createSignal(untrack(() => props.dialog.prefill || ""));
+  const [editedValue, setValue] = createSignal<string>();
+  const value = () => editedValue() ?? props.dialog.prefill ?? '';
+  createEffect(on(() => props.dialog.id, () => setValue(undefined)));
   return (
     <Dialog
       open

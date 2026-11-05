@@ -23,6 +23,7 @@
   margin-bottom: 2lh;
 }
 
+.startup-empty-chat .message-composer,
 .startup-empty-chat .editor {
   margin: 0;
 }

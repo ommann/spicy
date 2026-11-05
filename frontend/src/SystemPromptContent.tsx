@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onCleanup, onMount, on } from 'solid-js';
 import CollapseToggle from './CollapseToggle';
 import SourceText from './SourceText';
 import ScrollArea from './ScrollArea';
@@ -11,9 +11,9 @@ interface ExpansionProps {
 }
 
 function createExpansion(props: ExpansionProps) {
-  const [local, setLocal] = createSignal(untrack(() => props.expandAll));
-  createEffect(() => setLocal(props.expandAll));
-  const expanded = () => props.onExpandChange ? props.expandAll : local();
+  const [local, setLocal] = createSignal<boolean>();
+  createEffect(on(() => props.expandAll, () => setLocal(undefined)));
+  const expanded = () => props.onExpandChange ? props.expandAll : local() ?? props.expandAll;
   const toggle = () => {
     if (props.onExpandChange) props.onExpandChange(!expanded());
     else setLocal(!expanded());

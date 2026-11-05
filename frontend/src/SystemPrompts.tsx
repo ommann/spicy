@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount, on, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount, on } from 'solid-js';
 import { promptLabel } from './prompt-numbers';
 import type { PromptVersion } from './SystemPromptRoute';
 import SystemPromptContent from './SystemPromptContent';
@@ -27,7 +27,8 @@ export default function SystemPrompts(props: Props) {
   const [expanded, setExpanded] = createSignal(true);
   const [widths, setWidths] = createSignal({ focused: 'auto', side: '1040' });
   const widthPresets = [720, 1040, 1280, 1600, 1920, 2240, 2560, 3200];
-  const [selection, setSelection] = createSignal(untrack(() => props.selected));
+  const [selectionOverride, setSelection] = createSignal<string>();
+  const selection = () => selectionOverride() ?? props.selected;
   const sections = new Map<string, HTMLElement>();
   let viewport!: HTMLElement;
   let optionsDialog!: HTMLDialogElement;
@@ -44,7 +45,8 @@ export default function SystemPrompts(props: Props) {
   });
   const selected = createMemo(() => props.versions.find(version => version.key === selection()) || props.versions[0]);
 
-  const [navigation, setNavigation] = createSignal(untrack(() => props.selected));
+  const [navigationOverride, setNavigation] = createSignal<string>();
+  const navigation = () => navigationOverride() ?? props.selected;
   createEffect(() => { setSelection(props.selected); setNavigation(props.selected); });
 
   function select(key: string) {

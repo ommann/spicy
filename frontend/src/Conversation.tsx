@@ -68,7 +68,12 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JS
   onMount(() => props.measure(props.id, element));
   onCleanup(() => props.unmeasure(element));
 
-  return <SectionContext.Provider value={element => { const dispose = props.registerSection(props.id, element); onCleanup(dispose); }}><article class="tree-node" classList={{ 'prefix-preview': props.node.isPrefixDelta }} data-entry-id={props.id}
+  return <SectionContext.Provider value={element => {
+    createEffect(() => {
+      const dispose = props.registerSection(props.id, element);
+      onCleanup(dispose);
+    });
+  }}><article class="tree-node" classList={{ 'prefix-preview': props.node.isPrefixDelta }} data-entry-id={props.id}
     hidden={props.position.hidden} style={{ ...props.gridStyle, width: `${props.position.span}px` }}>
     <Card ref={element} anchors={props.node.anchors} style={{ left: `${props.position.cardLeft}px`, width: `${props.width}px` }}>
       <Show when={props.node.entry.type === 'branch_draft'}>
@@ -151,12 +156,16 @@ export default function Conversation(props: Props) {
     return {
       columns: x.slice(1).map((edge, index) => `${edge - x[index]}px`).join(' '),
       rows: y.slice(1).map((edge, index) => `${edge - y[index]}px`).join(' '),
-      place: (left: number, top: number, width: number): JSX.CSSProperties => ({
-        'grid-column': `${x.indexOf(left) + 1} / ${x.indexOf(left + width) + 1}`,
-        'grid-row': y.indexOf(top) + 1,
-      }),
+      x, y,
     };
   });
+  function gridPlacement(left: number, top: number, width: number): JSX.CSSProperties {
+    const { x, y } = tracks();
+    return {
+      'grid-column': `${x.indexOf(left) + 1} / ${x.indexOf(left + width) + 1}`,
+      'grid-row': y.indexOf(top) + 1,
+    };
+  }
   const sections = new Map<HTMLElement, string>();
   function registerSection(id: string, element: HTMLElement) {
     sections.set(element, id);
@@ -221,13 +230,14 @@ export default function Conversation(props: Props) {
   }
 
   function captureAnchor(lane = focused()) {
+    const positions = layout().items;
     const candidates = [...props.graph.nodes.values()].filter((node: Wire) => !node.isPrefixDelta && node.first <= lane && node.last >= lane)
-      .sort((a: Wire, b: Wire) => layout().items.get(a.id).top - layout().items.get(b.id).top);
+      .sort((a: Wire, b: Wire) => positions.get(a.id).top - positions.get(b.id).top);
     const node = candidates.find((item: Wire) => {
-      const position = layout().items.get(item.id);
+      const position = positions.get(item.id);
       return position.top + position.height >= viewport.scrollTop + 40;
     }) || candidates.at(-1);
-    return node ? { id: node.id, offset: layout().items.get(node.id).top - viewport.scrollTop } : undefined;
+    return node ? { id: node.id, offset: positions.get(node.id).top - viewport.scrollTop } : undefined;
   }
 
   function selectLane(lane: number, preserveReading = true) {
@@ -411,7 +421,9 @@ export default function Conversation(props: Props) {
         8, window.innerWidth - jumpSizes().branch - 8) };
   });
 
-  const canvas = <ImageContext.Provider value={props.onImage}><div class="canvas-scroll-shell" classList={{ 'no-horizontal': !layout().hasHorizontal }}>
+  function openImage(image: PreviewImage) { props.onImage(image); }
+
+  const canvas = <ImageContext.Provider value={openImage}><div class="canvas-scroll-shell" classList={{ 'no-horizontal': !layout().hasHorizontal }}>
     <main ref={viewport} id="trace-viewport" class="transcript" aria-label="Conversation tree — scroll vertically through time, horizontally between branches"
       classList={{ 'pan-ready': interaction.space(), panning: interaction.dragging() }}
       {...interaction.handlers}>
@@ -422,7 +434,7 @@ export default function Conversation(props: Props) {
         </svg>
         <For each={props.graph.leaves}>{(leaf: Wire, index) => <Show when={leaf.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf.id).captured}>
           <article class="tree-node" hidden={mode() === 'focused' && index() !== focused()}
-            style={{ ...tracks().place(layout().inset + layout().starts[index()], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
+            style={{ ...gridPlacement(layout().inset + layout().starts[index()], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
             <Card><Show when={isUnstartedCompaction(props.graph, leaf.id)} fallback={
               <SystemPromptReference entryId={leaf.id} promptId={versionFor(leaf.id)?.full?.id || ''}
                 title={versionFor(leaf.id)?.title} number={versionFor(leaf.id)?.number || 1}
@@ -453,7 +465,7 @@ export default function Conversation(props: Props) {
 
           const promptRoot = () => props.graph.prefix.get(id).rootId;
           return <TreeCard id={id} node={node()} position={layout().items.get(id)}
-            gridStyle={tracks().place(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)}
+            gridStyle={gridPlacement(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)}
             promptNumber={number()} promptTitle={versionFor(id)?.title} scrollTop={scroll().top}
             promptRowTop={layout().items.get(promptRoot())?.top ?? spacing().row} selection={selection()}
             registerSection={registerSection} width={workingWidth()}

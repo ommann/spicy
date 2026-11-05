@@ -61,7 +61,7 @@ export default function Sessions(props: {
     <ScrollArea class="startup-session-scroll" vertical>
     <main class="startup-sessions" aria-label="Sessions">
       <section class="startup-empty-chat" aria-label="New chat">
-        <button class="branch-draft system-prompt-reference empty-placeholder" aria-label="Edit system prompt" disabled={props.busy} onClick={props.onEditPrompt}><span>#1</span><AgentHealth placeholder /></button>
+        <button class="branch-draft system-prompt-reference empty-placeholder" aria-label="Edit system prompt" disabled={props.busy} onClick={() => props.onEditPrompt()}><span>#1</span><AgentHealth placeholder /></button>
         <section class="branch-draft" />
         <MessageComposer value={props.draft} onChange={props.onDraft} onSubmit={props.onSubmit} busy={props.busy} />
       </section>

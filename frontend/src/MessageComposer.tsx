@@ -61,7 +61,7 @@ export default function MessageComposer(props: Props) {
       <span class="composer-working" role="status" data-status={props.health || 'ready'}>
         <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 0v12M1 3l10 6M1 9l10-6" /></svg>Working
       </span>
-      <button class="composer-stop text-action" type="button" disabled={props.busy} onClick={props.onAbort}>Stop</button>
+      <button class="composer-stop text-action" type="button" disabled={props.busy} onClick={() => props.onAbort?.()}>Stop</button>
     </div></Show>
     <div class="editor" data-leaf-id={props.leafId} style={{ position: 'relative', top: 'auto', margin: '0' }}>
     <ScrollableTextarea ref={element => { input = element; props.inputRef?.(element); }}
