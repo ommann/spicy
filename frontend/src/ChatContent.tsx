@@ -186,7 +186,7 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
         if (imageRead() && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); preview(event.currentTarget); }
       }}
       role={imageRead() ? 'button' : undefined} aria-label={imageRead() ? `Open image: ${props.call.name} ${label()}` : undefined}>
-      <strong>{props.call.name}</strong><span class={args().path ? 'path' : 'tool-arguments'}
+      <Show when={!isBash()}><strong>{props.call.name}</strong></Show><span class={args().path ? 'path' : 'tool-arguments'}
         onDblClick={event => { if (isBash()) { event.preventDefault(); selectSource(event.currentTarget); } }}><AnsiText text={label()} /></span>
       <Show when={args().offset}><span class="range">{`:${args().offset}${args().limit ? `-${args().offset + args().limit - 1}` : ''}`}</span></Show>
     </div>
