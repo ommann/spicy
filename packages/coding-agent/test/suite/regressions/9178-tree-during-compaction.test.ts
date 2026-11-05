@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { assistantMsg, userMsg } from "../../utilities.ts";
-import { createHarness, getMessageText, type Harness } from "../harness.ts";
+import { createHarness, type Harness } from "../harness.ts";
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
 	let resolve!: () => void;
@@ -45,6 +45,7 @@ describe("issue #9178: tree navigation during manual compaction", () => {
 		const originalLeafId = harness.sessionManager.appendMessage(assistantMsg("second assistant"));
 		harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 
+		const originalEntries = structuredClone(harness.sessionManager.getEntries());
 		const compactionPromise = harness.session.compact();
 		await compactionStarted.promise;
 
@@ -59,11 +60,14 @@ describe("issue #9178: tree navigation during manual compaction", () => {
 		}
 		await compactionPromise;
 
-		expect(harness.sessionManager.getEntries().at(-1)).toMatchObject({
-			type: "compaction",
-			parentId: originalLeafId,
-		});
-		expect(harness.session.messages.map(getMessageText)).toContain("second assistant");
+		const entries = harness.sessionManager.getEntries();
+		expect(entries.slice(0, originalEntries.length)).toEqual(originalEntries);
+		const root = entries.filter((entry) => entry.type === "compaction").at(-1);
+		expect(root).toMatchObject({ type: "compaction", parentId: null, summary: "summary" });
+		expect(harness.sessionManager.getLeafId()).not.toBe(originalLeafId);
+		expect(harness.session.messages).toEqual([
+			expect.objectContaining({ role: "compactionSummary", summary: "summary" }),
+		]);
 	});
 
 	it("rejects a second navigation while the first is waiting", async () => {

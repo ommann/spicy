@@ -27,9 +27,9 @@ const bundle = await build({
   } },
 });
 const code = (Array.isArray(bundle) ? bundle[0] : bundle).output.find(output => output.type === 'chunk').code;
-const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'http://localhost:5173/' });
+const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'http://localhost:5173/', pretendToBeVisual: true });
 const { window } = dom;
-for (const name of ['window', 'document', 'HTMLElement', 'HTMLTextAreaElement', 'HTMLDialogElement', 'HTMLHeadElement', 'Element', 'Node', 'NodeFilter', 'Event', 'KeyboardEvent', 'CustomEvent', 'AbortController', 'MutationObserver']) {
+for (const name of ['window', 'document', 'HTMLElement', 'HTMLTextAreaElement', 'HTMLDialogElement', 'HTMLHeadElement', 'Element', 'Node', 'NodeFilter', 'Event', 'KeyboardEvent', 'CustomEvent', 'AbortController', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame']) {
   globalThis[name] = name === 'window' ? window : window[name];
 }
 globalThis.location = window.location;
@@ -47,7 +47,11 @@ window.HTMLDialogElement.prototype.close = function () {
 };
 const components = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const root = window.document.getElementById('root');
-const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+const flush = async () => {
+  await Promise.resolve();
+  await new Promise(resolve => window.requestAnimationFrame(resolve));
+  await Promise.resolve();
+};
 const button = (parent, text) => [...parent.querySelectorAll('button')].find(element => element.textContent.trim() === text);
 
 test('working status and Stop stay outside the input without replacing it or losing its draft', async () => {
@@ -322,7 +326,7 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
     await flush();
     assert.equal(cards[0].hidden, true);
     assert.equal(cards[1].hidden, false);
-    button(dialog, 'Side by side').click();
+    button(dialog, 'Tree').click();
     await flush();
     assert.equal(cards[0].hidden, false);
     const hover = new window.MouseEvent('pointermove', { bubbles: true, clientX: 10 });
@@ -403,7 +407,10 @@ test('chat references open the Solid view without creating a model request or mo
     content: [{ type: 'text', text: 'Hello' }, { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
   } } : entry);
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
-  const snapshot = { agentId: 'default', entries: imageEntries, leafId: 'user2', state: { sessionId: 'test', sessionUrlId: 'k7m3xqa9' }, live: [], dialogs: [],
+  const snapshot = { agentId: 'default', entries: [...imageEntries, {
+    id: 'sibling-user', parentId: original.id, type: 'message',
+    message: { role: 'user', content: 'Other branch', timestamp: 0 },
+  }], leafId: 'user2', state: { sessionId: 'test', sessionUrlId: 'k7m3xqa9' }, live: [], dialogs: [],
     connected: true, running: false, cwd: '/test/project', token: 'test' };
   globalThis.fetch = async (url, options) => {
     requests.push({ url, options });
@@ -443,7 +450,7 @@ test('chat references open the Solid view without creating a model request or mo
     const nextLeft = viewport.scrollLeft;
     root.querySelector('[aria-label="Previous column"]').click();
     await flush();
-    assert.equal(nextLeft - viewport.scrollLeft, 768, 'Previous arrow moves back exactly one column');
+    assert.equal(nextLeft - viewport.scrollLeft, 1088, 'Previous arrow moves back exactly one column (1040px + 48px gap)');
     const image = root.querySelector('.trace-image');
     assert.ok(image);
     image.click();
@@ -612,7 +619,7 @@ test('Sessions composer keeps failed drafts, opens focused chat on success and o
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(created, 1, 'Retry uses the same new session');
     assert.equal(dispose.history.get(), '/k7m3xqa9');
-    assert.equal(button(root, 'Focused').getAttribute('aria-pressed'), 'true');
+    assert.equal(button(root, 'Single').getAttribute('aria-pressed'), 'true');
     button(root, 'Sessions').click();
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(dispose.history.get(), '/');
@@ -666,6 +673,12 @@ test('side-by-side chats send and stop independently while both agents stream', 
   const dispose = components.mountApp(root);
   try {
     for (let i = 0; i < 8; i++) await flush();
+    button(root, 'Options').click();
+    const options = root.querySelector('[aria-label="Options"]');
+    const streaming = [...options.querySelectorAll('label')].find(label => label.textContent.includes('Show streaming content')).querySelector('input');
+    streaming.click();
+    button(options, 'Close').click();
+    await flush();
     const send = (id, text) => {
       const input = root.querySelector(`.editor[data-leaf-id="${id}-answer"] textarea`);
       assert.ok(input, `Composer for ${id} exists`);
@@ -690,13 +703,13 @@ test('side-by-side chats send and stop independently while both agents stream', 
     assert.match(root.textContent, /right streaming/);
     const stops = root.querySelectorAll('.composer-stop');
     assert.equal(stops.length, 2);
-    root.querySelector('.editor[data-leaf-id="stream-left-1"] .composer-stop').click();
+    root.querySelector('.message-composer:has(.editor[data-leaf-id="stream-left-1"]) .composer-stop').click();
     await flush();
     assert.deepEqual(requests.filter(request => request.type === 'abort').map(request => request.agentId), ['left']);
     streams.get('left').emit('record', { type: 'agent_settled' });
     await flush();
     assert.equal(root.querySelectorAll('.composer-stop').length, 1);
-    assert.ok(root.querySelector('.editor[data-leaf-id="stream-right-1"] .composer-stop'));
+    assert.ok(root.querySelector('.message-composer:has(.editor[data-leaf-id="stream-right-1"]) .composer-stop'));
     assert.match(root.textContent, /right streaming/);
     let rightInput = root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea');
     rightInput.value = 'Keep right draft';
@@ -735,6 +748,8 @@ test('side-by-side chats send and stop independently while both agents stream', 
     assert.equal(steering.agentId, 'right');
     assert.equal(steering.streamingBehavior, 'steer');
   } finally {
+    const streaming = [...root.querySelectorAll('[aria-label="Options"] label')].find(label => label.textContent.includes('Show streaming content'))?.querySelector('input');
+    if (streaming?.checked) streaming.click();
     dispose();
     assert.ok([...streams.values()].every(stream => stream.closed));
     assert.equal(requests.filter(request => request.type === 'stop').length, 0);

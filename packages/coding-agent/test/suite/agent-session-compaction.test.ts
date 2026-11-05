@@ -242,8 +242,9 @@ describe("AgentSession compaction characterization", () => {
 		expect(statsAfter.tokens.cacheRead).toBe(statsBefore.tokens.cacheRead + summaryUsage.cacheRead);
 		expect(statsAfter.tokens.cacheWrite).toBe(statsBefore.tokens.cacheWrite + summaryUsage.cacheWrite);
 		expect(statsAfter.cost).toBe(statsBefore.cost + summaryUsage.cost.total);
-		expect(harness.session.messages[0]?.role).toBe("system");
-		expect(harness.session.messages[1]?.role).toBe("compactionSummary");
+		expect(compactionEntry?.parentId).toBeNull();
+		expect(harness.session.messages.map((message) => message.role)).toEqual(["compactionSummary", "system"]);
+		expect(harness.session.messages[0]).toMatchObject({ summary: "summary from extension" });
 	});
 
 	it("checkpoints the replayed system state and folds summarized and retained system patches into it", async () => {
