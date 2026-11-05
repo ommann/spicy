@@ -535,13 +535,31 @@ export default function Conversation(props: Props) {
       let input!: HTMLTextAreaElement;
       const index = () => lanes().findIndex(lane => lane.key === key);
       const lane = () => lanes()[index()];
+      const history = createMemo(() => {
+        const prompts: string[] = [];
+        const seen = new Set<string>();
+        let id = lane()?.leafId;
+        while (id && !seen.has(id)) {
+          seen.add(id);
+          const entry = props.graph.raw.get(id);
+          if (!entry) break;
+          if (entry.message?.role === 'user') {
+            const content = entry.message.content;
+            const text = typeof content === 'string' ? content : (content || [])
+              .filter((block: Wire) => block.type === 'text').map((block: Wire) => block.text).join('\n');
+            if (text) prompts.push(text);
+          }
+          id = entry.parentId;
+        }
+        return prompts.reverse();
+      });
       const inline = createMemo(() => layout().inlineComposers);
       onMount(() => { observe(key, element, 'composer'); inputElements.set(key, input); });
       onCleanup(() => { unobserve(element); inputElements.delete(key); });
 
       return <Portal mount={inline() ? stage : composerRow}>
         <MessageComposer ref={value => { element = value; }} inputRef={value => { input = value; }}
-          value={props.drafts[key] || ''} onChange={value => setDrafts(key, value)} leafId={lane()?.leafId}
+          value={props.drafts[key] || ''} history={history()} onChange={value => setDrafts(key, value)} leafId={lane()?.leafId}
           label={index() ? `Message draft (not sent), branch ${index() + 1}` : 'Message draft (not sent)'}
           class={inline() ? 'inline-composer' : undefined} hidden={mode() === 'focused' && index() !== focused()}
           style={{ width: `${workingWidth()}px`, 'margin-left': '0',

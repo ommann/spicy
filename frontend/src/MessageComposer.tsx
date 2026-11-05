@@ -7,6 +7,7 @@ import { clipboardImages, imageSource, type ImageAttachment } from './image-atta
 
 interface Props {
   value: string;
+  history?: string[];
   onChange: (text: string) => void;
   onSubmit?: (images?: ImageAttachment[]) => void | boolean | Promise<boolean>;
   onAbort?: () => void;
@@ -24,11 +25,34 @@ interface Props {
 }
 
 export default function MessageComposer(props: Props) {
+  let historyIndex: number | undefined;
+  let unsentDraft = '';
+  function navigateHistory(event: KeyboardEvent) {
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || input.selectionStart !== input.selectionEnd) return;
+    const older = event.key === 'ArrowUp';
+    if (!older && event.key !== 'ArrowDown') return;
+    const caret = input.selectionStart;
+    if (older ? input.value.slice(0, caret).includes('\n') : input.value.slice(caret).includes('\n')) return;
+    const history = props.history || [];
+    if (!history.length || (!older && historyIndex === undefined)) return;
+    event.preventDefault();
+    if (historyIndex === undefined) {
+      unsentDraft = props.value;
+      historyIndex = history.length;
+    }
+    historyIndex = Math.max(0, Math.min(history.length, historyIndex + (older ? -1 : 1)));
+    const value = historyIndex === history.length ? unsentDraft : history[historyIndex];
+    if (historyIndex === history.length) historyIndex = undefined;
+    props.onChange(value);
+    input.value = value;
+    input.setSelectionRange(value.length, value.length);
+  }
   const [images, setImages] = createSignal<ImageAttachment[]>([]);
   const [pasting, setPasting] = createSignal(false);
   const [attachmentError, setAttachmentError] = createSignal('');
   async function submit() {
     if (pasting() || props.busy) return;
+    historyIndex = undefined;
     const sent = images();
     if (await props.onSubmit?.(sent) === true) setImages(current => current.filter(image => !sent.includes(image)));
   }
@@ -106,8 +130,9 @@ export default function MessageComposer(props: Props) {
       aria-label={props.label || 'Message draft (not sent)'} rows="1" wrap="soft" spellcheck={false}
       value={props.value} style={{ height: `${size().height}px`, 'overflow-y': size().scrollable ? 'auto' : 'hidden' }}
       onPaste={paste}
-      onInput={event => props.onChange(event.currentTarget.value)} onFocus={props.onFocus}
+      onInput={event => { historyIndex = undefined; props.onChange(event.currentTarget.value); }} onFocus={props.onFocus}
       onKeyDown={event => {
+        navigateHistory(event);
         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); void submit(); }
         if (event.key === 'Escape') { event.preventDefault(); props.onAbort?.(); }
       }} />
