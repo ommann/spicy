@@ -828,6 +828,7 @@ describe("durable length recovery", () => {
 
 	it("gives a distinct queued follow-up its own length-recovery budget", async () => {
 		let queued = false;
+		const recoveryRequests: string[] = [];
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
 			settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
@@ -852,9 +853,15 @@ describe("durable length recovery", () => {
 		harnesses.push(harness);
 		harness.setResponses([
 			fauxAssistantMessage("first partial", { stopReason: "length" }),
-			fauxAssistantMessage("first recovered"),
+			(context) => {
+				recoveryRequests.push(JSON.stringify(context.messages));
+				return fauxAssistantMessage("first recovered");
+			},
 			() => fauxAssistantMessage("follow-up partial", { stopReason: "length", timestamp: Date.now() + 1_000 }),
-			() => fauxAssistantMessage("follow-up recovered", { timestamp: Date.now() + 2_000 }),
+			(context) => {
+				recoveryRequests.push(JSON.stringify(context.messages));
+				return fauxAssistantMessage("follow-up recovered", { timestamp: Date.now() + 2_000 });
+			},
 		]);
 
 		await harness.session.prompt("x".repeat(5000));
@@ -870,7 +877,23 @@ describe("durable length recovery", () => {
 			.getEntries()
 			.flatMap((entry) => (entry.type === "context_edit" ? [entry.targetId] : []));
 		expect(lengthIds).toHaveLength(2);
-		expect(omitted).toEqual(expect.arrayContaining(lengthIds));
+		// Recovery leaves the original responses intact instead of recording destructive omissions.
+		expect(omitted).toEqual([]);
+		expect(recoveryRequests).toHaveLength(2);
+		for (const request of recoveryRequests) {
+			expect(request).toContain("recovered input");
+			expect(request).not.toContain("first partial");
+			expect(request).not.toContain("follow-up partial");
+		}
+		const savedResponses = harness.sessionManager.getEntries().flatMap((entry) =>
+			entry.type === "message" && entry.message.role === "assistant" ? [getMessageText(entry.message)] : [],
+		);
+		expect(savedResponses).toEqual([
+			"first partial",
+			"first recovered",
+			"follow-up partial",
+			"follow-up recovered",
+		]);
 		expect(harness.faux.state.callCount).toBe(4);
 	});
 
