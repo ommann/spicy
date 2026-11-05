@@ -3028,6 +3028,11 @@ export class AgentSession {
 		usage?: Usage,
 	): string {
 		const inheritedPrompt = getCurrentSystemMessage(this.sessionManager.buildSessionProjection().messages);
+		const selection = this.model;
+		const routerState =
+			selection && isVirtualModel(selection)
+				? getVirtualModelState(this.sessionManager.getBranch(), selection.provider, selection.id)
+				: undefined;
 		const rootId = this.sessionManager.appendCompactionRoot(summary, tokensBefore, details, fromExtension, usage);
 		if (inheritedPrompt) {
 			this.sessionManager.appendMessage({
@@ -3048,6 +3053,13 @@ export class AgentSession {
 		}
 		this.sessionManager.appendModelChange(model.provider, model.id);
 		this.sessionManager.appendThinkingLevelChange(this.thinkingLevel);
+		if (selection && routerState !== undefined) {
+			this.sessionManager.appendCustomEntry(VIRTUAL_MODEL_STATE_ENTRY, {
+				provider: selection.provider,
+				modelId: selection.id,
+				state: routerState,
+			} satisfies VirtualModelStateData);
+		}
 		this._refreshFinalizedContext();
 		this._emit({
 			type: "history_root",

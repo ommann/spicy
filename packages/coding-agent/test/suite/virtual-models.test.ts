@@ -101,7 +101,10 @@ describe("AgentSession virtual models", () => {
 
 	it("retries the first request of a turn on the model routed for that turn", async () => {
 		const { harness, requests, reasons, dispatched } = await createRoutedHarness(defaultRoute, {
-			settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+			settings: {
+				compaction: { enabled: false },
+				retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 },
+			},
 		});
 		harness.session.setThinkingLevel("low");
 		harness.setResponses([
@@ -286,11 +289,13 @@ describe("AgentSession virtual models", () => {
 		expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual(["threshold"]);
 		expect(compactedBeforeSmall).toBe(true);
 		// The earlier response stays saved, but only the resumed response belongs to the new root.
-		const savedResponses = harness.sessionManager.getEntries().flatMap((entry) =>
-			entry.type === "message" && entry.message.role === "assistant"
-				? [`${entry.message.provider}/${entry.message.model}:${entry.message.thinkingLevel}`]
-				: [],
-		);
+		const savedResponses = harness.sessionManager
+			.getEntries()
+			.flatMap((entry) =>
+				entry.type === "message" && entry.message.role === "assistant"
+					? [`${entry.message.provider}/${entry.message.model}:${entry.message.thinkingLevel}`]
+					: [],
+			);
 		expect(savedResponses).toEqual(["faux/large:high", "faux/small:off"]);
 		expect(dispatched()).toEqual(["faux/small:off"]);
 	});
@@ -327,7 +332,7 @@ describe("AgentSession virtual models", () => {
 			fauxAssistantMessage("first"),
 			fauxAssistantMessage("second"),
 			fauxAssistantMessage("summary"),
-			fauxAssistantMessage("summary"),
+			fauxAssistantMessage("after compaction"),
 		]);
 
 		await harness.session.prompt("one");
@@ -343,11 +348,16 @@ describe("AgentSession virtual models", () => {
 			{ provider: "router", modelId: "auto", state: { turns: 2 } },
 		]);
 
+		const originalEntries = [...harness.sessionManager.getEntries()];
 		await harness.session.compact();
 
+		expect(harness.sessionManager.getEntries().slice(0, originalEntries.length)).toEqual(originalEntries);
 		expect(reasons()).toEqual(["user", "continuation", "user", "direct"]);
 		expect(states).toEqual([undefined, { turns: 1 }, { turns: 1 }, undefined]);
-		expect(stored()).toHaveLength(2);
+		expect(stored()).toEqual([{ provider: "router", modelId: "auto", state: { turns: 2 } }]);
+		await harness.session.prompt("after compaction");
+		expect(states.at(-1)).toEqual({ turns: 2 });
+		expect(stored().at(-1)).toEqual({ provider: "router", modelId: "auto", state: { turns: 3 } });
 	});
 
 	it("does not route compactions that an extension supplies", async () => {
@@ -394,11 +404,7 @@ describe("AgentSession virtual models", () => {
 			return fauxAssistantMessage("summary");
 		};
 		// Our compaction summarizes the entire active conversation in one routed request.
-		harness.setResponses([
-			fauxAssistantMessage("first answer"),
-			fauxAssistantMessage("second answer"),
-			summary,
-		]);
+		harness.setResponses([fauxAssistantMessage("first answer"), fauxAssistantMessage("second answer"), summary]);
 		await harness.session.prompt("first");
 		await harness.session.prompt("second");
 

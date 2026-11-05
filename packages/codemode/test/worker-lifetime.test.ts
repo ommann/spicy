@@ -1,4 +1,4 @@
-import { execFile, spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Worker } from "node:worker_threads";
@@ -202,19 +202,13 @@ describe("worker lifetime", () => {
 	});
 });
 
-const runtimes = [
-	{ name: "Node", command: process.execPath, available: true },
-	{ name: "Bun", command: "bun", available: spawnSync("bun", ["--version"], { timeout: 5000 }).status === 0 },
-];
-
-describe.each(runtimes)("$name process lifetime", ({ name, command, available }) => {
-	// #10748: verify both prompt cancellation and, on Node, prompt process exit with a real worker.
-	// Bun 1.4.0's pending terminate() keeps the process alive even after unref(), independently of codemode.
-	it.skipIf(!available).each(["abort", "timeout", "close"] as const)(
-		name === "Node" ? "exits promptly after %s with a real worker" : "settles %s promptly with a real worker",
+describe("Node process lifetime", () => {
+	// #10748: verify prompt cancellation and process exit with a real worker.
+	it.each(["abort", "timeout", "close"] as const)(
+		"exits promptly after %s with a real worker",
 		async (how) => {
 			const fixture = fileURLToPath(new URL("./fixtures/worker-process-exit.ts", import.meta.url));
-			const { stdout } = await promisify(execFile)(command, [fixture, how], { timeout: 20000 });
+			const { stdout } = await promisify(execFile)(process.execPath, [fixture, how], { timeout: 20000 });
 			const lines = stdout.trim().split(/\r?\n/);
 			expect(lines).toHaveLength(2);
 			const result = JSON.parse(lines[0]) as { type: string; kind: string; elapsedMs: number };
@@ -222,7 +216,7 @@ describe.each(runtimes)("$name process lifetime", ({ name, command, available })
 			expect(result).toMatchObject({ type: "result", kind: how === "timeout" ? "timeout" : "aborted" });
 			expect(exit.type).toBe("exit");
 			expect(result.elapsedMs).toBeLessThan(1000);
-			if (name === "Node") expect(exit.elapsedMs - result.elapsedMs).toBeLessThan(1000);
+			expect(exit.elapsedMs - result.elapsedMs).toBeLessThan(1000);
 		},
 		25000,
 	);

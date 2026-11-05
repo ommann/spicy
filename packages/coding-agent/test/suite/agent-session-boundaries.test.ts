@@ -125,10 +125,11 @@ describe("AgentSession actionable boundaries", () => {
 		},
 	);
 
-	it("keeps a boundary replacement verbatim through threshold compaction", async () => {
+	it("summarizes a boundary replacement without changing its saved history", async () => {
 		let handled = false;
 		const requests: string[] = [];
-		const instruction = "EXACT-REPLACEMENT-INSTRUCTION ".repeat(100);
+		const summaryInputs: string[] = [];
+		const instruction = "EXACT-REPLACEMENT-INSTRUCTION ".repeat(200);
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
@@ -150,13 +151,16 @@ describe("AgentSession actionable boundaries", () => {
 							continue: true,
 						};
 					});
-					pi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "older history summary",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+					pi.on("session_before_compact", (event) => {
+						summaryInputs.push(JSON.stringify(event.preparation.messagesToSummarize));
+						return {
+							compaction: {
+								summary: "Summary retaining EXACT-REPLACEMENT-INSTRUCTION",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						};
+					});
 				},
 			],
 		});
@@ -176,12 +180,20 @@ describe("AgentSession actionable boundaries", () => {
 
 		expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
 		expect(requests).toHaveLength(1);
-		expect(requests[0]).toContain("EXACT-REPLACEMENT-INSTRUCTION");
+		expect(summaryInputs[0]).toContain(instruction);
+		expect(summaryInputs[0]).toContain("older input");
+		expect(summaryInputs[0]).not.toContain("answered original input");
+		expect(requests[0]).toContain("Summary retaining EXACT-REPLACEMENT-INSTRUCTION");
+		expect(requests[0]).not.toContain(instruction);
+		expect(harness.sessionManager.getEntries()).toContainEqual(
+			expect.objectContaining({ type: "context_edit", replacement: { content: instruction } }),
+		);
 	});
 
-	it("keeps boundary input verbatim through threshold compaction when metadata follows it", async () => {
+	it("summarizes boundary input when metadata follows it without changing its saved history", async () => {
 		let handled = false;
 		const requests: string[] = [];
+		const summaryInputs: string[] = [];
 		const instruction = "EXACT-UNSENT-INSTRUCTION ".repeat(100);
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
@@ -204,13 +216,16 @@ describe("AgentSession actionable boundaries", () => {
 							continue: true,
 						};
 					});
-					pi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "older history summary",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+					pi.on("session_before_compact", (event) => {
+						summaryInputs.push(JSON.stringify(event.preparation.messagesToSummarize));
+						return {
+							compaction: {
+								summary: "Summary retaining EXACT-UNSENT-INSTRUCTION",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						};
+					});
 				},
 			],
 		});
@@ -227,7 +242,13 @@ describe("AgentSession actionable boundaries", () => {
 
 		expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
 		expect(requests).toHaveLength(1);
-		expect(requests[0]).toContain("EXACT-UNSENT-INSTRUCTION");
+		expect(summaryInputs[0]).toContain(instruction);
+		expect(summaryInputs[0]).toContain("old input");
+		expect(requests[0]).toContain("Summary retaining EXACT-UNSENT-INSTRUCTION");
+		expect(requests[0]).not.toContain(instruction);
+		expect(harness.sessionManager.getEntries()).toContainEqual(
+			expect.objectContaining({ type: "custom_message", customType: "next-work", content: instruction }),
+		);
 	});
 
 	it("refreshes canonical context before publishing boundary entry notifications", async () => {
@@ -842,9 +863,9 @@ describe("durable length recovery", () => {
 			expect(request).not.toContain("second partial");
 		}
 		expect(
-			harness.sessionManager.getEntries().some(
-				(entry) => entry.type === "message" && getMessageText(entry.message) === "completed second recovery",
-			),
+			harness.sessionManager
+				.getEntries()
+				.some((entry) => entry.type === "message" && getMessageText(entry.message) === "completed second recovery"),
 		).toBe(true);
 		expect(harness.faux.state.callCount).toBe(4);
 	});
@@ -908,15 +929,12 @@ describe("durable length recovery", () => {
 			expect(request).not.toContain("first partial");
 			expect(request).not.toContain("follow-up partial");
 		}
-		const savedResponses = harness.sessionManager.getEntries().flatMap((entry) =>
-			entry.type === "message" && entry.message.role === "assistant" ? [getMessageText(entry.message)] : [],
-		);
-		expect(savedResponses).toEqual([
-			"first partial",
-			"first recovered",
-			"follow-up partial",
-			"follow-up recovered",
-		]);
+		const savedResponses = harness.sessionManager
+			.getEntries()
+			.flatMap((entry) =>
+				entry.type === "message" && entry.message.role === "assistant" ? [getMessageText(entry.message)] : [],
+			);
+		expect(savedResponses).toEqual(["first partial", "first recovered", "follow-up partial", "follow-up recovered"]);
 		expect(harness.faux.state.callCount).toBe(4);
 	});
 
@@ -974,7 +992,7 @@ describe("durable length recovery", () => {
 		const entries = harness.sessionManager.getEntries();
 		const edits = entries.filter((entry) => entry.type === "context_edit" && entry.targetId === partialId);
 		expect(edits).toHaveLength(1);
-		expect(edits[0]?.replacement).toEqual({ content: [{ type: "text", text: "edited partial" }] });
+		expect(edits[0]).toMatchObject({ replacement: { content: [{ type: "text", text: "edited partial" }] } });
 		expect(entries.find((entry) => entry.id === partialId)).toMatchObject({ type: "message", message: partial });
 		// Cancellation leaves the original branch and its existing edit active.
 		expect(entries.some((entry) => entry.type === "compaction")).toBe(false);
@@ -1038,7 +1056,7 @@ describe("durable length recovery", () => {
 		const entries = harness.sessionManager.getEntries();
 		const edits = entries.filter((entry) => entry.type === "context_edit" && entry.targetId === overflowId);
 		expect(edits).toHaveLength(1);
-		expect(edits[0]?.replacement).toEqual({ content: [{ type: "text", text: "retained error" }] });
+		expect(edits[0]).toMatchObject({ replacement: { content: [{ type: "text", text: "retained error" }] } });
 		expect(entries.find((entry) => entry.id === overflowId)).toMatchObject({
 			type: "message",
 			message: { stopReason: "error", errorMessage: "prompt is too long" },
