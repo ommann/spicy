@@ -297,9 +297,7 @@ pre {
   max-width: calc(100vw - 60px);
   max-height: calc(100dvh - 100px);
   border: 1px solid var(--dialog-border);
-  padding: 4px;
-  background: repeating-conic-gradient(var(--checker-dark) 0 25%, var(--checker-light) 0 50%) 0 / 12px
-    12px;
+  background: var(--image-background);
 }
 .trace-image {
   cursor: zoom-in;
@@ -310,16 +308,8 @@ pre {
   max-height: 600px;
   object-fit: initial;
   margin-top: 20px;
-  padding: 4px;
   border: 1px solid var(--dialog-border);
-  background-color: var(--checker-dark);
-  background-image: conic-gradient(
-    var(--checker-dark) 25%,
-    var(--checker-light) 0 50%,
-    var(--checker-dark) 0 75%,
-    var(--checker-light) 0
-  );
-  background-size: 12px 12px;
+  background: var(--image-background);
 }
 .markdown-code {
   white-space: pre-wrap;
