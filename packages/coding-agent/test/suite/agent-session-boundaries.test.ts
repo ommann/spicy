@@ -952,6 +952,8 @@ describe("durable length recovery", () => {
 	it("recovers an explicit overflow error after a retained boundary replacement", async () => {
 		let replaced = false;
 		let overflowId: string | undefined;
+		const summaryInputs: string[] = [];
+		const retryRequests: string[] = [];
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
@@ -971,28 +973,48 @@ describe("durable length recovery", () => {
 							],
 						};
 					});
-					pi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "recovered overflow",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+					pi.on("session_before_compact", (event) => {
+						summaryInputs.push(JSON.stringify(event.preparation.messagesToSummarize));
+						return {
+							compaction: {
+								summary: "recovered overflow",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						};
+					});
 				},
 			],
 		});
 		harnesses.push(harness);
 		harness.setResponses([
 			fauxAssistantMessage("retained error", { stopReason: "error", errorMessage: "prompt is too long" }),
-			fauxAssistantMessage("recovered"),
+			(context) => {
+				retryRequests.push(JSON.stringify(context.messages));
+				return fauxAssistantMessage("recovered");
+			},
 		]);
 
 		await harness.session.prompt("x".repeat(5_000));
 
 		expect(harness.faux.state.callCount).toBe(2);
 		expect(overflowId).toBeDefined();
-		const edits = harness.sessionManager.getEntries().filter((entry) => entry.type === "context_edit");
-		expect(edits.filter((entry) => entry.targetId === overflowId).at(-1)?.replacement).toBeNull();
+		const entries = harness.sessionManager.getEntries();
+		const edits = entries.filter((entry) => entry.type === "context_edit" && entry.targetId === overflowId);
+		expect(edits).toHaveLength(1);
+		expect(edits[0]?.replacement).toEqual({ content: [{ type: "text", text: "retained error" }] });
+		expect(entries.find((entry) => entry.id === overflowId)).toMatchObject({
+			type: "message",
+			message: { stopReason: "error", errorMessage: "prompt is too long" },
+		});
+		expect(summaryInputs.length).toBeGreaterThan(0);
+		for (const input of summaryInputs) expect(input).not.toContain("retained error");
+		expect(retryRequests).toHaveLength(1);
+		expect(retryRequests[0]).toContain("recovered overflow");
+		expect(retryRequests[0]).not.toContain("retained error");
+		expect(entries.some((entry) => entry.type === "message" && getMessageText(entry.message) === "recovered")).toBe(
+			true,
+		);
 	});
 
 	it("keeps follow-up work behind an automatic error retry", async () => {
