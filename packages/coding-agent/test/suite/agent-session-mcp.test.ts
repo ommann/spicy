@@ -798,10 +798,12 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
 		const systemMessages = harness.session.messages.filter(
 			(message): message is SystemMessage => message.role === "system",
 		);
-		// The first request lists the server by name; its summary follows as an appended patch.
+		// The first request lists the server by name; the next snapshot adds its summary
+		// while preserving every other prompt section.
 		expect(systemMessages).toHaveLength(2);
 		expect(systemMessages[0].sections?.[MCP_SERVERS_SECTION]).toContain("- mcp__slow (codemode)\n");
 		expect(systemMessages[1].sections).toEqual({
+			...systemMessages[0].sections,
 			[MCP_SERVERS_SECTION]: expect.stringContaining("- mcp__slow (codemode): Slow docs."),
 		});
 		expect(harness.session.messages.indexOf(systemMessages[1])).toBeGreaterThan(
