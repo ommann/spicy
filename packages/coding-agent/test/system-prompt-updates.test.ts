@@ -42,7 +42,10 @@ describe("system prompt updates", () => {
 			const tools = harness.session.agent.state.tools;
 			const source = harness.session.getSystemPromptDocument();
 			expect(source.document.parts.length).toBeGreaterThan(1);
-			expect(source.document.forced).toBeDefined();
+			// Temporary request overrides are not saved as the editor's structured source.
+			expect(source.document.forced).toBeUndefined();
+			expect(source.currentBuilder).toBeDefined();
+			expect(source.diagnostic).toBeUndefined();
 			expect(harness.session.getSystemPromptDocument()).toEqual(source);
 			expect(hooks).toBe(1);
 			expect(harness.sessionManager.getEntries()).toEqual(entries);
@@ -154,12 +157,16 @@ describe("system prompt updates", () => {
 		}
 	});
 
-	test("web preserves the original forced-prompt projection and structured history", async () => {
+	test("web preserves the approved prompt against temporary forced-prompt overrides", async () => {
 		let forced: string | undefined;
+		let hooks = 0;
 		const harness = await createHarness({
 			extensionFactories: [
 				(pi) => {
-					pi.on("before_agent_start", () => (forced === undefined ? undefined : { systemPrompt: forced }));
+					pi.on("before_agent_start", () => {
+						hooks++;
+						return forced === undefined ? undefined : { systemPrompt: forced };
+					});
 				},
 			],
 		});
@@ -173,12 +180,16 @@ describe("system prompt updates", () => {
 			);
 			await harness.session.prompt("one", { systemPromptPolicy: { decide: () => "accept" } });
 			const originalSections = getCurrentSystemMessage(harness.session.messages)?.sections;
+			const originalPrompt = getCurrentSystemPrompt(requests[0]!.messages);
+			expect(originalPrompt).not.toBe("");
 			forced = "Exact replacement instructions.";
 			await harness.session.prompt("two", { systemPromptPolicy: { decide: () => "current" } });
 			expect(getCurrentSystemPrompt(harness.session.messages)).not.toContain(forced);
 			await harness.session.prompt("three", { systemPromptPolicy: { decide: () => "accept" } });
-			expect(getCurrentSystemPrompt(requests[1]!.messages)).toBe(forced);
-			expect(getCurrentSystemPrompt(requests[2]!.messages)).toBe(forced);
+			expect(hooks).toBe(3);
+			expect(getCurrentSystemPrompt(requests[1]!.messages)).toBe(originalPrompt);
+			expect(getCurrentSystemPrompt(requests[2]!.messages)).toBe(originalPrompt);
+			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(originalPrompt);
 			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(originalSections);
 		} finally {
 			harness.cleanup();
