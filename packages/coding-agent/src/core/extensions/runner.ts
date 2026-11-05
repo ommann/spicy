@@ -2,7 +2,12 @@
  * Extension runner - executes extensions and manages their lifecycle.
  */
 
-import { type AgentMessage, type AgentTool, getCurrentSystemMessage } from "@earendil-works/pi-agent-core";
+import {
+	type AgentMessage,
+	type AgentTool,
+	getCurrentSystemMessage,
+	projectSystemPromptSnapshots,
+} from "@earendil-works/pi-agent-core";
 import type { ImageContent, Model, Provider, ProviderHeaders } from "@earendil-works/pi-ai";
 import type { CacheWarmingAction } from "../cache-warmer.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
@@ -1174,6 +1179,10 @@ export class ExtensionRunner {
 				}
 			}
 		}
+
+		// These hooks operate on the provider-facing prompt, not recording-order snapshots.
+		// Project before invoking them so their edits are not overwritten by a later snapshot replay.
+		currentMessages = projectSystemPromptSnapshots(currentMessages);
 
 		for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "context_with_system")) {
 			for (const handler of handlers) {

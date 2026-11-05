@@ -45,7 +45,7 @@ async function compactSession(harness: Harness): Promise<void> {
 	await harness.session.prompt("first");
 	await harness.session.prompt("second");
 	await harness.session.compact();
-	expect(harness.session.messages.map((message) => message.role).slice(0, 2)).toEqual(["system", "compactionSummary"]);
+	expect(harness.session.messages.map((message) => message.role)).toEqual(["compactionSummary", "system"]);
 }
 
 describe("context handlers and system messages", () => {
@@ -84,7 +84,7 @@ describe("context handlers and system messages", () => {
 		expect(request.messages.filter((message) => message.role === "system")).toHaveLength(1);
 	});
 
-	it("keeps mid-conversation system messages in place when a handler leaves the conversation unchanged", async () => {
+	it("projects the latest complete prompt when a handler leaves the conversation unchanged", async () => {
 		let turn = 0;
 		const harness = await createHarness({
 			extensionFactories: [
@@ -99,13 +99,21 @@ describe("context handlers and system messages", () => {
 		harnesses.push(harness);
 		harness.setResponses([fauxAssistantMessage("one")]);
 		await harness.session.prompt("first");
+		const initialSystem = harness.session.messages.find((message) => message.role === "system");
+		expect(initialSystem).toBeDefined();
 		const getRequest = captureRequest(harness, "two");
 
 		await harness.session.prompt("second");
 
 		const systemMessages = getRequest().messages.filter((message) => message.role === "system");
-		expect(systemMessages).toHaveLength(2);
-		expect(systemMessages[1]?.sections).toEqual({ plan_mode: "<plan_mode>\nPlan only.\n</plan_mode>" });
+		expect(systemMessages).toHaveLength(1);
+		expect(getRequest().messages[0]).toEqual(systemMessages[0]);
+		expect(systemMessages[0]?.sections).toEqual({
+			...initialSystem?.sections,
+			plan_mode: "<plan_mode>\nPlan only.\n</plan_mode>",
+		});
+		expect(toolNames(getRequest())).toEqual(harness.session.getActiveToolNames());
+		expect(harness.session.messages.filter((message) => message.role === "system")).toHaveLength(2);
 	});
 
 	it("applies in-place edits to event.messages without a return value", async () => {
