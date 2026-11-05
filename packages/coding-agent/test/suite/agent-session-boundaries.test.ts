@@ -915,13 +915,17 @@ describe("durable length recovery", () => {
 		);
 	});
 
-	it("omits a recoverable projected replacement by its source entry ID", async () => {
+	it("omits a projected failed reply from compaction without editing its source", async () => {
+		const summaryInputs: string[] = [];
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
 			extensionFactories: [
 				(pi) => {
-					pi.on("session_before_compact", () => ({ cancel: true }));
+					pi.on("session_before_compact", (event) => {
+						summaryInputs.push(JSON.stringify(event.preparation.messagesToSummarize));
+						return { cancel: true };
+					});
 				},
 			],
 		});
@@ -940,13 +944,22 @@ describe("durable length recovery", () => {
 
 		await harness.session.prompt("next prompt");
 
-		const edits = harness.sessionManager.getEntries().filter((entry) => entry.type === "context_edit");
-		expect(edits.filter((entry) => entry.targetId === partialId).at(-1)?.replacement).toBeNull();
+		expect(summaryInputs.length).toBeGreaterThan(0);
+		expect(summaryInputs[0]).toContain("x".repeat(5_000));
+		expect(summaryInputs[0]).not.toContain("original partial");
+		expect(summaryInputs[0]).not.toContain("edited partial");
+		const entries = harness.sessionManager.getEntries();
+		const edits = entries.filter((entry) => entry.type === "context_edit" && entry.targetId === partialId);
+		expect(edits).toHaveLength(1);
+		expect(edits[0]?.replacement).toEqual({ content: [{ type: "text", text: "edited partial" }] });
+		expect(entries.find((entry) => entry.id === partialId)).toMatchObject({ type: "message", message: partial });
+		// Cancellation leaves the original branch and its existing edit active.
+		expect(entries.some((entry) => entry.type === "compaction")).toBe(false);
 		expect(
 			harness.sessionManager
 				.buildSessionProjection()
 				.messages.some((message) => getMessageText(message) === "edited partial"),
-		).toBe(false);
+		).toBe(true);
 	});
 
 	it("recovers an explicit overflow error after a retained boundary replacement", async () => {
