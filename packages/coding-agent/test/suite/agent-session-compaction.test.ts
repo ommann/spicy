@@ -549,6 +549,7 @@ describe("AgentSession compaction characterization", () => {
 			};
 			const order: string[] = [];
 			const observedSettings: unknown[] = [];
+			const summarizedMessages: AgentMessage[] = [];
 			const harness = await createHarness({
 				models: [{ id: "faux-1", contextWindow: 2600, maxTokens: 100 }],
 				settings: {
@@ -567,6 +568,7 @@ describe("AgentSession compaction characterization", () => {
 						pi.on("session_before_compact", (event) => {
 							order.push("compaction");
 							observedSettings.push(event.preparation.settings);
+							summarizedMessages.push(...event.preparation.messagesToSummarize);
 							return {
 								compaction: {
 									summary: "compacted history",
@@ -605,7 +607,18 @@ describe("AgentSession compaction characterization", () => {
 				reason: "threshold",
 			});
 			expect(resumedRequest).toContain("compacted history");
-			expect(resumedRequest).toContain("large-tool-result");
+			expect(resumedRequest).not.toContain("large-tool-result");
+			const summarized = JSON.stringify(summarizedMessages);
+			expect(summarized).toContain(toolResult);
+			expect(summarized).toContain("old-history:");
+			expect(summarized).toContain("recent-history:");
+			const entries = harness.sessionManager.getEntries();
+			expect(entries.filter((entry) => entry.type === "compaction")).toEqual([
+				expect.objectContaining({ parentId: null, summary: "compacted history" }),
+			]);
+			expect(
+				JSON.stringify(entries.filter((entry) => entry.type === "message" && entry.message.role === "toolResult")),
+			).toContain(toolResult);
 			expect(harness.session.getLastAssistantText()).toBe("finished after compaction");
 		},
 	);

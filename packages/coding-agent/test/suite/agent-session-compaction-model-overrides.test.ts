@@ -64,7 +64,8 @@ describe("AgentSession compaction model overrides", () => {
 				],
 			});
 			harnesses.push(harness);
-			const recentUserId = seedHistory(harness, path === "pre-prompt" ? 2500 : 650);
+			seedHistory(harness, path === "pre-prompt" ? 2500 : 650);
+			const seededMessages = [...harness.session.messages];
 
 			if (path === "manual") {
 				await harness.session.compact();
@@ -90,7 +91,8 @@ describe("AgentSession compaction model overrides", () => {
 				path === "manual" ? "manual" : path === "overflow" ? "overflow" : "threshold",
 			);
 			if (path === "manual" || path === "pre-prompt") {
-				expect(preparations[0]?.preparation.firstKeptEntryId).toBe(recentUserId);
+				expect(preparations[0]?.preparation.messagesToSummarize).toEqual(expect.arrayContaining(seededMessages));
+				expect(preparations[0]?.preparation.isSplitTurn).toBe(false);
 			}
 			expect(harness.eventsOfType("compaction_end")).toHaveLength(1);
 			expect(harness.eventsOfType("compaction_end")[0]).toMatchObject({
