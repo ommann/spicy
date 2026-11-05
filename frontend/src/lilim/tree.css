@@ -48,7 +48,9 @@
 }
 .composer-row {
   position: relative;
-  overflow: hidden;
+  /* Clip off-column composers without creating a scroll container that the
+     browser can scroll when the focused textarea grows. */
+  overflow: clip;
 }
 .composer-row .editor {
   margin-right: 0;

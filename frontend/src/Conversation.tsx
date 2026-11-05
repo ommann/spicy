@@ -119,12 +119,26 @@ export default function Conversation(props: Props) {
   const setDrafts = (key: string, text: string) => props.onDraftChange(key, text);
   const [jumpSizes, setJumpSizes] = createSignal({ branch: 0, latest: 0 });
   const [scrollRequest, setScrollRequest] = createSignal<{ id: string; bottom: boolean; smooth: boolean }>();
+  let followLatest = true;
+  function focusedFollowTop() {
+    // The canvas deliberately includes blank overscroll space below the history.
+    // Follow the content edge, not the bottom of that blank space.
+    return Math.max(0, layout().height - Math.max(80, dimensions().height * .75) - dimensions().height + 48);
+  }
+  function handleViewportScroll() {
+    if (viewport && mode() === 'focused') {
+      const nearBottom = focusedFollowTop() - viewport.scrollTop <= 48;
+      if (nearBottom) followLatest = true;
+      else if (viewport.scrollTop < scroll().top - 1) followLatest = false;
+    }
+    updateScroll();
+  }
   const interaction = createColumnInteraction({
     viewport: () => viewport, enabled: () => props.active && mode() === 'side',
     columns: () => ({ inset: layout().inset, starts: layout().starts, width: workingWidth() }),
     onColumn: lane => {
       if (layout().starts[lane] !== layout().starts[focused()]) selectLane(lane);
-    }, onScroll: updateScroll,
+    }, onScroll: handleViewportScroll,
   });
   const lanes = () => props.lanes;
   function inheritedVersion(id: string) {
@@ -263,6 +277,7 @@ export default function Conversation(props: Props) {
     const node = props.graph.nodes.get(id);
     if (!node) return;
     interaction.resetPointer();
+    followLatest = bottom;
     selectLane(Math.max(node.first, Math.min(node.last, focused())), false);
     setScrollRequest({ id, bottom, smooth });
   }
@@ -359,6 +374,7 @@ export default function Conversation(props: Props) {
     const position = layout();
     updateScroll();
     if (readingAnchor) {
+      followLatest = false;
       const node = position.items.get(readingAnchor.id);
       if (node) viewport.scrollTop = node.top - readingAnchor.offset;
       readingAnchor = undefined;
@@ -366,6 +382,12 @@ export default function Conversation(props: Props) {
     if (centerAfterLayout) {
       viewport.scrollLeft = Math.max(0, position.inset + (position.starts[focused()] || 0) + workingWidth() / 2 - dimensions().width / 2);
       centerAfterLayout = false;
+      updateScroll();
+    }
+    if (mode() === 'focused' && followLatest) {
+      // Measured card heights change as tokens arrive. Follow the new geometry
+      // immediately rather than restarting a smooth animation on every token.
+      viewport.scrollTop = focusedFollowTop();
       updateScroll();
     }
   });
@@ -479,7 +501,7 @@ export default function Conversation(props: Props) {
       </div>
     </main>
       <ScrollBar vertical position={scroll().top} client={dimensions().height} extent={Math.max(scroll().height, layout().height)}
-        onChange={top => { viewport.scrollTop = top; updateScroll(); }} />
+        onChange={top => { viewport.scrollTop = top; handleViewportScroll(); }} />
       <ScrollBar position={scroll().left} client={dimensions().width} extent={Math.max(scroll().width, layout().width)}
         onChange={left => { viewport.scrollLeft = left; updateScroll(); }} />
       <div class="canvas-scroll-corner" />
