@@ -407,10 +407,16 @@ describe("system prompt updates", () => {
 			expect(update).toEqual({
 				role: "system",
 				content: "",
-				sections: { tools: expect.stringContaining("second prompt snippet"), rules: expect.any(String) },
-				toolsRemoved: [{ name: "first" }],
+				sections: {
+					...initial.sections,
+					tools: expect.stringContaining("second prompt snippet"),
+					rules: expect.stringContaining("Use second carefully."),
+				},
+				toolsAdded: initial.toolsAdded?.filter((tool) => tool.name === "second"),
 				timestamp: expect.any(Number),
 			});
+			expect(requests[1]?.messages.filter((message) => message.role === "system")).toEqual([update]);
+			expect(requests[1]?.messages[0]).toEqual(update);
 			expect(update?.sections?.tools).not.toContain("first prompt snippet");
 			expect(update?.sections?.rules).not.toContain("Use first carefully.");
 
