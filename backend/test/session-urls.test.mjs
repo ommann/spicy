@@ -48,7 +48,7 @@ test('short session URLs follow live sessions and reopen the same file after bac
   };
   const post = async (endpoint, body, status = 200) => {
     const response = await fetch(`${base}/api/${endpoint}`, { method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Lilim-Token': token }, body: JSON.stringify(body) });
+      headers: { 'Content-Type': 'application/json', 'X-Spicy-Token': token }, body: JSON.stringify(body) });
     const value = await response.json();
     assert.equal(response.status, status, JSON.stringify(value));
     return value;

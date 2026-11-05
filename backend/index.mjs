@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import path from 'node:path';
 import os from 'node:os';
@@ -91,7 +91,7 @@ async function body(req) {
   return JSON.parse(text || '{}');
 }
 function authorized(req) {
-  const value = req.headers['x-lilim-token'];
+  const value = req.headers['x-spicy-token'];
   return typeof value === 'string' && value.length === token.length && timingSafeEqual(Buffer.from(value), Buffer.from(token));
 }
 const allowed = new Set(['prompt', 'abort', 'clear_queue', 'fork', 'new_session', 'set_model', 'set_thinking_level', 'get_available_models', 'get_available_thinking_levels', 'get_system_prompt_document', 'save_system_prompt', 'compact']);
@@ -145,6 +145,24 @@ const server = http.createServer(async (req, res) => {
       if (req.method !== 'POST') return json(res, { error: 'Not found' }, 404);
       if (!authorized(req)) return json(res, { error: 'Invalid token' }, 403);
       const { agentId, ...command } = await body(req);
+      if (url.pathname === '/api/attachments') {
+        const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+        if (!Array.isArray(command.images) || !command.images.length) throw new Error('No images supplied');
+        const images = command.images.map(image => {
+          const extension = extensions[image?.mimeType];
+          if (!extension || image.type !== 'image' || typeof image.data !== 'string' || !image.data.length || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)) throw new Error('Invalid image attachment');
+          return { extension, bytes: Buffer.from(image.data, 'base64') };
+        });
+        const directory = path.join(managed, 'attachments');
+        await mkdir(directory, { recursive: true });
+        const paths = [];
+        for (const image of images) {
+          const file = path.join(directory, `${randomUUID()}.${image.extension}`);
+          await writeFile(file, image.bytes, { flag: 'wx', mode: 0o600 });
+          paths.push(file);
+        }
+        return json(res, { paths });
+      }
       if (url.pathname === '/api/auth/login') return json(res, await login.start(command.providerId, command.type));
       if (url.pathname === '/api/auth/reply') return json(res, login.reply(command.id, command.promptId, command.value));
       if (url.pathname === '/api/auth/cancel') return json(res, await login.cancel(command.id));

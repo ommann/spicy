@@ -45,7 +45,7 @@ test('local bridge protects mutation endpoints and supports live RPC, fork and r
     });
     assert.equal(invalidHostStatus, 403);
     const post = async (endpoint, body, status = 200) => {
-      const response = await fetch(`${base}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Lilim-Token': info.token }, body: JSON.stringify(body || {}) });
+      const response = await fetch(`${base}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Spicy-Token': info.token }, body: JSON.stringify(body || {}) });
       const value = await response.json();
       assert.equal(response.status, status, JSON.stringify(value));
       return value;

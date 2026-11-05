@@ -2,6 +2,7 @@ import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX
 import ScrollableTextarea from './ScrollableTextarea';
 import type { AgentHealthStatus } from './AgentHealth';
 import './message-composer.css';
+import { pasteImagePaths } from './image-paste-mode';
 import { clipboardImages, imageSource, type ImageAttachment } from './image-attachments';
 
 interface Props {
@@ -35,9 +36,21 @@ export default function MessageComposer(props: Props) {
     if (!event.clipboardData || !Array.from(event.clipboardData.items).some(item => item.kind === 'file' && item.type.startsWith('image/'))) return;
     event.preventDefault();
     const items = event.clipboardData.items;
+    const asPaths = pasteImagePaths();
     setPasting(true);
     setAttachmentError('');
-    try { const pasted = await clipboardImages(items); if (!pasted.length) throw new Error('Unsupported image format'); setImages(current => [...current, ...pasted]); }
+    try {
+      const pasted = await clipboardImages(items);
+      if (!pasted.length) throw new Error('Unsupported image format');
+      if (asPaths) {
+        const info = await fetch('/api/info').then(response => response.json());
+        const response = await fetch('/api/attachments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Spicy-Token': info.token }, body: JSON.stringify({ images: pasted }) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not save image');
+        input.setRangeText(result.paths.join('\n'), input.selectionStart, input.selectionEnd, 'end');
+        props.onChange(input.value);
+      } else setImages(current => [...current, ...pasted]);
+    }
     catch (error) { setAttachmentError(error instanceof Error ? error.message : String(error)); }
     finally { setPasting(false); }
   }
@@ -82,6 +95,7 @@ export default function MessageComposer(props: Props) {
       </span>
       <button class="composer-stop text-action" type="button" disabled={props.busy} onClick={() => props.onAbort?.()}>Stop</button>
     </div></Show>
+    <Show when={pasting()}><span role="status">Saving image…</span></Show>
     <Show when={images().length}><div class="composer-attachments" aria-label="Attached images">
       <For each={images()}>{image => <div><img src={imageSource(image)} alt="Attached image" />
         <button type="button" aria-label="Remove attached image" onClick={() => setImages(current => current.filter(item => item !== image))}>Remove</button></div>}</For>

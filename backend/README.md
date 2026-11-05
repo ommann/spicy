@@ -24,7 +24,7 @@ starts automatically, and the original history stays untouched.
 
 ## API
 
-Mutations require the existing `X-Lilim-Token` from `GET /api/info`.
+Mutations require the existing `X-Spicy-Token` from `GET /api/info`.
 
 - `GET /api/agents`: list connections and their status.
 - `POST /api/agents` with `{ "cwd": "/absolute/project/path" }`: create and

@@ -36,6 +36,7 @@ import Handoffs from './Handoffs';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
+import ImagePasteOption from './ImagePasteOption';
 import SyntaxOptions from './SyntaxOptions';
 import { streamingContent } from './streaming-content';
 import type { AgentHealthStatus } from './AgentHealth';
@@ -237,7 +238,7 @@ export default function App(props: ParentProps) {
     const response = await fetch(`/api/${endpoint}`, {
       method: "POST",
       signal: appLifecycle.signal,
-      headers: { "Content-Type": "application/json", "X-Lilim-Token": token },
+      headers: { "Content-Type": "application/json", "X-Spicy-Token": token },
       body: JSON.stringify({ ...(selectedAgentId() ? { agentId: selectedAgentId() } : {}), ...data }),
     });
 
@@ -773,6 +774,7 @@ export default function App(props: ParentProps) {
         }</For>
         <CodeLinewrapOption />
         <StreamingContentOption />
+        <ImagePasteOption />
         <SyntaxOptions />
       </Dialog>
       <Dialog
