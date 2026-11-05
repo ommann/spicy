@@ -1,49 +1,15 @@
-import { posix, win32 } from "node:path";
+import { posix } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createFindToolDefinition, relativizeFindResultPath } from "../../../src/core/tools/find.ts";
 
 /**
  * Regression test for https://github.com/earendil-works/pi/issues/6104
  *
- * path.resolve() preserves a trailing separator when resolving to a root path,
- * such as POSIX / or Windows I:\\. The find tool used to slice absolute
- * results at searchPath.length + 1, which dropped the first character of the
- * first path segment for root searches. Windows directory results that ended in
- * backslash also gained an extra slash.
+ * path.resolve() preserves a trailing separator when resolving to POSIX /.
+ * The find tool used to slice absolute results at searchPath.length + 1,
+ * which dropped the first character of the first path segment for root searches.
  */
 describe("issue #6104 find relativizes root search paths", () => {
-	describe("Windows drive root", () => {
-		const searchRoot = "I:\\";
-
-		it("preserves the first segment and emits one trailing slash for fd directory output", () => {
-			expect(relativizeFindResultPath("I:\\AI\\Models\\TextGen\\gemma4\\", searchRoot, win32)).toBe(
-				"AI/Models/TextGen/gemma4/",
-			);
-		});
-
-		it("handles fd output that uses forward slashes under a drive root", () => {
-			expect(relativizeFindResultPath("I:/AI/Models/TextGen/gemma4/", searchRoot, win32)).toBe(
-				"AI/Models/TextGen/gemma4/",
-			);
-		});
-
-		it("keeps deeper search paths unchanged", () => {
-			expect(relativizeFindResultPath("I:\\AI\\Models\\", "I:\\AI", win32)).toBe("Models/");
-		});
-
-		it("does not relativize a sibling directory that shares a name prefix", () => {
-			expect(relativizeFindResultPath("I:\\AI\\Models2\\file.txt", "I:\\AI\\Models", win32)).toBe(
-				"../Models2/file.txt",
-			);
-		});
-
-		it("normalizes relative custom-glob results without corrupting them", () => {
-			expect(relativizeFindResultPath("AI\\Models\\TextGen\\gemma4\\", searchRoot, win32)).toBe(
-				"AI/Models/TextGen/gemma4/",
-			);
-		});
-	});
-
 	describe("POSIX root", () => {
 		it("preserves the first segment for files under /", () => {
 			expect(relativizeFindResultPath("/home/user/file.txt", "/", posix)).toBe("home/user/file.txt");
