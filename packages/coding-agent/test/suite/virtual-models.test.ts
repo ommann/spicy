@@ -285,7 +285,14 @@ describe("AgentSession virtual models", () => {
 
 		expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual(["threshold"]);
 		expect(compactedBeforeSmall).toBe(true);
-		expect(dispatched()).toEqual(["faux/large:high", "faux/small:off"]);
+		// The earlier response stays saved, but only the resumed response belongs to the new root.
+		const savedResponses = harness.sessionManager.getEntries().flatMap((entry) =>
+			entry.type === "message" && entry.message.role === "assistant"
+				? [`${entry.message.provider}/${entry.message.model}:${entry.message.thinkingLevel}`]
+				: [],
+		);
+		expect(savedResponses).toEqual(["faux/large:high", "faux/small:off"]);
+		expect(dispatched()).toEqual(["faux/small:off"]);
 	});
 
 	it("projects the session once per request under a virtual selection", async () => {
@@ -373,15 +380,23 @@ describe("AgentSession virtual models", () => {
 		const { harness, reasons } = await createRoutedHarness(defaultRoute, {
 			settings: { compaction: { keepRecentTokens: 1 } },
 		});
-		const summary: FauxResponseStep = (_context, options, _state, model) => {
+		const summary: FauxResponseStep = (context, options, _state, model) => {
+			const conversation = JSON.stringify(context.messages);
+			for (const text of [
+				"[User]: first",
+				"[Assistant]: first answer",
+				"[User]: second",
+				"[Assistant]: second answer",
+			]) {
+				expect(conversation).toContain(text);
+			}
 			summaries.push(`${model.id}:${options?.reasoning ?? "off"}`);
 			return fauxAssistantMessage("summary");
 		};
-		// Compaction summarizes the history and the split turn prefix with one routed model.
+		// Our compaction summarizes the entire active conversation in one routed request.
 		harness.setResponses([
 			fauxAssistantMessage("first answer"),
 			fauxAssistantMessage("second answer"),
-			summary,
 			summary,
 		]);
 		await harness.session.prompt("first");
@@ -392,6 +407,6 @@ describe("AgentSession virtual models", () => {
 		expect(result.summary).toContain("summary");
 		expect(reasons()).toEqual(["user", "user", "direct"]);
 		// The router's model and thinking level apply. The provider layer sizes output from that model.
-		expect(summaries).toEqual(["large:low", "large:low"]);
+		expect(summaries).toEqual(["large:low"]);
 	});
 });
