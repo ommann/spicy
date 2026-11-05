@@ -417,8 +417,10 @@ describe("AgentSession compaction characterization", () => {
 		expect(transformContext).not.toHaveBeenCalled();
 		expect(getCurrentSystemPrompt(requestContext?.messages ?? [])).not.toBe(harness.session.agent.state.systemPrompt);
 		expect(getCurrentTools(requestContext?.messages ?? [])).toEqual([]);
-		// Regression test for #9652: split-turn summaries use a clear Markdown conversation boundary.
-		expect(JSON.stringify(requestContext?.messages)).toContain("# Conversation\\n[User]: message to compact");
+		// Whole-history compaction uses tagged boundaries; split-turn formatting has separate coverage.
+		expect(JSON.stringify(requestContext?.messages)).toContain(
+			"<conversation>\\n[User]: message to compact\\n\\n[Assistant]: assistant response to compact\\n</conversation>\\n\\n",
+		);
 		expect(requestOptions).toMatchObject({ cacheRetention: "none" });
 		expect(requestOptions?.sessionId).not.toBe("active-routing-session");
 		expect(requestOptions?.transport).toBeUndefined();
