@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSystemPromptCatalog } from '../src/lilim/system-prompts.js';
+import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from '../src/lilim/system-prompts.js';
+
+test('streamed reply chunks reuse prompt diffs, but prompt and ancestry changes invalidate them', () => {
+  const catalogFor = createMemoizedSystemPromptCatalog();
+  const system = { id: 'system', parentId: null, type: 'message', message: { role: 'system', content: 'Instructions' } };
+  const reply = { id: 'reply', parentId: 'system', type: 'message', message: { role: 'assistant', content: [] } };
+  const original = catalogFor([system, reply]);
+  const chunk = { ...reply, message: { ...reply.message, content: [{ type: 'text', text: 'Growing reply' }] } };
+  assert.equal(catalogFor([system, chunk]), original);
+  const changed = { ...system, message: { ...system.message, content: 'New instructions' } };
+  const updated = catalogFor([changed, chunk]);
+  assert.notEqual(updated, original);
+  assert.match(updated.versions[0].key, /New instructions/);
+  assert.notEqual(catalogFor([changed, { ...chunk, parentId: null }]), updated);
+});
 
 const entries = [
   { id: 'original', parentId: null, type: 'message', message: { role: 'system', content: 'Original instructions', sections: { tools: 'Original tools' } } },

@@ -15,6 +15,25 @@ export function promptDocument(before, after) {
   return [{ name: 'content', hunks: [{ rows }] }];
 }
 
+// Reply chunks change message bodies, not prompt history. Keep expensive prompt
+// serialization and diffs out of that hot path while tracking all parent links.
+export function createMemoizedSystemPromptCatalog() {
+  let previous = [];
+  let catalog;
+  return entries => {
+    const inputs = entries.map(entry => [entry.id, entry.parentId, entry.type,
+      entry.message?.role, entry.message?.role === 'system' ? entry.message : undefined,
+      entry.systemMessage, entry.systemPromptKey, entry.customType,
+      entry.type === 'custom' && entry.customType === SAVED_SYSTEM_PROMPT_ENTRY ? entry.data : undefined]);
+    if (!catalog || inputs.length !== previous.length || inputs.some((fields, index) =>
+      fields.some((value, field) => value !== previous[index][field]))) {
+      catalog = createSystemPromptCatalog(entries);
+      previous = inputs;
+    }
+    return catalog;
+  };
+}
+
 // Number captured prompt states in recording order, independently of the active lane.
 export function createSystemPromptCatalog(entries) {
   const prefix = createPrefixResolver(entries);

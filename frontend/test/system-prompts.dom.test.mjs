@@ -728,7 +728,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
     button(root, 'Options').click();
     const options = root.querySelector('[aria-label="Options"]');
     const streaming = [...options.querySelectorAll('label')].find(label => label.textContent.includes('Show streaming content')).querySelector('input');
-    streaming.click();
+    assert.equal(streaming.checked, true, 'Streaming is enabled by default');
     button(options, 'Close').click();
     await flush();
     const send = (id, text) => {
@@ -753,6 +753,13 @@ test('side-by-side chats send and stop independently while both agents stream', 
     await flush();
     assert.match(root.textContent, /left streaming/);
     assert.match(root.textContent, /right streaming/);
+    const responseText = root.querySelector('[data-entry-id="stream-right-1"] .trace-text');
+    const firstSpan = responseText.querySelector('span');
+    streams.get('right').emit('record', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: ' more' } });
+    await flush();
+    assert.match(root.textContent, /right streaming more/);
+    assert.equal(root.querySelector('[data-entry-id="stream-right-1"] .trace-text'), responseText);
+    assert.equal(responseText.querySelector('span'), firstSpan, 'Streaming preserves existing text elements');
     const stops = root.querySelectorAll('.composer-stop');
     assert.equal(stops.length, 2);
     root.querySelector('.message-composer:has(.editor[data-leaf-id="stream-left-1"]) .composer-stop').click();

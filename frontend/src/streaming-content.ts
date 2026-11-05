@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 
-const [streamingContent, updateStreamingContent] = createSignal(false);
+const [streamingContent, updateStreamingContent] = createSignal(true);
 export { streamingContent };
 
 export function setStreamingContent(value: boolean) {

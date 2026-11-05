@@ -12,7 +12,7 @@ export function applyRecord(messages, record) {
   if (index < 0) return messages;
   const event = record.assistantMessageEvent;
   if (!Number.isInteger(event?.contentIndex)) return messages;
-  const message = structuredClone(messages[index]);
+  const message = { ...messages[index], content: messages[index].content?.slice() };
   if (!Array.isArray(message.content)) message.content = [];
   const i = event.contentIndex;
   if (event.type.startsWith('text_')) {
@@ -25,7 +25,7 @@ export function applyRecord(messages, record) {
     message.content[i] = { type: 'toolCall', id: event.id, name: event.toolName, arguments: {}, partial: '' };
   } else if (event.type === 'toolcall_delta') {
     const block = message.content[i];
-    if (block) block.partial = (block.partial || '') + event.delta;
+    if (block) message.content[i] = { ...block, partial: (block.partial || '') + event.delta };
   } else if (event.type === 'toolcall_end') message.content[i] = event.toolCall;
   return messages.map((previous, i) => i === index ? message : previous);
 }
