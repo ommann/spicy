@@ -778,12 +778,17 @@ describe("durable length recovery", () => {
 	});
 
 	it("resets length recovery after a successful intermediate assistant turn", async () => {
+		let toolCalls = 0;
+		const retryRequests: string[] = [];
 		const tool: AgentTool = {
 			name: "noop",
 			label: "Noop",
 			description: "Noop",
 			parameters: Type.Object({}),
-			execute: async () => ({ content: [{ type: "text", text: "done" }], details: {} }),
+			execute: async () => {
+				toolCalls++;
+				return { content: [{ type: "text", text: "done" }], details: {} };
+			},
 		};
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
@@ -804,9 +809,15 @@ describe("durable length recovery", () => {
 		harnesses.push(harness);
 		harness.setResponses([
 			fauxAssistantMessage("first partial", { stopReason: "length" }),
-			fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),
+			(context) => {
+				retryRequests.push(JSON.stringify(context.messages));
+				return fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" });
+			},
 			() => fauxAssistantMessage("second partial", { stopReason: "length", timestamp: Date.now() + 1_000 }),
-			() => fauxAssistantMessage("completed second recovery", { timestamp: Date.now() + 2_000 }),
+			(context) => {
+				retryRequests.push(JSON.stringify(context.messages));
+				return fauxAssistantMessage("completed second recovery", { timestamp: Date.now() + 2_000 });
+			},
 		]);
 
 		await harness.session.prompt("x".repeat(5000));
@@ -822,8 +833,20 @@ describe("durable length recovery", () => {
 					entry.type === "message" && entry.message.role === "assistant" && entry.message.stopReason === "length",
 			);
 		expect(lengthResponses).toHaveLength(2);
-		expect(omittedIds).toEqual(expect.arrayContaining(lengthResponses.map((entry) => entry.id)));
-		expect(harness.faux.state.callCount).toBe(3);
+		expect(omittedIds).toEqual([]);
+		expect(toolCalls).toBe(1);
+		expect(retryRequests).toHaveLength(2);
+		for (const request of retryRequests) {
+			expect(request).toContain("recovered input");
+			expect(request).not.toContain("first partial");
+			expect(request).not.toContain("second partial");
+		}
+		expect(
+			harness.sessionManager.getEntries().some(
+				(entry) => entry.type === "message" && getMessageText(entry.message) === "completed second recovery",
+			),
+		).toBe(true);
+		expect(harness.faux.state.callCount).toBe(4);
 	});
 
 	it("gives a distinct queued follow-up its own length-recovery budget", async () => {
