@@ -28,6 +28,15 @@ export function AnsiText(props: { text: string }) {
 function MarkdownText(props: { text: string }) {
   const tokens = createMemo(() => Lexer.lexInline(props.text));
   return <For each={tokens()}>{token => <Switch fallback={<HighlightedText text={token.raw} language="markdown" />}>
+    <Match when={token.type === 'link'}>
+      <Show when={/^(https?:\/\/|mailto:)/i.test((token as Tokens.Link).href)}
+        fallback={<HighlightedText text={token.raw} language="markdown" />}>
+        <a href={(token as Tokens.Link).href} target="_blank" rel="noopener noreferrer"
+          title={(token as Tokens.Link).title || undefined}>
+          {(token as Tokens.Link).text}
+        </a>
+      </Show>
+    </Match>
     <Match when={token.type === 'strong'}>
       <strong><Show when={showBoldSyntax()}>{token.raw.slice(0, 2)}</Show>
         <MarkdownText text={(token as Tokens.Strong).text} />
