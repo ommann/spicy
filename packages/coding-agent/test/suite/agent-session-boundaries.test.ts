@@ -1088,7 +1088,8 @@ describe("durable length recovery", () => {
 		);
 	});
 
-	it("keeps omissions and does not retry when recovery compaction fails", async () => {
+	it("preserves history and does not retry when recovery compaction fails", async () => {
+		const summaryRequests: string[] = [];
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
 			settings: {
@@ -1099,14 +1100,20 @@ describe("durable length recovery", () => {
 		harnesses.push(harness);
 		harness.setResponses([
 			fauxAssistantMessage("partial response", { stopReason: "length" }),
-			fauxAssistantMessage("summary failed", { stopReason: "error", errorMessage: "summary failed" }),
+			(context) => {
+				summaryRequests.push(JSON.stringify(context.messages));
+				return fauxAssistantMessage("summary failed", { stopReason: "error", errorMessage: "summary failed" });
+			},
 			fauxAssistantMessage("must not retry"),
 		]);
 
 		await harness.session.prompt("x".repeat(5000));
 
 		const entries = harness.sessionManager.getEntries();
-		expect(entries.some((entry) => entry.type === "context_edit")).toBe(true);
+		expect(summaryRequests).toHaveLength(1);
+		expect(summaryRequests[0]).toContain("x".repeat(5000));
+		expect(summaryRequests[0]).not.toContain("partial response");
+		expect(entries.some((entry) => entry.type === "context_edit")).toBe(false);
 		expect(entries.some((entry) => entry.type === "compaction")).toBe(false);
 		expect(
 			entries.some((entry) => entry.type === "message" && getMessageText(entry.message) === "partial response"),
@@ -1115,7 +1122,14 @@ describe("durable length recovery", () => {
 			harness.sessionManager
 				.buildSessionProjection()
 				.messages.some((message) => getMessageText(message) === "partial response"),
-		).toBe(false);
+		).toBe(true);
+		expect(harness.eventsOfType("compaction_end")).toContainEqual(
+			expect.objectContaining({
+				result: undefined,
+				willRetry: false,
+				errorMessage: expect.stringContaining("summary failed"),
+			}),
+		);
 		expect(harness.faux.state.callCount).toBe(2);
 	});
 });
