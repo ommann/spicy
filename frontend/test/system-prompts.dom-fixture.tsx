@@ -12,6 +12,16 @@ import { SessionsRoute } from '../src/Sessions';
 import SystemPrompts from '../src/SystemPrompts';
 import SystemPromptContent from '../src/SystemPromptContent';
 import ChatContent from '../src/ChatContent';
+import { TreeCard } from '../src/Conversation';
+
+export function mountStreamingCard(root: HTMLElement, initial: any) {
+  const [node, setNode] = createSignal(initial);
+  const dispose = render(() => <TreeCard id="stream-test" node={node()} position={{ span: 720, cardLeft: 0, top: 0 }}
+    gridStyle={{}} scrollTop={0} promptRowTop={0} width={720}
+    registerSection={() => () => {}} onBranch={() => {}} onDismiss={() => {}}
+    measure={() => {}} unmeasure={() => {}} />, root);
+  return { dispose, setNode };
+}
 import ScrollArea from '../src/ScrollArea';
 import SystemPromptCreator from '../src/SystemPromptCreator';
 import { SystemPromptCreatorContext, type PromptDocumentSnapshot, type CreatedPrompt } from '../src/SystemPromptCreatorContext';

@@ -1,5 +1,5 @@
 import { For, Index, Show, batch, createEffect, createMemo, createSignal, on, onCleanup, onMount, type JSX } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import Card from './Card';
 import { createColumnInteraction } from './column-interaction';
@@ -59,11 +59,15 @@ interface Props {
   onOptions: () => void;
 }
 
-function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; promptTitle?: string; scrollTop: number; promptRowTop: number;
+export function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; promptTitle?: string; scrollTop: number; promptRowTop: number;
   selection?: { value: string; options: SelectOption[]; onChange: (value: string) => void };
   registerSection: (id: string, element: HTMLElement) => () => void;
   width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
   let element!: HTMLElement;
+  // Graph projections are immutable snapshots. Reconcile them into a persistent
+  // store so unchanged historical blocks retain identity across streaming updates.
+  const [content, setContent] = createStore({ parts: props.node.parts });
+  createEffect(() => setContent('parts', reconcile(props.node.parts, { key: null, merge: true })));
 
   onMount(() => props.measure(props.id, element));
   onCleanup(() => props.unmeasure(element));
@@ -86,7 +90,7 @@ function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JS
             onClick={() => props.onDismiss(props.id)}>Dismiss</button>
         </Show>
       </Show>
-      <Index each={props.node.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch} />}</Index>
+      <Index each={content.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch} />}</Index>
     </Card>
   </article></SectionContext.Provider>;
 }

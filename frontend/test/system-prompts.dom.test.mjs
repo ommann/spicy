@@ -54,6 +54,32 @@ const flush = async () => {
 };
 const button = (parent, text) => [...parent.querySelectorAll('button')].find(element => element.textContent.trim() === text);
 
+test('streaming cards preserve historical DOM across fresh snapshots and update changed text', async () => {
+  const initial = { entry: { type: 'message' }, parts: [
+    { kind: 'thinking', entryId: 'stream-test', text: 'Historical thinking' },
+    { kind: 'message', entryId: 'stream-test', text: 'Initial answer' },
+  ] };
+  const card = components.mountStreamingCard(root, initial);
+  try {
+    await flush();
+    const thinking = root.querySelector('.thinking-text span');
+    let mutations = 0;
+    const observer = new window.MutationObserver(records => { mutations += records.length; });
+    observer.observe(root, { childList: true, characterData: true, subtree: true });
+    card.setNode(structuredClone(initial));
+    await flush();
+    observer.disconnect();
+    assert.equal(mutations, 0, 'identical snapshots must not rebuild content');
+    assert.equal(root.querySelector('.thinking-text span'), thinking);
+    const changed = structuredClone(initial);
+    changed.parts[1].text = 'Updated answer';
+    card.setNode(changed);
+    await flush();
+    assert.equal(root.querySelector('.thinking-text span'), thinking);
+    assert.match(root.textContent, /Updated answer/);
+  } finally { card.dispose(); }
+});
+
 test('working status and Stop stay outside the input without replacing it or losing its draft', async () => {
   const dispose = components.mountComposer(root);
   try {
