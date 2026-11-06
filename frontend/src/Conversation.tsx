@@ -123,9 +123,7 @@ export default function Conversation(props: Props) {
   const [scrollRequest, setScrollRequest] = createSignal<{ id: string; bottom: boolean; smooth: boolean }>();
   let followLatest = true;
   function focusedFollowTop() {
-    // The canvas deliberately includes blank overscroll space below the history.
-    // Follow the content edge, not the bottom of that blank space.
-    return Math.max(0, layout().height - Math.max(80, dimensions().height * .75) - dimensions().height + 48);
+    return Math.max(0, layout().height - dimensions().height);
   }
   function handleViewportScroll() {
     if (viewport && mode() === 'focused') {
@@ -440,7 +438,9 @@ export default function Conversation(props: Props) {
 
   const jumps = createMemo(() => {
     const latestLane = latestMessage()?.first ?? 0;
-    const branchHidden = mode() === 'side' && focused() === latestLane;
+    const branchHidden = mode() === 'focused'
+      ? scroll().top >= focusedFollowTop() - 2
+      : focused() === latestLane;
     const origin = layout().inset - scroll().left;
     const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
     const latest = clamp(origin + (layout().starts[Math.max(0, latestLane)] || 0) + workingWidth() / 2 - jumpSizes().latest / 2,
@@ -514,9 +514,9 @@ export default function Conversation(props: Props) {
   const bottom = <div class="bottom">
     <div class="jump-row"><div class="jump-actions" classList={{ 'has-jump-up': !jumps().branchHidden }}>
       <button ref={jumpUp} class="jump-up" hidden={jumps().branchHidden} style={{ left: `${jumps().branch}px` }}
-        onClick={() => { const leaf = props.graph.leaves[focused()]; if (leaf) focus(leaf.id, true); }}>Jump to branch’s last message</button>
+        onClick={() => { const leaf = props.graph.leaves[focused()]; if (leaf) focus(leaf.id, true); }}>{mode() === 'focused' ? 'Jump to end' : 'Jump to branch’s end'}</button>
       <button ref={jumpLatest} id="jump" hidden={jumps().latestHidden} style={{ left: `${jumps().latest}px` }}
-        onClick={() => { const latest = latestMessage(); if (latest) focus(latest.id, true); }}>Jump to last message</button>
+        onClick={() => { const latest = latestMessage(); if (latest) focus(latest.id, true); }}>Jump to latest message</button>
     </div></div>
     <div ref={composerRow} class="composer-row" style={{ height: layout().inlineComposers ? '0px' : `${composerHeights[lanes()[focused()].key] || 40}px` }} />
   </div>;

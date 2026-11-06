@@ -25,6 +25,22 @@ test('compaction roots get independent columns and a switchable prompt until the
   assert.equal(isUnstartedCompaction(started, 'new-message'), false);
 });
 
+test('Single view ends at the last card as it grows, while side view retains overscroll', () => {
+  const graph = createConversationGraph([
+    { id: 'user', parentId: null, type: 'message', message: { role: 'user', content: 'Hello' } },
+    { id: 'reply', parentId: 'user', type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'Streaming' }] } },
+  ]);
+  const options = { width: 720, viewportWidth: 1200, viewportHeight: 800, lane: 0 };
+  for (const height of [100, 1200, 1800]) {
+    const focused = layoutConversation(graph, { ...options, mode: 'focused', heights: { reply: height } });
+    const last = focused.items.get('reply');
+    assert.equal(focused.height, last.top + last.height, 'no blank scrollable tail');
+    const side = layoutConversation(graph, { ...options, mode: 'side', heights: { reply: height } });
+    const composer = side.composers[0];
+    assert.equal(side.height, composer.top + composer.height + 600, 'side-view overscroll is unchanged');
+  }
+});
+
 test('empty chats use a normal first column and composer in both modes', () => {
   for (const mode of ['side', 'focused']) {
     const graph = createConversationGraph([]);

@@ -206,7 +206,7 @@ export function continuationTarget(graph, id) {
   }
 }
 
-// Retain the established packing, shared-card placement, connector paths, and overscroll.
+// Retain the established packing, shared-card placement, and connector paths.
 // This function has no browser or rendering dependency.
 export function layoutConversation(graph, { mode, width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {},
   rowGap = CHAT_BLOCK_GAP, columnGap = 48, edgeGap = 24 }) {
@@ -260,7 +260,7 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
   const height = Math.max(rowGap + prefixHeight,
     ...(inlineComposers ? composers.map(composer => composer.top + composer.height) : []),
     ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden).map(node => items.get(node.id).top + items.get(node.id).height))
-    + Math.max(80, viewportHeight * .75);
+    + (mode === 'focused' ? 0 : Math.max(80, viewportHeight * .75));
   const paths = [];
 
   if (mode === 'side') for (const node of graph.nodes.values()) {
