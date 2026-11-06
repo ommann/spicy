@@ -43,8 +43,8 @@ try {
     }
     assert.equal(await solid.getByRole('button', { name: 'Focused', exact: true }).getAttribute('aria-pressed'), String(mode === 'focused'));
     assert.equal(await solid.getByRole('button', { name: 'Side by side', exact: true }).getAttribute('aria-pressed'), String(mode === 'side'));
-    const reference = await original.screenshot({ path: `/tmp/lilim-original-${mode}.png`, animations: 'disabled', style: '.tree-toolbar { visibility: hidden; }' });
-    const target = await solid.screenshot({ path: `/tmp/lilim-solid-${mode}.png`, animations: 'disabled', style: '.tree-toolbar { visibility: hidden; }' });
+    const reference = await original.screenshot({ path: `/tmp/spicy-original-${mode}.png`, animations: 'disabled', style: '.tree-toolbar { visibility: hidden; }' });
+    const target = await solid.screenshot({ path: `/tmp/spicy-solid-${mode}.png`, animations: 'disabled', style: '.tree-toolbar { visibility: hidden; }' });
     const pixels = await solid.evaluate(async ([left, right]) => {
       const images = await Promise.all([left, right].map(async data => {
         const image = new Image();

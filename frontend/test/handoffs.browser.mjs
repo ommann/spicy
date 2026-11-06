@@ -38,7 +38,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  const snapshot = { connected: true, running: false, cwd: '/fixture/ollim', state: { sessionId: 'fixture' }, live: [], dialogs: [], leafId: 'r', diagnostic: '', entries: [
+  const snapshot = { connected: true, running: false, cwd: '/fixture/spicy', state: { sessionId: 'fixture' }, live: [], dialogs: [], leafId: 'r', diagnostic: '', entries: [
     { type: 'message', id: 'u', parentId: null, message: { role: 'user', content: 'Help me choose a joke' } },
     { type: 'message', id: 'a', parentId: 'u', message: { role: 'assistant', content: [{ type: 'toolCall', id: 'c', name: 'handoff_task_to_user', arguments: { tool: 'joke', instructions: 'Choose your favorite joke.', inputs: {} } }] } },
     { type: 'message', id: 'r', parentId: 'a', message: { role: 'toolResult', toolCallId: 'c', details: { task_id: id }, content: [{ type: 'text', text: JSON.stringify({ task_id: id }) }] } },
@@ -49,7 +49,7 @@ try {
   const control = page.getByRole('button', { name: 'handoff_task_to_user · joke · open handoff', exact: true });
   await control.click({ timeout: 5000 }).catch(async error => {
     console.error('Page errors:', errors, 'Body:', await page.locator('body').innerText());
-    await page.screenshot({ path: '/tmp/ollim-handoff-failure.png' });
+    await page.screenshot({ path: '/tmp/spicy-handoff-failure.png' });
     throw error;
   });
   const dialog = page.getByRole('dialog', { name: 'Tool UI', exact: true });
@@ -63,7 +63,7 @@ try {
   const frameBox = await page.locator('iframe').boundingBox();
   assert.ok(frameBox.height > 300, 'Embedded tool has usable height');
   assert.equal(await frame.getByRole('textbox', { name: 'Draft' }).isVisible(), true);
-  await page.screenshot({ path: '/tmp/ollim-handoff.png' });
+  await page.screenshot({ path: '/tmp/spicy-handoff.png' });
   await frame.getByRole('button', { name: 'Finish task' }).click();
   await frame.getByRole('heading', { name: 'Completed preview' }).waitFor();
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
@@ -72,7 +72,7 @@ try {
   assert.equal(await dialog.getByRole('button', { name: 'Reject', exact: true }).count(), 0);
   await frame.getByRole('heading', { name: 'Completed preview' }).waitFor();
   assert.deepEqual(errors, []);
-  console.log('Handoff browser check passed; screenshot: /tmp/ollim-handoff.png');
+  console.log('Handoff browser check passed; screenshot: /tmp/spicy-handoff.png');
 } finally {
   await browser?.close();
   server.kill('SIGTERM');

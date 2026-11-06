@@ -20,7 +20,7 @@ test('RPC correlates concurrent commands and preserves Unicode separators in JSO
 });
 test('startup failures reject pending requests and leave client disconnected', async () => {
   const rpc = new PiRpc();
-  await assert.rejects(rpc.start('/does/not/exist/lilim-pi', [], process.cwd()), /ENOENT/);
+  await assert.rejects(rpc.start('/does/not/exist/spicy-pi', [], process.cwd()), /ENOENT/);
   assert.equal(rpc.child, null);
   assert.equal(rpc.pending.size, 0);
 });

@@ -4,7 +4,7 @@ import { applyRecord } from '../src/stream.mjs';
 import { createPrefixResolver } from '../src/lilim/prefix-state.js';
 import { diffPrefixes } from '../src/lilim/prefix-diff.js';
 
-test('existing lilim prefix replay and diffs remain branch-relative', () => {
+test('existing spicy prefix replay and diffs remain branch-relative', () => {
   const entries = [
     { id: 'root', parentId: null, message: { role: 'system', sections: { cwd: '/project', rules: 'one' } } },
     { id: 'left', parentId: 'root', message: { role: 'system', sections: { rules: 'two' } } },

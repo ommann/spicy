@@ -59,7 +59,7 @@ try {
   assert.equal(draftBox.y, sourceBox.y, 'Outline aligns with the selected prompt');
   const draftInput = page.locator('.editor[data-leaf-id^="draft-"] textarea');
   assert.equal(await draftInput.inputValue(), '');
-  await page.screenshot({ path: '/tmp/lilim-branch-preview.png' });
+  await page.screenshot({ path: '/tmp/spicy-branch-preview.png' });
   await draftInput.fill('Different prompt');
   await draftInput.press('Enter');
   await page.locator('.tree-node[data-entry-id="entry-4"]').waitFor();
@@ -82,7 +82,7 @@ try {
   console.log('Dashed preview, empty composer, and same-session branch submission passed.');
 } catch (error) {
   console.error('Browser errors:', errors);
-  await page?.screenshot({ path: '/tmp/lilim-branch-failure.png' });
+  await page?.screenshot({ path: '/tmp/spicy-branch-failure.png' });
   throw error;
 } finally {
   await browser?.close();
