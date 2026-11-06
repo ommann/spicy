@@ -92,18 +92,22 @@ test('local bridge protects mutation endpoints and supports live RPC, fork and r
     assert.equal(left.source.entryId, anchor);
     assert.equal(left.source.sessionId, Buffer.from(sourceFile).toString('base64url'));
 
+    const reset = await fetch(`${base}/api/events?agentIds=obsolete-agent`);
+    assert.match(await reset.text(), /event: reset/);
+
     const controllers = [];
     const streams = [];
     const subscribe = async agentId => {
       const controller = new AbortController();
       controllers.push(controller);
-      const response = await fetch(`${base}/api/events?agentId=${agentId}`, { signal: controller.signal });
+      const query = Array.isArray(agentId) ? `agentIds=${agentId.join(',')}` : `agentId=${agentId}`;
+      const response = await fetch(`${base}/api/events?${query}`, { signal: controller.signal });
       const reader = response.body.getReader();
       const stream = { text: '' };
       const decoder = new TextDecoder();
       const initial = await reader.read();
       stream.text += decoder.decode(initial.value, { stream: true });
-      assert.ok(stream.text.includes(`"agentId":"${agentId}"`));
+      assert.ok(stream.text.includes(`"agentId":"${Array.isArray(agentId) ? agentId[0] : agentId}"`));
       streams.push((async () => {
         try {
           while (true) {
@@ -118,6 +122,7 @@ test('local bridge protects mutation endpoints and supports live RPC, fork and r
     try {
       const leftEvents = await subscribe(left.agentId);
       const rightEvents = await subscribe(right.agentId);
+      const sharedEvents = await subscribe([left.agentId, right.agentId]);
       await Promise.all([
         post('command', { agentId: left.agentId, type: 'prompt', message: 'Left branch' }),
         post('command', { agentId: right.agentId, type: 'prompt', message: 'Right branch' }),
@@ -131,6 +136,11 @@ test('local bridge protects mutation endpoints and supports live RPC, fork and r
       assert.equal(rightDone.entries[2].message.content, 'Right branch');
       assert.equal((await get('default')).leafId, null);
       assert.equal(await readFile(sourceFile, 'utf8'), sourceContent);
+      assert.ok(sharedEvents.text.includes('event: agent'));
+      assert.ok(sharedEvents.text.includes(`"agentId":"${left.agentId}"`));
+      assert.ok(sharedEvents.text.includes(`"agentId":"${right.agentId}"`));
+      assert.ok(sharedEvents.text.includes('Left branch'));
+      assert.ok(sharedEvents.text.includes('Right branch'));
       assert.ok(leftEvents.text.includes('Left branch'));
       assert.ok(!leftEvents.text.includes('Right branch'));
       assert.ok(rightEvents.text.includes('Right branch'));

@@ -475,7 +475,7 @@ test('chat references open the Solid view without creating a model request or mo
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     constructor() { eventSource = this; }
     addEventListener(type, listener) { this.listeners.set(type, listener); }
-    emit(type, data) { this.listeners.get(type)?.({ data: JSON.stringify(data) }); }
+    emit(type, data) { this.listeners.get('agent')?.({ data: JSON.stringify({ agentId: snapshot.agentId, event: type, data }) }); }
     close() {}
   };
   const dispose = components.mountApp(root);
@@ -717,9 +717,16 @@ test('side-by-side chats send and stop independently while both agents stream', 
   const streams = new Map();
   globalThis.EventSource = class {
     listeners = new Map();
-    constructor(url) { streams.set(new URL(url, window.location.href).searchParams.get('agentId'), this); }
+    constructor(url) {
+      const source = this;
+      for (const id of new URL(url, window.location.href).searchParams.get('agentIds').split(',')) {
+        streams.set(id, {
+          emit(type, data) { source.listeners.get('agent')?.({ data: JSON.stringify({ agentId: id, event: type, data }) }); },
+          get closed() { return source.closed; },
+        });
+      }
+    }
     addEventListener(type, listener) { this.listeners.set(type, listener); }
-    emit(type, value) { this.listeners.get(type)?.({ data: JSON.stringify(value) }); }
     close() { this.closed = true; }
   };
   const dispose = components.mountApp(root);

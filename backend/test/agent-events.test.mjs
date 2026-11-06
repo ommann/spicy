@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { serveAgentEvents } from '../agent-events.mjs';
+
+test('multiplexed subscriptions send fresh snapshots and clean up on disconnect', t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const a = { id: 'a', clients: new Set(), payload: () => ({ agentId: 'a', version: 2 }) };
+  const b = { id: 'b', clients: new Set(), payload: () => ({ agentId: 'b' }) };
+  const req = new EventEmitter();
+  const res = new EventEmitter();
+  const chunks = [];
+  res.writeHead = () => {};
+  res.write = chunk => chunks.push(chunk);
+  serveAgentEvents(req, res, [a, b]);
+  assert.equal(a.clients.size, 1);
+  assert.equal(b.clients.size, 1);
+  assert.match(chunks[0], /"event":"snapshot"/);
+  assert.match(chunks[0], /"version":2/);
+  [...b.clients][0].send('record', { type: 'agent_start' });
+  assert.match(chunks[2], /"agentId":"b"/);
+  t.mock.timers.tick(15000);
+  assert.match(chunks.at(-1), /event: heartbeat/);
+  res.emit('close');
+  assert.equal(a.clients.size, 0);
+  assert.equal(b.clients.size, 0);
+  const count = chunks.length;
+  t.mock.timers.tick(30000);
+  assert.equal(chunks.length, count);
+});

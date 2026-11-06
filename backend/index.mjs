@@ -6,6 +6,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { AgentRegistry } from './agents.mjs';
+import { serveAgentEvents } from './agent-events.mjs';
 import { LoginBridge } from './auth.mjs';
 import { proxyUtw, utwBase } from './utw.mjs';
 import { createServer } from 'vite';
@@ -116,6 +117,14 @@ const server = http.createServer(async (req, res) => {
           const { agentId, cwd, connected, running, state, source } = agent.payload();
           return { agentId, cwd, connected, running, state, source };
         }));
+        if (url.pathname === '/api/events' && url.searchParams.has('agentIds')) {
+          const ids = [...new Set(url.searchParams.get('agentIds').split(',').filter(Boolean))];
+          if (ids.some(id => !agents.agents.has(id))) {
+            res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
+            return res.end('event: reset\ndata: {}\n\n');
+          }
+          return serveAgentEvents(req, res, ids.map(id => agents.get(id)));
+        }
         const agent = agents.get(url.searchParams.get('agentId') ?? undefined);
         if (url.pathname === '/api/info') return json(res, { token, ...agent.payload() });
         if (url.pathname === '/api/sessions') {

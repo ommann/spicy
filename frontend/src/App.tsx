@@ -25,6 +25,7 @@ import Conversation, { type ConversationController, type ViewOptions } from './C
 import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
 import { traceRecord } from './stream-timing';
+import { createAgentEvents } from './agent-events.mjs';
 import { agentForEntry, agentForLeaf, mergeAgentEntries } from './agent-conversations.mjs';
 import { hasCommittedDraft } from "./branch-drafts.mjs";
 import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from "./system-prompts.js";
@@ -124,7 +125,28 @@ export default function App(props: ParentProps) {
   let token = "";
   let markBridgeReady!: () => void;
   const bridgeReady = new Promise<void>(resolve => { markBridgeReady = resolve; });
-  const streams = new Map<string, EventSource>();
+  const streams = new Map<string, EventTarget & { close: () => void }>();
+  const agentEvents = createAgentEvents({
+    onReset: () => {
+      const urlId = routeSessionId() || selectedSessionUrlId();
+      if (!urlId) return;
+      void (async () => {
+        const response = await fetch('/api/info', { signal: appLifecycle.signal });
+        if (!response.ok) throw new Error('Could not reconnect to the local bridge');
+        token = (await response.json()).token;
+        await openSessionUrl(urlId, () => appLifecycle.signal.aborted);
+      })().catch(reportFailure);
+    },
+    onError: () => {
+      setDisconnectedStreams([...streams.keys()]);
+      setNotification({ message: 'Local bridge disconnected; reconnecting…', isError: true });
+    },
+    onOpen: () => {
+      setDisconnectedStreams([]);
+      setNotification(previous => previous.message === 'Local bridge disconnected; reconnecting…'
+        ? { message: '', isError: false } : previous);
+    },
+  });
   let conversation: ConversationController | undefined;
 
   const actualEntries = createMemo<Wire[]>(() => {
@@ -279,7 +301,7 @@ export default function App(props: ParentProps) {
 
   function watchAgent(id: string) {
     if (streams.has(id)) return;
-    const events = new EventSource(`/api/events?agentId=${encodeURIComponent(id)}`);
+    const events: EventTarget & { close: () => void } = agentEvents.watch(id);
     streams.set(id, events);
     events.addEventListener('snapshot', event => accept(JSON.parse((event as MessageEvent).data)));
     events.addEventListener('record', event => {
@@ -314,15 +336,6 @@ export default function App(props: ParentProps) {
       updateAgent(id, previous => ({ ...previous, connected: false, running: false, dialogs: [], connectionError: JSON.parse((event as MessageEvent).data) }));
       setNotification({ message: JSON.parse((event as MessageEvent).data), isError: true });
     });
-    events.onerror = () => {
-      setDisconnectedStreams(previous => [...new Set([...previous, id])]);
-      setNotification({ message: 'Local bridge disconnected; reconnecting…', isError: true });
-    };
-    events.onopen = () => {
-      setDisconnectedStreams(previous => previous.filter(agentId => agentId !== id));
-      setNotification(previous => previous.message === 'Local bridge disconnected; reconnecting…'
-        ? { message: '', isError: false } : previous);
-    };
   }
 
   function showAgent(value: Snapshot & { relatedAgents?: Snapshot[] }, replace: boolean) {
@@ -680,7 +693,8 @@ export default function App(props: ParentProps) {
   onMount(() => { void restoreBridge(); });
   onCleanup(() => {
     appLifecycle.abort();
-    for (const stream of streams.values()) stream.close();
+    agentEvents.close();
+    streams.clear();
   });
 
   return (
