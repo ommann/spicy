@@ -1,6 +1,17 @@
 /** RPC deltas have no cumulative message snapshot. Reconstruct by contentIndex. */
 export function applyRecord(messages, record) {
-  if (record.type === 'message_start') return [...messages, structuredClone(record.message)];
+  if (record.type === 'tool_execution_update') {
+    const index = messages.findLastIndex(message => message.role === 'toolResult' && message.toolCallId === record.toolCallId);
+    const result = { role: 'toolResult', toolCallId: record.toolCallId, toolName: record.toolName,
+      ...record.partialResult };
+    return index < 0 ? [...messages, result] : messages.map((message, i) => i === index ? result : message);
+  }
+  if (record.type === 'message_start') {
+    const message = structuredClone(record.message);
+    const index = message.role === 'toolResult'
+      ? messages.findLastIndex(previous => previous.role === 'toolResult' && previous.toolCallId === message.toolCallId) : -1;
+    return index < 0 ? [...messages, message] : messages.map((previous, i) => i === index ? message : previous);
+  }
   if (record.type === 'message_end') {
     const index = messages.findLastIndex(message => message.role === record.message.role
       && message.timestamp === record.message.timestamp);

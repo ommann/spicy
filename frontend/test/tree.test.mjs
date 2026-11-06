@@ -16,6 +16,27 @@ test('existing spicy prefix replay and diffs remain branch-relative', () => {
   assert.equal(diffPrefixes(prefix.get('root'), prefix.get('left'))[0].name, 'sections.rules');
 });
 
+test('tool output arrives before completion and the final message replaces it', () => {
+  const update = (messages, id, text) => applyRecord(messages, {
+    type: 'tool_execution_update', toolCallId: id, toolName: 'bash',
+    partialResult: { content: [{ type: 'text', text }] },
+  });
+  let messages = update([], 'a', 'first\n');
+  const previous = messages;
+  messages = update(messages, 'a', 'first\nsecond\n');
+  assert.equal(previous[0].content[0].text, 'first\n');
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].content[0].text, 'first\nsecond\n');
+  messages = update(messages, 'b', 'other command');
+  const final = { role: 'toolResult', toolCallId: 'a', toolName: 'bash', timestamp: 42,
+    content: [{ type: 'text', text: 'complete' }] };
+  messages = applyRecord(messages, { type: 'message_start', message: final });
+  messages = applyRecord(messages, { type: 'message_end', message: final });
+  assert.equal(messages.length, 2);
+  assert.deepEqual(messages[0], final);
+  assert.equal(messages[1].toolCallId, 'b');
+});
+
 test('RPC deltas reconstruct partial messages and final messages replace them', () => {
   let messages = applyRecord([], { type: 'message_start', message: { role: 'assistant', timestamp: 1, stopReason: 'pending', content: [] } });
   const update = event => { messages = applyRecord(messages, { type: 'message_update', assistantMessageEvent: event }); };

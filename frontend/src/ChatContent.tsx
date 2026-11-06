@@ -10,6 +10,7 @@ import { projectChatParts } from './conversation-model.mjs';
 import type { Wire } from './types';
 import { selectSource } from './source-selection';
 import { HandoffTool } from './Handoffs';
+import { partialCommand } from './partial-command.mjs';
 
 function Images(props: { blocks: Wire[]; caption?: string }) {
   const open = useContext(ImageContext);
@@ -159,6 +160,7 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
   const args = () => props.call.arguments || {};
   const isBash = () => /(^|[._])bash$/.test(props.call.name);
   const label = () => {
+    if (isBash() && typeof args().command !== 'string') return partialCommand(props.call.partial);
     const value = args().path || args().command || args().url || args();
     return typeof value === 'string' ? value : JSON.stringify(value);
   };
