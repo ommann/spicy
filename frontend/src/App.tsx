@@ -613,7 +613,7 @@ export default function App(props: ParentProps) {
   }
 
   createEffect(() => {
-    document.title = `Spicy — ${live() ? sessionCwd().split('/').filter(Boolean).at(-1) || 'chat' : 'chat'}`;
+    document.title = `${live() ? sessionCwd().split('/').filter(Boolean).at(-1) || 'chat' : 'chat'} — Spicy`;
   });
 
   async function openSessionUrl(urlId: string, isCancelled: () => boolean) {
