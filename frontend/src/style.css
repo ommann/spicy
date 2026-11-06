@@ -271,7 +271,7 @@
   font: inherit;
 }
 
-.lilim-host {
+.spicy-host {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
@@ -281,47 +281,47 @@
   min-height: 0;
 }
 
-.lilim-host.has-horizontal-scrollbar {
+.spicy-host.has-horizontal-scrollbar {
   padding-bottom: 14px;
 }
 
-.lilim-host > .canvas-scroll-shell,
-.lilim-host.has-horizontal-scrollbar > .canvas-scroll-shell {
+.spicy-host > .canvas-scroll-shell,
+.spicy-host.has-horizontal-scrollbar > .canvas-scroll-shell {
   grid-row: 1;
   height: auto;
   min-height: 0;
 }
 
-.lilim-host > .transcript {
+.spicy-host > .transcript {
   grid-row: 1;
   height: auto;
   min-height: 0;
 }
 
-.lilim-host > .bottom,
-.lilim-host.has-horizontal-scrollbar > .bottom {
+.spicy-host > .bottom,
+.spicy-host.has-horizontal-scrollbar > .bottom {
   grid-row: 2;
   position: relative;
   bottom: auto;
   min-width: 0;
 }
 
-.lilim-host:not(:has(.inline-composer)) > .bottom {
+.spicy-host:not(:has(.inline-composer)) > .bottom {
   padding-bottom: 1lh;
 }
 
-.lilim-host:has(.inline-composer) > .bottom {
+.spicy-host:has(.inline-composer) > .bottom {
   position: absolute;
   bottom: 14px;
   pointer-events: none;
   background: transparent;
 }
 
-.lilim-host:has(.inline-composer) > .bottom button {
+.spicy-host:has(.inline-composer) > .bottom button {
   pointer-events: auto;
 }
 
-.lilim-host .user {
+.spicy-host .user {
   position: relative;
 }
 
@@ -349,7 +349,7 @@
   transform: rotate(45deg);
 }
 
-.lilim-host .user:hover .branch-trigger,
+.spicy-host .user:hover .branch-trigger,
 .branch-trigger:focus-visible {
   opacity: 1;
 }

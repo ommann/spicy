@@ -523,7 +523,7 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(root.querySelector('#image-preview'), null);
     const reference = root.querySelector('[data-system-prompt="2"]');
     assert.ok(reference, `Chat contains numbered prompt references: ${root.textContent}`);
-    assert.doesNotMatch(root.querySelector('.lilim-host').textContent, /Original instructions|New tools/);
+    assert.doesNotMatch(root.querySelector('.spicy-host').textContent, /Original instructions|New tools/);
     const input = root.querySelector('.editor textarea');
     input.value = 'Keep this draft';
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -628,7 +628,7 @@ test('default Sessions view groups and filters real sessions and opens without b
     root.querySelector('.startup-session').click();
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(dispose.history.get(), '/k7m3xqa9');
-    assert.ok(root.querySelector('.lilim-host'));
+    assert.ok(root.querySelector('.spicy-host'));
     assert.deepEqual(requests.filter(request => request.body).map(request => request.body), [{ openSessionId: 'first-file' }]);
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });

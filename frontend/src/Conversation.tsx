@@ -520,7 +520,7 @@ export default function Conversation(props: Props) {
     <div ref={composerRow} class="composer-row" style={{ height: layout().inlineComposers ? '0px' : `${composerHeights[lanes()[focused()].key] || 40}px` }} />
   </div>;
 
-  return <div class="lilim-host" classList={{ 'route-hidden': !props.active, 'tree-mode': true, 'has-horizontal-scrollbar': layout().hasHorizontal }}
+  return <div class="spicy-host" classList={{ 'route-hidden': !props.active, 'tree-mode': true, 'has-horizontal-scrollbar': layout().hasHorizontal }}
     aria-hidden={!props.active} inert={!props.active} tabIndex={-1}
     onKeyDown={keydown} onKeyUp={release} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) blur();
