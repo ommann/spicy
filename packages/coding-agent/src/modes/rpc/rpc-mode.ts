@@ -277,7 +277,9 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 		unsubscribe?.();
 		unsubscribeBackpressure?.();
 		unsubscribe = session.subscribe((event) => {
-			output(toJsonEvent(event));
+			output(process.env.SPICY_STREAM_TIMING === "1"
+				? { ...toJsonEvent(event), spicyEmittedAt: Date.now() }
+				: toJsonEvent(event));
 			if (event.type === "agent_settled") {
 				void checkShutdownRequested();
 			}

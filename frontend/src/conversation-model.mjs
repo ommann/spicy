@@ -4,6 +4,10 @@ import { branchEntries } from './session-entries.mjs';
 
 export const CHAT_BLOCK_GAP = 20;
 
+// Entries are immutable snapshots. Preserve parts for unchanged history so Solid
+// does not reconcile every historical card for each streamed token.
+const projectedParts = new WeakMap();
+
 export function projectChatParts(entries) {
   const summaries = new Set(entries.filter(entry => entry.type === 'branch_summary').map(entry => entry.fromId));
   const results = new Map(entries.filter(entry => entry.message?.role === 'toolResult').map(entry => [entry.message.toolCallId, entry.message]));
@@ -17,10 +21,21 @@ export function projectChatParts(entries) {
 
   for (const entry of entries) {
     const message = entry.message;
+    const toolResults = message?.role === 'assistant'
+      ? (message.content || []).filter(block => block.type === 'toolCall').map(block => results.get(block.id)) : [];
+    const summary = summaries.has(entry.id);
+    const cached = projectedParts.get(entry);
+    if (cached && cached.message === message && cached.summary === summary
+      && cached.results.length === toolResults.length && cached.results.every((result, i) => result === toolResults[i])) {
+      if (cached.parts) parts.set(entry.id, cached.parts);
+      continue;
+    }
+    const remember = () => projectedParts.set(entry, { message, summary, results: toolResults, parts: parts.get(entry.id) });
     if (!message) {
       if (entry.type === 'branch_draft') add(entry, { kind: 'draft' });
       if (entry.type === 'compaction' || entry.type === 'branch_summary') add(entry, { kind: 'summary', text: entry.summary || '' });
       if (entry.type === 'custom_message' && entry.display) add(entry, { kind: 'custom', content: entry.content });
+      remember();
       continue;
     }
 
@@ -48,6 +63,7 @@ export function projectChatParts(entries) {
       kind: 'tool', call: { name: 'bash', arguments: { command: message.command } },
       result: { content: [{ type: 'text', text: message.output || '' }], isError: message.exitCode !== 0 },
     });
+    remember();
   }
 
   return parts;

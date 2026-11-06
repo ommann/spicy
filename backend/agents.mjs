@@ -23,6 +23,7 @@ export class AgentConnection {
     this.id = id;
     this.cwd = cwd;
     this.rpc.on('record', record => {
+      record.spicyReceivedAt = Date.now();
       // A retry also emits agent_start. Keep the visible turn until its saved
       // snapshot arrives rather than erasing the user's message between attempts.
       this.live = applyRecord(this.live, record);
@@ -50,6 +51,7 @@ export class AgentConnection {
   }
 
   broadcast(type, data) {
+    if (type === 'record') data = { ...data, spicySentAt: Date.now() };
     const wire = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const client of this.clients) client.write(wire);
   }

@@ -68,7 +68,8 @@ export function TreeCard(props: { id: string; node: Wire; position: Wire; gridSt
   // Graph projections are immutable snapshots. Reconcile them into a persistent
   // store so unchanged historical blocks retain identity across streaming updates.
   const [content, setContent] = createStore<{ parts: Wire[] }>({ parts: [] });
-  createEffect(() => setContent('parts', reconcile(props.node.parts, { key: null, merge: true })));
+  const projected = createMemo(() => props.node.parts);
+  createEffect(() => setContent('parts', reconcile(projected(), { key: null, merge: true })));
 
   onMount(() => props.measure(props.id, element));
   onCleanup(() => props.unmeasure(element));

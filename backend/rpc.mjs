@@ -12,7 +12,7 @@ export class PiRpc extends EventEmitter {
   stderr = '';
   async start(command, args, cwd) {
     if (this.child) throw new Error('Pi is already connected');
-    const child = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, SPICY_STREAM_TIMING: '1' } });
     this.child = child;
     let buffer = '';
     child.stdout.setEncoding('utf8');

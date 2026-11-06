@@ -24,6 +24,7 @@ import SelectWithDialog from './SelectWithDialog';
 import Conversation, { type ConversationController, type ViewOptions } from './Conversation';
 import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
+import { traceRecord } from './stream-timing';
 import { agentForEntry, agentForLeaf, mergeAgentEntries } from './agent-conversations.mjs';
 import { hasCommittedDraft } from "./branch-drafts.mjs";
 import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from "./system-prompts.js";
@@ -283,6 +284,7 @@ export default function App(props: ParentProps) {
     events.addEventListener('snapshot', event => accept(JSON.parse((event as MessageEvent).data)));
     events.addEventListener('record', event => {
       const record = JSON.parse((event as MessageEvent).data);
+      const finishTiming = traceRecord(id, record);
       updateAgent(id, previous => {
         const live = record.type === 'history_root' ? [] : applyRecord(previous.live, record);
         const generating = record.type === 'agent_start' ? true : record.type === 'agent_settled' ? false
@@ -306,6 +308,7 @@ export default function App(props: ParentProps) {
         if (record.method === 'set_editor_text' && id === selectedAgentId()) conversation?.setDraft(record.text || '');
         if (record.method === 'notify') setNotification({ message: record.message || '', isError: record.notifyType === 'error' });
       }
+      finishTiming();
     });
     events.addEventListener('disconnected', event => {
       updateAgent(id, previous => ({ ...previous, connected: false, running: false, dialogs: [], connectionError: JSON.parse((event as MessageEvent).data) }));
