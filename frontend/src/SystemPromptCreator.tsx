@@ -12,7 +12,7 @@ import CodeLinewrapOption from './CodeLinewrapOption';
 import SelectWithDialog from './SelectWithDialog';
 import Navigation from './Navigation';
 import type { Wire } from './types';
-import { promptDocument } from './lilim/system-prompts.js';
+import { promptDocument } from './system-prompts.js';
 
 function PartEditor(props: {
   part: SystemPromptPart;

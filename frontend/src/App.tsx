@@ -26,7 +26,7 @@ import { createConversationGraph, continuationTarget, isUnstartedCompaction, mat
 import { applyRecord } from "./stream.mjs";
 import { agentForEntry, agentForLeaf, mergeAgentEntries } from './agent-conversations.mjs';
 import { hasCommittedDraft } from "./branch-drafts.mjs";
-import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from "./lilim/system-prompts.js";
+import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from "./system-prompts.js";
 import { promptLabel } from './prompt-numbers';
 import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";

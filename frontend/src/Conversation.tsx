@@ -21,7 +21,7 @@ import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
 import { promptLabel } from './prompt-numbers';
-import { systemPromptText } from './lilim/system-prompts.js';
+import { systemPromptText } from './system-prompts.js';
 
 export interface ViewOptions {
   widths: { focused: number; side: number };

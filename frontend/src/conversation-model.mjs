@@ -1,5 +1,5 @@
 import { createPrefixResolver } from './lilim/prefix-state.js';
-import { createSystemPromptCatalog, systemPromptText } from './lilim/system-prompts.js';
+import { createSystemPromptCatalog, systemPromptText } from './system-prompts.js';
 import { branchEntries } from './session-entries.mjs';
 
 export const CHAT_BLOCK_GAP = 20;

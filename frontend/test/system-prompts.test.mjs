@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from '../src/lilim/system-prompts.js';
+import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from '../src/system-prompts.js';
 
 test('streamed reply chunks reuse prompt diffs, but prompt and ancestry changes invalidate them', () => {
   const catalogFor = createMemoizedSystemPromptCatalog();

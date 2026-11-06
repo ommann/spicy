@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { build } from 'vite';
 import solid from 'vite-plugin-solid';
 import { fileURLToPath } from 'node:url';
-import { createSystemPromptCatalog } from '../src/lilim/system-prompts.js';
+import { createSystemPromptCatalog } from '../src/system-prompts.js';
 import { renderSystemPromptDocument, SAVED_SYSTEM_PROMPT_ENTRY } from '../../packages/coding-agent/src/core/system-prompt-document.ts';
 
 const original = {

@@ -1,5 +1,5 @@
-import { SAVED_SYSTEM_PROMPT_ENTRY } from '../../../packages/coding-agent/src/core/system-prompt-document.ts';
-import { createPrefixResolver, systemEntryForState } from './prefix-state.js';
+import { SAVED_SYSTEM_PROMPT_ENTRY } from '../../packages/coding-agent/src/core/system-prompt-document.ts';
+import { createPrefixResolver, systemEntryForState } from './lilim/prefix-state.js';
 import { diffLines, diffPrefixes } from './prefix-diff.js';
 
 // Show all system instructions, including the available tool definitions.

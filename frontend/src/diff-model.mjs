@@ -1,5 +1,5 @@
 import { diffWordsWithSpace, parsePatch } from 'diff';
-import { diffLines } from './lilim/prefix-diff.js';
+import { diffLines } from './prefix-diff.js';
 
 export function recordedEditDiff(details, path, edits = []) {
   if (typeof details?.patch === 'string' && details.patch.trim()) {

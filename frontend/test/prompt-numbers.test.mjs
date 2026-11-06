@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { promptLabel } from '../src/prompt-numbers.ts';
-import { createSystemPromptCatalog } from '../src/lilim/system-prompts.js';
+import { createSystemPromptCatalog } from '../src/system-prompts.js';
 
 test('prompt labels use compact numbers and optional names', () => {
   assert.equal(promptLabel(1), '#1');
