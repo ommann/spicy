@@ -1,7 +1,7 @@
 import { For, Index, Match, Show, Switch, createMemo, type JSX } from 'solid-js';
 import { highlightTokens } from './syntax.mjs';
 import ScrollArea from './ScrollArea';
-import { createAnsiTokenizer } from './lilim/ansi.mjs';
+import { createAnsiTokenizer } from './ansi.mjs';
 import { Lexer, type Tokens } from 'marked';
 import './markdown-table.css';
 import { showBoldSyntax, showItalicSyntax, showInlineCodeSyntax } from './formatting-syntax';

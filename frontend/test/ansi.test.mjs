@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAnsiTokenizer } from '../src/lilim/ansi.mjs';
+import { createAnsiTokenizer } from '../src/ansi.mjs';
 
 test('grep output preserves bold red and strips erase-line controls', () => {
   const runs = createAnsiTokenizer()('before \x1b[01;31m\x1b[Kneedle\x1b[m\x1b[K after\n');

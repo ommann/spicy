@@ -17,7 +17,7 @@ export default function treeNavigation(pi) {
       await ctx.reload();
     },
   });
-  pi.registerCommand('lilim-tree', {
+  pi.registerCommand('spicy-tree', {
     handler: async (args, ctx) => {
       const result = await ctx.navigateTree(args.trim(), { summarize: false });
       if (result.cancelled) throw new Error('Tree navigation cancelled');

@@ -23,7 +23,7 @@ process.stdin.on('data', chunk => {
     else if (command.type === 'get_entries') response({ entries: session.getEntries(), leafId: session.getLeafId() });
     else if (command.type === 'get_available_models') response({ models: [{ provider: 'test', id: 'fake', name: 'Fake model' }] });
     else if (command.type === 'get_available_thinking_levels') response({ levels: ['off'] });
-    else if (command.type === 'get_commands') response({ commands: [{ name: 'lilim-tree', source: 'extension' }] });
+    else if (command.type === 'get_commands') response({ commands: [{ name: 'spicy-tree', source: 'extension' }] });
     else if (command.type === 'echo') response(command.value);
     else if (command.type === 'clear_queue') response({ steering: [], followUp: [] });
     else if (command.type === 'fork') {
@@ -32,8 +32,8 @@ process.stdin.on('data', chunk => {
       response({ cancelled: false, text: target.message.content });
     } else if (command.type === 'switch_session') { session = SessionManager.open(command.sessionPath, directory); response({ cancelled: false }); }
     else if (command.type === 'new_session') { session = SessionManager.create(process.cwd(), directory); response({ cancelled: false }); }
-    else if (command.type === 'prompt' && command.message.startsWith('/lilim-tree ')) {
-      const source = session.getEntry(command.message.slice('/lilim-tree '.length));
+    else if (command.type === 'prompt' && command.message.startsWith('/spicy-tree ')) {
+      const source = session.getEntry(command.message.slice('/spicy-tree '.length));
       const target = source.message?.role === 'user' ? source.parentId : source.id;
       if (target) session.branch(target); else session.resetLeaf();
       response({ disposition: 'handled' });

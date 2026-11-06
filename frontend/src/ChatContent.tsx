@@ -5,7 +5,7 @@ import DiffView from './DiffView';
 import { recordedEditDiff } from './diff-model.mjs';
 import { Dynamic } from 'solid-js/web';
 import SourceText, { AnsiText, TerminalText } from './SourceText';
-import { createAnsiTokenizer } from './lilim/ansi.mjs';
+import { createAnsiTokenizer } from './ansi.mjs';
 import { projectChatParts } from './conversation-model.mjs';
 import type { Wire } from './types';
 import { selectSource } from './source-selection';

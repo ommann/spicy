@@ -268,13 +268,13 @@ export class AgentRegistry {
     const source = before.entries.find(entry => entry.id === entryId);
     if (!source) throw new Error('Branch entry not found');
     const commands = await agent.rpc.command({ type: 'get_commands' });
-    if (!commands.commands.some(entry => entry.name === 'lilim-tree')) throw new Error('Reconnect Pi to enable tree navigation');
+    if (!commands.commands.some(entry => entry.name === 'spicy-tree')) throw new Error('Reconnect Pi to enable tree navigation');
     let navigationError;
     const observe = record => {
-      if (record.type === 'extension_error' && record.extensionPath === 'command:lilim-tree') navigationError = record.error;
+      if (record.type === 'extension_error' && record.extensionPath === 'command:spicy-tree') navigationError = record.error;
     };
     agent.rpc.on('record', observe);
-    try { await agent.rpc.command({ type: 'prompt', message: `/lilim-tree ${source.id}` }); }
+    try { await agent.rpc.command({ type: 'prompt', message: `/spicy-tree ${source.id}` }); }
     finally { agent.rpc.off('record', observe); }
     if (navigationError) throw new Error(navigationError);
     const navigated = await agent.rpc.command({ type: 'get_entries' });
