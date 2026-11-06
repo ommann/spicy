@@ -105,8 +105,13 @@ function getMessagesFromProjectedEntryForCompaction(entry: ProjectedSessionEntry
 	return entry.messages.filter((message) => message.role !== "system");
 }
 
-/** Result from compact() - SessionManager adds uuid/parentUuid when saving */
+/** Identifies the built-in full-branch checkpoint procedure and its prompts in this module. */
+export const FULL_BRANCH_COMPACTION_PROCEDURE_ID = "full-branch-summary-v1";
+
+/** Result from compact() - SessionManager adds id/parentId when saving. */
 export interface CompactionResult<T = unknown> {
+	/** Extensions may identify their own compaction procedure; omitted when unknown. */
+	procedureId?: string;
 	summary: string;
 	firstKeptEntryId: string;
 	tokensBefore: number;

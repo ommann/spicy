@@ -72,6 +72,7 @@ import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
 import type { CacheWarmer, CacheWarmingStatus } from "./cache-warmer.ts";
 import {
+	FULL_BRANCH_COMPACTION_PROCEDURE_ID,
 	type CompactionPreparation,
 	type CompactionResult,
 	calculateContextTokens,
@@ -3020,12 +3021,14 @@ export class AgentSession {
 	}
 
 	private _saveCompactedHistory(
+		source: { sourceStartId: string; sourceEndId: string },
 		summary: string,
 		tokensBefore: number,
 		model: Model<any>,
 		details?: unknown,
 		fromExtension?: boolean,
 		usage?: Usage,
+		procedureId?: string,
 	): string {
 		const inheritedPrompt = getCurrentSystemMessage(this.sessionManager.buildSessionProjection().messages);
 		const selection = this.model;
@@ -3033,7 +3036,10 @@ export class AgentSession {
 			selection && isVirtualModel(selection)
 				? getVirtualModelState(this.sessionManager.getBranch(), selection.provider, selection.id)
 				: undefined;
-		const rootId = this.sessionManager.appendCompactionRoot(summary, tokensBefore, details, fromExtension, usage);
+		const rootId = this.sessionManager.appendCompactionRoot(summary, tokensBefore, details, fromExtension, usage, {
+			...source,
+			procedureId: fromExtension ? procedureId : FULL_BRANCH_COMPACTION_PROCEDURE_ID,
+		});
 		if (inheritedPrompt) {
 			this.sessionManager.appendMessage({
 				...createSystemPromptSnapshot({
@@ -3167,7 +3173,16 @@ export class AgentSession {
 				throw new Error("Compaction cancelled");
 			}
 
-			firstKeptEntryId = this._saveCompactedHistory(summary, tokensBefore, model, details, fromExtension, usage);
+			firstKeptEntryId = this._saveCompactedHistory(
+				{ sourceStartId: pathEntries[0].id, sourceEndId: pathEntries[pathEntries.length - 1].id },
+				summary,
+				tokensBefore,
+				model,
+				details,
+				fromExtension,
+				usage,
+				extensionCompaction?.procedureId,
+			);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
 			const estimatedTokensAfter = estimateMessagesTokens(this.sessionManager.buildSessionProjection().messages);
@@ -3514,7 +3529,16 @@ export class AgentSession {
 			}
 			abortController.signal.throwIfAborted();
 
-			firstKeptEntryId = this._saveCompactedHistory(summary, tokensBefore, model, details, fromExtension, usage);
+			firstKeptEntryId = this._saveCompactedHistory(
+				{ sourceStartId: pathEntries[0].id, sourceEndId: pathEntries[pathEntries.length - 1].id },
+				summary,
+				tokensBefore,
+				model,
+				details,
+				fromExtension,
+				usage,
+				extensionCompaction?.procedureId,
+			);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
 			const estimatedTokensAfter = estimateMessagesTokens(this.sessionManager.buildSessionProjection().messages);

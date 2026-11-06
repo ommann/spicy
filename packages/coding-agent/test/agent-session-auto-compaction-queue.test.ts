@@ -7,6 +7,7 @@ import { getModel, streamSimple } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import { type CompactionResult, FULL_BRANCH_COMPACTION_PROCEDURE_ID } from "../src/core/compaction/index.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
@@ -55,6 +56,35 @@ describe("AgentSession auto-compaction queue resume", () => {
 			rmSync(tempDir, { recursive: true });
 		}
 	});
+
+	it.each(["manual", "threshold", "overflow"] as const)(
+		"records a full source range for %s compaction",
+		async (reason) => {
+			const start = sessionManager.appendMessage({ role: "user", content: "Summarize this", timestamp: 1 });
+			const end = sessionManager.appendMessage(fauxAssistantMessage("A response to summarize"));
+			session.agent.state.messages = sessionManager.buildSessionContext().messages;
+			const runtime = session as unknown as {
+				_runDefaultCompaction: () => Promise<CompactionResult>;
+				_runAutoCompaction: (reason: "threshold" | "overflow", willRetry: boolean) => Promise<boolean>;
+			};
+			vi.spyOn(runtime, "_runDefaultCompaction").mockResolvedValue({
+				summary: "Checkpoint",
+				firstKeptEntryId: start,
+				tokensBefore: 100,
+			});
+			if (reason === "manual") await session.compact();
+			else await runtime._runAutoCompaction(reason, false);
+			const roots = sessionManager.getEntries().filter((entry) => entry.type === "compaction");
+			expect(roots).toHaveLength(1);
+			expect(roots[0]).toMatchObject({
+				parentId: null,
+				sourceStartId: start,
+				sourceEndId: end,
+				procedureId: FULL_BRANCH_COMPACTION_PROCEDURE_ID,
+			});
+			expect(sessionManager.getBranch().some((entry) => entry.id === start)).toBe(false);
+		},
+	);
 
 	it("should resume after threshold compaction when only agent-level queued messages exist", async () => {
 		settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });

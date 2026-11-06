@@ -32,7 +32,7 @@ import { readdir, stat } from "fs/promises";
 import { basename, join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
-import { hydrateSessionEntry, serializeSessionEntry } from './session-attachments.ts';
+import { hydrateSessionEntry, serializeSessionEntry } from "./session-attachments.ts";
 import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import {
@@ -98,6 +98,11 @@ export interface UsageEntry extends SessionEntryBase {
 
 export interface CompactionEntry<T = unknown> extends SessionEntryBase {
 	type: "compaction";
+	/** Inclusive source range on a single history path; does not establish tree parentage. */
+	sourceStartId?: string;
+	sourceEndId?: string;
+	/** Reference to the definition of the procedure that produced this compaction. */
+	procedureId?: string;
 	summary: string;
 	firstKeptEntryId: string;
 	tokensBefore: number;
@@ -375,7 +380,7 @@ export function parseSessionEntries(content: string, sessionFile?: string): File
 		}
 	}
 
-	return sessionFile ? entries.map(entry => hydrateSessionEntry(entry, sessionFile)) : entries;
+	return sessionFile ? entries.map((entry) => hydrateSessionEntry(entry, sessionFile)) : entries;
 }
 
 export function getLatestCompactionEntry(entries: SessionEntry[]): CompactionEntry | null {
@@ -675,7 +680,7 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
 	}
 
 	if (pending) appendFileSync(resolvedFilePath, "\n");
-	return entries.map(entry => hydrateSessionEntry(entry, resolvedFilePath));
+	return entries.map((entry) => hydrateSessionEntry(entry, resolvedFilePath));
 }
 
 /**
@@ -1355,12 +1360,16 @@ export class SessionManager {
 		details?: T,
 		fromHook?: boolean,
 		usage?: Usage,
+		provenance?: Pick<CompactionEntry, "sourceStartId" | "sourceEndId" | "procedureId">,
 	): string {
 		const id = generateId(this.byId);
 		this._appendEntry({
 			type: "compaction",
 			id,
 			parentId: null,
+			sourceStartId: provenance?.sourceStartId,
+			sourceEndId: provenance?.sourceEndId,
+			procedureId: provenance?.procedureId,
 			timestamp: new Date().toISOString(),
 			summary,
 			firstKeptEntryId: id,
