@@ -334,14 +334,18 @@ describe("RPC prompt response semantics", () => {
 
 				lineHandler(JSON.stringify({ id: "A", type, message: "A" }));
 				await vi.waitFor(() => {
-					expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
+					expect(
+						parseOutputLines(rpcIo.outputLines).filter((line) => line.type === "response" && line.id === "A"),
+					).toContainEqual({
 						id: "A",
 						type: "response",
 						command: type,
 						success: true,
 						data: { disposition: "handled" },
 					});
-					expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
+					expect(
+						parseOutputLines(rpcIo.outputLines).filter((line) => line.type === "queue_update"),
+					).toContainEqual({
 						type: "queue_update",
 						steering: type === "steer" ? ["B"] : [],
 						followUp: type === "follow_up" ? ["B"] : [],
@@ -374,14 +378,16 @@ describe("RPC prompt response semantics", () => {
 		try {
 			lineHandler(JSON.stringify({ id: "A", type, message: "A" }));
 			await vi.waitFor(() => {
-				expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
+				expect(
+					parseOutputLines(rpcIo.outputLines).filter((line) => line.type === "response" && line.id === "A"),
+				).toContainEqual({
 					id: "A",
 					type: "response",
 					command: type,
 					success: true,
 					data: { disposition: "queued" },
 				});
-				expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
+				expect(parseOutputLines(rpcIo.outputLines).filter((line) => line.type === "queue_update")).toContainEqual({
 					type: "queue_update",
 					steering: type === "steer" ? ["B"] : [],
 					followUp: type === "follow_up" ? ["B"] : [],
@@ -429,7 +435,9 @@ describe("RPC prompt response semantics", () => {
 
 			lineHandler(JSON.stringify({ id: "clear", type: "clear_queue" }));
 			await vi.waitFor(() => {
-				expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
+				expect(
+					parseOutputLines(rpcIo.outputLines).filter((line) => line.type === "response" && line.id === "clear"),
+				).toContainEqual({
 					id: "clear",
 					type: "response",
 					command: "clear_queue",

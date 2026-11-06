@@ -9,7 +9,8 @@ export default mergeConfig(
 			environment: "node",
 			testTimeout: 30000,
 			// Tests run offline by default; opt in with allowNetwork() from test/test-network-env.ts.
-			env: { PI_OFFLINE: "1" },
+			// UI timing diagnostics must not change the RPC protocol under test.
+			env: { PI_OFFLINE: "1", SPICY_STREAM_TIMING: "0" },
 			unstubEnvs: true,
 			reporters: process.env.GITHUB_ACTIONS ? ["dot", "github-actions"] : ["dot"],
 			silent: "passed-only",
