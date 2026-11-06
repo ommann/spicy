@@ -232,8 +232,8 @@ const server = http.createServer(async (req, res) => {
         try {
           if (reload) {
             const available = await rpc.command({ type: 'get_commands' });
-            if (!available.commands.some(entry => entry.name === 'lilim-reload')) throw new Error('Reconnect Pi to enable /reload');
-            command.message = '/lilim-reload';
+            if (!available.commands.some(entry => entry.name === 'spicy-reload')) throw new Error('Reconnect Pi to enable /reload');
+            command.message = '/spicy-reload';
           }
           const result = await rpc.command(command);
           if (changesBranch) {

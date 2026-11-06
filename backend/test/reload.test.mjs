@@ -11,7 +11,7 @@ test('web reload command reloads resources without sending a model prompt', asyn
   });
   let reloads = 0;
   try {
-    await commands.get('lilim-reload').handler('', { reload: async () => { reloads++; } });
+    await commands.get('spicy-reload').handler('', { reload: async () => { reloads++; } });
     assert.equal(reloads, 1);
   } finally {
     events.get('session_shutdown')();

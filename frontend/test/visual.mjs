@@ -4,8 +4,8 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
-const referenceURL = process.env.LILIM_REFERENCE_URL || 'http://localhost:8080';
-const targetURL = process.env.LILIM_URL || 'http://localhost:5173';
+const referenceURL = process.env.SPICY_REFERENCE_URL || 'http://localhost:8080';
+const targetURL = process.env.SPICY_URL || 'http://localhost:5173';
 const executablePath = process.env.CHROMIUM_EXECUTABLE || process.env.PATH.split(path.delimiter)
   .map(directory => path.join(directory, 'chromium')).find(filename => existsSync(filename));
 if (!executablePath) throw new Error('Set CHROMIUM_EXECUTABLE to Chromium');

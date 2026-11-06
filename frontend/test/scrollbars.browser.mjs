@@ -1,4 +1,4 @@
-// Browser regression: npm run dev must be serving LILIM_URL.
+// Browser regression: npm run dev must be serving SPICY_URL.
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 
@@ -11,7 +11,7 @@ try {
   ];
   await page.route('**/api/info', route => route.fulfill({ json: { entries, leafId: 'user', state: { sessionId: 'scroll-test' }, connected: true, live: [], dialogs: [], token: 'test', cwd: '/test' } }));
   await page.route('**/api/events', route => route.fulfill({ contentType: 'text/event-stream', body: '' }));
-  await page.goto(`${process.env.LILIM_URL || 'http://127.0.0.1:5173'}/system-prompts/1`);
+  await page.goto(`${process.env.SPICY_URL || 'http://127.0.0.1:5173'}/system-prompts/1`);
   const area = page.locator('.system-prompt-version .diff-scroll-area').first();
   const track = area.locator(':scope > [aria-orientation="horizontal"]');
   await track.waitFor({ state: 'visible' });

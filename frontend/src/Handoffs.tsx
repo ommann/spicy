@@ -90,7 +90,7 @@ function HandoffDialog(props: ParentProps) {
   let backdropPress = false;
   const [metadata] = createResource(requested, async ({ id }) => {
     const response = await fetch(`/utw/tasks/${id}`, { signal: AbortSignal.timeout(15000) });
-    if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Ollim returned a page instead of task metadata. Restart ollim.');
+    if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Spicy returned a page instead of task metadata. Restart spicy.');
     const task = await response.json();
     if (!response.ok) throw new Error(task.error || `HTTP ${response.status}`);
     if (task.task_id !== id) throw new Error('UTW task mismatch');

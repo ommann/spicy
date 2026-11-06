@@ -11,7 +11,7 @@ export default function treeNavigation(pi) {
   pi.on('after_provider_response', event => connection.response(event.status));
   pi.on('session_shutdown', () => connection.close());
 
-  pi.registerCommand('lilim-reload', {
+  pi.registerCommand('spicy-reload', {
     description: 'Reload Pi resources from the web UI',
     handler: async (_args, ctx) => {
       await ctx.reload();
