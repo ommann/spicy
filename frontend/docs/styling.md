@@ -3,12 +3,12 @@
 ## Ownership
 
 - `src/theme.css`: all default palette values, organized by semantic role.
-- `src/lilim/style.css`: document typography and base chat primitives.
-- `src/lilim/tree.css`: conversation columns, cards, navigation, diffs and codemode.
-- `src/lilim/markdown.css`: source syntax token selectors (no HTML rendering).
+- `src/chat/style.css`: document typography and base chat primitives.
+- `src/chat/tree.css`: conversation columns, cards, navigation, diffs and codemode.
+- `src/chat/markdown.css`: source syntax token selectors (no HTML rendering).
 - `src/style.css`: import entry point, shared scroll areas, app shell and dialogs.
 
-The `lilim` directory contains inherited application styles, not a third-party
+The `chat` directory contains inherited application styles, not a third-party
 library. Keep these boundaries while editing; don't create a second component
 implementation just to style an empty state. Empty chats use branch-draft cards.
 

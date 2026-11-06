@@ -1,4 +1,4 @@
-import { createPrefixResolver } from './lilim/prefix-state.js';
+import { createPrefixResolver } from './chat/prefix-state.js';
 import { createSystemPromptCatalog, systemPromptText } from './system-prompts.js';
 import { branchEntries } from './session-entries.mjs';
 

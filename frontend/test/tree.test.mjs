@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyRecord } from '../src/stream.mjs';
-import { createPrefixResolver } from '../src/lilim/prefix-state.js';
+import { createPrefixResolver } from '../src/chat/prefix-state.js';
 import { diffPrefixes } from '../src/prefix-diff.js';
 
 test('existing spicy prefix replay and diffs remain branch-relative', () => {

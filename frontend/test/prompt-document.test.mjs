@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPrefixResolver } from '../src/lilim/prefix-state.js';
+import { createPrefixResolver } from '../src/chat/prefix-state.js';
 import { createSystemPromptCatalog, systemPromptText } from '../src/system-prompts.js';
 
 test('tool-schema changes create a displayed prompt version and reference number', () => {

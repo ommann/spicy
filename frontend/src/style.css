@@ -1,7 +1,7 @@
 @import "./theme.css";
-@import "./lilim/style.css";
-@import "./lilim/tree.css";
-@import "./lilim/markdown.css";
+@import "./chat/style.css";
+@import "./chat/tree.css";
+@import "./chat/markdown.css";
 @import "./utw/handoff.css";
 
 .checkbox {
@@ -225,7 +225,7 @@
   min-width: 100px;
 }
 
-/* Keep lilim's original selectors, typography, colors, and card geometry.
+/* Keep the chat's existing selectors, typography, colors, and card geometry.
  * Grid replaces viewport-minus-composer calculations in the APP SHELL only.
  * The established tree canvas keeps its own branch/connector layout engine.
  */
