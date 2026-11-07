@@ -172,7 +172,7 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
     const value = args().path || args().command || args().url || args();
     return typeof value === 'string' ? value : JSON.stringify(value);
   };
-  const compactRead = () => props.call.name === 'read' && props.result && !props.result.isError;
+  const compactRead = () => props.call.name === 'read' && !props.result?.isError;
   const imageRead = () => props.call.name === 'read' && (props.result?.content || []).some((block: Wire) => block.type === 'image');
   const output = () => props.call.name === 'write' && typeof args().content === 'string'
     ? [{ type: 'text', text: args().content }] : props.result?.content || [{ type: 'text', text: 'No result recorded in this branch.' }];
