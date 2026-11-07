@@ -7,6 +7,8 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createORPCClient } from '@orpc/client';
+import { RPCLink } from '@orpc/client/fetch';
 
 test('short session URLs follow live sessions and reopen the same file after backend restart', async () => {
   const temporary = await mkdtemp(path.join(tmpdir(), 'spicy-session-url-'));
@@ -15,7 +17,7 @@ test('short session URLs follow live sessions and reopen the same file after bac
   await mkdir(project);
   let child;
   let base;
-  let token;
+  let api;
   const stop = async () => {
     if (!child) return;
     const exited = once(child, 'exit');
@@ -44,27 +46,22 @@ test('short session URLs follow live sessions and reopen the same file after bac
       child.stdout.once('data', () => { clearTimeout(timeout); resolve(); });
     });
     base = `http://127.0.0.1:${port}`;
-    token = (await (await fetch(`${base}/api/info`)).json()).token;
-  };
-  const post = async (endpoint, body, status = 200) => {
-    const response = await fetch(`${base}/api/${endpoint}`, { method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Spicy-Token': token }, body: JSON.stringify(body) });
-    const value = await response.json();
-    assert.equal(response.status, status, JSON.stringify(value));
-    return value;
+    let token;
+    api = createORPCClient(new RPCLink({ url: `${base}/rpc`, headers: () => token ? { 'X-Spicy-Token': token } : {} }));
+    token = (await api.info({})).token;
   };
   try {
     await start();
-    const created = await post('agents', { cwd: project }, 201);
+    const created = await api.agents.create({ cwd: project });
     const urlId = created.state.sessionUrlId;
     assert.match(urlId, /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
     assert.notEqual(urlId, created.state.sessionId);
-    const followed = await post('agents', { sessionUrlId: urlId });
+    const followed = await api.agents.create({ sessionUrlId: urlId });
     assert.equal(followed.agentId, created.agentId, 'Following does not create another agent or branch');
-    await post('command', { agentId: created.agentId, type: 'prompt', message: 'Keep this session' });
+    await api.command({ agentId: created.agentId, type: 'prompt', message: 'Keep this session' });
     let saved;
     for (let i = 0; i < 100; i++) {
-      saved = await (await fetch(`${base}/api/info?agentId=${created.agentId}`)).json();
+      saved = await api.info({ agentId: created.agentId });
       if (!saved.running && saved.entries.length === 2) break;
       await new Promise(resolve => setTimeout(resolve, 20));
     }
@@ -74,52 +71,52 @@ test('short session URLs follow live sessions and reopen the same file after bac
     assert.equal((await fetch(`${base}/${urlId}`)).status, 200);
     await stop();
     await start();
-    const reopened = await post('agents', { sessionUrlId: urlId }, 201);
+    const reopened = await api.agents.create({ sessionUrlId: urlId });
     assert.equal(reopened.cwd, project, 'URL restoration is not restricted to the default working directory');
     assert.equal(reopened.state.sessionId, saved.state.sessionId);
     assert.equal(reopened.state.sessionUrlId, urlId);
     assert.equal(reopened.state.sessionFile, saved.state.sessionFile);
     assert.deepEqual(reopened.entries, saved.entries);
     assert.equal(reopened.connected, false, 'Viewing a saved session does not start an agent');
-    assert.ok((await (await fetch(`${base}/api/agents`)).json()).every(agent => !agent.connected));
-    const started = await post('start', { agentId: reopened.agentId });
+    assert.ok((await api.agents.list({})).every(agent => !agent.connected));
+    const started = await api.start({ agentId: reopened.agentId });
     assert.equal(started.connected, true);
     assert.equal(started.state.sessionFile, saved.state.sessionFile);
     assert.deepEqual(started.entries, saved.entries);
-    await post('stop', { agentId: reopened.agentId });
-    const stopped = await (await fetch(`${base}/api/info?agentId=${reopened.agentId}`)).json();
+    await api.stop({ agentId: reopened.agentId });
+    const stopped = await api.info({ agentId: reopened.agentId });
     assert.equal(stopped.connected, false);
     assert.equal(stopped.connectionError, '', 'An intentional stop is not a connection failure');
-    const fork = await post('agents', { sourceAgentId: reopened.agentId, entryId: saved.leafId }, 201);
+    const fork = await api.agents.create({ sourceAgentId: reopened.agentId, entryId: saved.leafId });
     assert.deepEqual(fork.entries, saved.entries, 'Forking can capture history without starting the source agent');
-    await post('stop', { agentId: fork.agentId });
-    const family = await post('agents', { sessionUrlId: urlId });
+    await api.stop({ agentId: fork.agentId });
+    const family = await api.agents.create({ sessionUrlId: urlId });
     assert.ok(family.relatedAgents.some(agent => agent.state.sessionFile === fork.state.sessionFile));
     assert.equal(family.connected, false);
     assert.ok(family.relatedAgents.every(agent => !agent.connected), 'Viewing related branches does not start their agents');
     assert.equal(await readFile(saved.state.sessionFile, 'utf8'), contents);
-    assert.equal((await post('agents', { sessionUrlId: urlId })).agentId, reopened.agentId);
-    const listing = await (await fetch(`${base}/api/sessions?scope=all`)).json();
+    assert.equal((await api.agents.create({ sessionUrlId: urlId })).agentId, reopened.agentId);
+    const listing = await api.sessions({ scope: 'all' });
     const listed = listing.find(session => session.urlId === urlId);
     assert.equal(listed.cwd, project);
-    assert.equal((await post('agents', { openSessionId: listed.id })).agentId, reopened.agentId);
+    assert.equal((await api.agents.create({ openSessionId: listed.id })).agentId, reopened.agentId);
     const legacyFile = path.join(managed, 'legacy.jsonl');
     const legacyHeader = { ...JSON.parse(contents.split('\n')[0]), id: 'legacy-session' };
     delete legacyHeader.urlId;
     await writeFile(legacyFile, JSON.stringify(legacyHeader) + contents.slice(contents.indexOf('\n')));
-    const legacyListing = await (await fetch(`${base}/api/sessions?scope=all`)).json();
+    const legacyListing = await api.sessions({ scope: 'all' });
     const legacy = legacyListing.find(session => !session.urlId);
-    const openedLegacy = await post('agents', { openSessionId: legacy.id });
+    const openedLegacy = await api.agents.create({ openSessionId: legacy.id });
     assert.equal(openedLegacy.state.sessionId, 'legacy-session');
     assert.equal(openedLegacy.state.sessionFile, legacyFile);
     assert.match(openedLegacy.state.sessionUrlId, /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
     assert.deepEqual(openedLegacy.entries, saved.entries);
-    await post('agents', { sessionUrlId: urlId === 'aaaaaaaa' ? 'bbbbbbbb' : 'aaaaaaaa' }, 404);
-    await post('agents', { sessionUrlId: 'bad' }, 400);
+    await assert.rejects(api.agents.create({ sessionUrlId: urlId === 'aaaaaaaa' ? 'bbbbbbbb' : 'aaaaaaaa' }), error => error.code === 'NOT_FOUND');
+    await assert.rejects(api.agents.create({ sessionUrlId: 'bad' }), error => error.code === 'BAD_REQUEST');
     const newline = contents.indexOf('\n');
     const header = { ...JSON.parse(contents.slice(0, newline)), id: 'duplicate-session' };
     await writeFile(path.join(managed, 'duplicate.jsonl'), JSON.stringify(header) + contents.slice(newline));
-    await post('agents', { sessionUrlId: urlId }, 409);
+    await assert.rejects(api.agents.create({ sessionUrlId: urlId }), error => error.code === 'CONFLICT');
     assert.equal(await readFile(saved.state.sessionFile, 'utf8'), contents);
   } finally {
     await stop();

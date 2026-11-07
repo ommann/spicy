@@ -8,8 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createORPCClient } from '@orpc/client';
+import { RPCLink } from '@orpc/client/fetch';
 
-test('local bridge protects mutation endpoints and supports live RPC, fork and refresh', async () => {
+test('local bridge protects mutation endpoints and supports live oRPC, fork and refresh', async () => {
   const reserve = net.createServer().listen(0, '127.0.0.1');
   await once(reserve, 'listening');
   const port = reserve.address().port;
@@ -18,6 +20,7 @@ test('local bridge protects mutation endpoints and supports live RPC, fork and r
   const resolver = new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
   const temporary = await mkdtemp(path.join(tmpdir(), 'spicy-agents-test-'));
   const child = spawn(process.execPath, ['--import', resolver, 'index.mjs'], { cwd: root, env: { ...process.env, PORT: String(port), PI_SESSION_DIR: path.join(temporary, 'sessions'), PI_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.mjs', import.meta.url)) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const exited = once(child, 'exit');
   let logs = '';
   child.stderr.on('data', chunk => { logs += chunk; });
   try {
@@ -27,61 +30,54 @@ test('local bridge protects mutation endpoints and supports live RPC, fork and r
       child.stdout.once('data', () => { clearTimeout(timeout); resolve(); });
     });
     const base = `http://127.0.0.1:${port}`;
-    const info = await (await fetch(`${base}/api/info`)).json();
+    let token;
+    const api = createORPCClient(new RPCLink({ url: `${base}/rpc`, headers: () => token ? { 'X-Spicy-Token': token } : {} }));
+    const info = await api.info({});
     assert.equal(info.connected, false);
     const promptRoute = await fetch(`${base}/system-prompts/2`);
     assert.equal(promptRoute.status, 200);
     assert.match(promptRoute.headers.get('content-type'), /text\/html/);
     assert.match(await promptRoute.text(), /<div id="root"><\/div>/);
-    assert.equal((await fetch(`${base}/api/start`, { method: 'POST', body: '{}' })).status, 403);
+    await assert.rejects(api.start({}), error => error.code === 'FORBIDDEN');
+    token = info.token;
     const shellHeaders = { Origin: 'tauri://localhost', 'Sec-Fetch-Site': 'cross-site' };
     assert.equal((await fetch(`${base}/system-prompts/1`, { headers: shellHeaders })).status, 200);
-    const bridgeInfo = await fetch(`${base}/api/info`, { headers: shellHeaders });
+    const bridgeInfo = await fetch(`${base}/rpc/info`, { method: 'POST', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ json: {} }) });
     assert.equal(bridgeInfo.status, 200);
+    await bridgeInfo.text();
     assert.equal(bridgeInfo.headers.get('access-control-allow-origin'), null);
-    assert.equal((await fetch(`${base}/api/start`, { method: 'POST', headers: shellHeaders, body: '{}' })).status, 403);
+    assert.equal((await fetch(`${base}/rpc/info`, { headers: shellHeaders })).status, 403);
+    assert.equal((await fetch(`${base}/rpc/start`, { method: 'POST', headers: { ...shellHeaders, 'X-Spicy-Token': token }, body: '{}' })).status, 403);
     const invalidHostStatus = await new Promise((resolve, reject) => {
-      http.get(`${base}/api/info`, { headers: { Host: `evil.example:${port}` } }, response => { response.resume(); resolve(response.statusCode); }).on('error', reject);
+      http.get(`${base}/rpc/info`, { headers: { Host: `evil.example:${port}` } }, response => { response.resume(); resolve(response.statusCode); }).on('error', reject);
     });
     assert.equal(invalidHostStatus, 403);
-    const post = async (endpoint, body, status = 200) => {
-      const response = await fetch(`${base}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Spicy-Token': info.token }, body: JSON.stringify(body || {}) });
-      const value = await response.json();
-      assert.equal(response.status, status, JSON.stringify(value));
-      return value;
-    };
-    const started = await post('start');
+    assert.equal((await fetch(`${base}/api/info`)).status, 404);
+    const started = await api.start({});
     assert.equal(started.connected, true);
     assert.deepEqual(started.entries, []);
-    await post('command', { type: 'prompt', message: 'Hello' });
-    let state;
-    for (let i = 0; i < 50; i++) {
-      state = await (await fetch(`${base}/api/info`)).json();
-      if (state.entries.length === 2) break;
-      await new Promise(resolve => setTimeout(resolve, 20));
-    }
-    assert.equal(state.entries.length, 2);
-    assert.equal(state.running, false);
-    assert.deepEqual(state.live, []);
-    assert.equal(state.entries[0].message.content, 'Hello');
-    const fork = await post('command', { type: 'fork', entryId: state.entries[0].id });
-    assert.equal(fork.text, 'Hello');
-    assert.equal((await (await fetch(`${base}/api/info`)).json()).leafId, null);
-    const get = async agentId => (await fetch(`${base}/api/info?agentId=${agentId}`)).json();
+    await api.command({ type: 'prompt', message: 'Hello' });
     const settled = async (agentId, count) => {
       for (let i = 0; i < 100; i++) {
-        const value = await get(agentId);
+        const value = await api.info({ agentId });
         if (!value.running && value.entries.length === count) return value;
         await new Promise(resolve => setTimeout(resolve, 20));
       }
       assert.fail(`Agent ${agentId} did not settle`);
     };
+    const state = await settled('default', 2);
+    assert.equal(state.running, false);
+    assert.deepEqual(state.live, []);
+    assert.equal(state.entries[0].message.content, 'Hello');
+    const fork = await api.command({ type: 'fork', entryId: state.entries[0].id });
+    assert.equal(fork.text, 'Hello');
+    assert.equal((await api.info({})).leafId, null);
     const anchor = state.entries[1].id;
     const sourceFile = state.state.sessionFile;
     const sourceContent = await readFile(sourceFile, 'utf8');
     const [left, right] = await Promise.all([
-      post('agents', { sourceAgentId: 'default', entryId: anchor }, 201),
-      post('agents', { sourceAgentId: 'default', entryId: anchor }, 201),
+      api.agents.create({ sourceAgentId: 'default', entryId: anchor }),
+      api.agents.create({ sourceAgentId: 'default', entryId: anchor }),
     ]);
     assert.notEqual(left.agentId, right.agentId);
     assert.notEqual(left.state.sessionFile, right.state.sessionFile);
@@ -91,113 +87,104 @@ test('local bridge protects mutation endpoints and supports live RPC, fork and r
     assert.deepEqual(right.entries, state.entries);
     assert.equal(left.source.entryId, anchor);
     assert.equal(left.source.sessionId, Buffer.from(sourceFile).toString('base64url'));
-
-    const reset = await fetch(`${base}/api/events?agentIds=obsolete-agent`);
-    assert.match(await reset.text(), /event: reset/);
-
+    const reset = await api.events({ agentIds: ['obsolete-agent'] });
+    assert.deepEqual((await reset.next()).value, { type: 'reset' });
+    assert.equal((await reset.next()).done, true);
     const controllers = [];
     const streams = [];
-    const subscribe = async agentId => {
+    const subscribe = async agentIds => {
       const controller = new AbortController();
       controllers.push(controller);
-      const query = Array.isArray(agentId) ? `agentIds=${agentId.join(',')}` : `agentId=${agentId}`;
-      const response = await fetch(`${base}/api/events?${query}`, { signal: controller.signal });
-      const reader = response.body.getReader();
-      const stream = { text: '' };
-      const decoder = new TextDecoder();
-      const initial = await reader.read();
-      stream.text += decoder.decode(initial.value, { stream: true });
-      assert.ok(stream.text.includes(`"agentId":"${Array.isArray(agentId) ? agentId[0] : agentId}"`));
+      const iterator = await api.events({ agentIds }, { signal: controller.signal });
+      const initial = await iterator.next();
+      assert.equal(initial.value.agentId, agentIds[0]);
+      assert.equal(initial.value.event, 'snapshot');
+      const events = [initial.value];
       streams.push((async () => {
-        try {
-          while (true) {
-            const chunk = await reader.read();
-            if (chunk.done) break;
-            stream.text += decoder.decode(chunk.value, { stream: true });
-          }
-        } catch (error) { if (error.name !== 'AbortError') throw error; }
+        try { for await (const event of iterator) events.push(event); }
+        catch (error) { if (error.name !== 'AbortError') throw error; }
       })());
-      return stream;
+      return events;
     };
     try {
-      const leftEvents = await subscribe(left.agentId);
-      const rightEvents = await subscribe(right.agentId);
+      const leftEvents = await subscribe([left.agentId]);
+      const rightEvents = await subscribe([right.agentId]);
       const sharedEvents = await subscribe([left.agentId, right.agentId]);
       await Promise.all([
-        post('command', { agentId: left.agentId, type: 'prompt', message: 'Left branch' }),
-        post('command', { agentId: right.agentId, type: 'prompt', message: 'Right branch' }),
+        api.command({ agentId: left.agentId, type: 'prompt', message: 'Left branch' }),
+        api.command({ agentId: right.agentId, type: 'prompt', message: 'Right branch' }),
       ]);
-      const active = await Promise.all([get(left.agentId), get(right.agentId)]);
+      const active = await Promise.all([api.info({ agentId: left.agentId }), api.info({ agentId: right.agentId })]);
       assert.ok(active.every(agent => agent.running));
       const [leftDone, rightDone] = await Promise.all([settled(left.agentId, 4), settled(right.agentId, 4)]);
       assert.equal(leftDone.entries[2].parentId, anchor);
       assert.equal(rightDone.entries[2].parentId, anchor);
       assert.equal(leftDone.entries[2].message.content, 'Left branch');
       assert.equal(rightDone.entries[2].message.content, 'Right branch');
-      assert.equal((await get('default')).leafId, null);
+      assert.equal((await api.info({})).leafId, null);
       assert.equal(await readFile(sourceFile, 'utf8'), sourceContent);
-      assert.ok(sharedEvents.text.includes('event: agent'));
-      assert.ok(sharedEvents.text.includes(`"agentId":"${left.agentId}"`));
-      assert.ok(sharedEvents.text.includes(`"agentId":"${right.agentId}"`));
-      assert.ok(sharedEvents.text.includes('Left branch'));
-      assert.ok(sharedEvents.text.includes('Right branch'));
-      assert.ok(leftEvents.text.includes('Left branch'));
-      assert.ok(!leftEvents.text.includes('Right branch'));
-      assert.ok(rightEvents.text.includes('Right branch'));
-      assert.ok(!rightEvents.text.includes('Left branch'));
-
-      await post('start', { agentId: right.agentId, sessionId: Buffer.from(leftDone.state.sessionFile).toString('base64url') }, 400);
-      assert.equal((await get(right.agentId)).leafId, rightDone.leafId);
-      await post('command', { agentId: left.agentId, type: 'fork', entryId: leftDone.entries[2].id });
-      assert.equal((await get(left.agentId)).leafId, anchor);
-      assert.equal((await get(right.agentId)).leafId, rightDone.leafId);
-
+      assert.ok(sharedEvents.some(event => event.type === 'agent' && event.agentId === left.agentId));
+      assert.ok(sharedEvents.some(event => event.type === 'agent' && event.agentId === right.agentId));
+      assert.match(JSON.stringify(sharedEvents), /Left branch/);
+      assert.match(JSON.stringify(sharedEvents), /Right branch/);
+      assert.match(JSON.stringify(leftEvents), /Left branch/);
+      assert.doesNotMatch(JSON.stringify(leftEvents), /Right branch/);
+      assert.match(JSON.stringify(rightEvents), /Right branch/);
+      assert.doesNotMatch(JSON.stringify(rightEvents), /Left branch/);
+      await assert.rejects(api.start({ agentId: right.agentId, sessionId: Buffer.from(leftDone.state.sessionFile).toString('base64url') }), error => error.code === 'BAD_REQUEST');
+      assert.equal((await api.info({ agentId: right.agentId })).leafId, rightDone.leafId);
+      await api.command({ agentId: left.agentId, type: 'fork', entryId: leftDone.entries[2].id });
+      assert.equal((await api.info({ agentId: left.agentId })).leafId, anchor);
+      assert.equal((await api.info({ agentId: right.agentId })).leafId, rightDone.leafId);
       await Promise.all([
-        post('command', { agentId: left.agentId, type: 'prompt', message: 'Abort only left' }),
-        post('command', { agentId: right.agentId, type: 'prompt', message: 'Keep right running' }),
+        api.command({ agentId: left.agentId, type: 'prompt', message: 'Abort only left' }),
+        api.command({ agentId: right.agentId, type: 'prompt', message: 'Keep right running' }),
       ]);
-      await post('command', { agentId: left.agentId, type: 'abort' });
-      assert.equal((await get(left.agentId)).running, false);
-      assert.equal((await get(right.agentId)).running, true);
-      const liveFork = await post('agents', { sourceAgentId: right.agentId, entryId: anchor }, 201);
+      await api.command({ agentId: left.agentId, type: 'abort' });
+      assert.equal((await api.info({ agentId: left.agentId })).running, false);
+      assert.equal((await api.info({ agentId: right.agentId })).running, true);
+      const liveFork = await api.agents.create({ sourceAgentId: right.agentId, entryId: anchor });
       assert.equal(liveFork.leafId, anchor);
       assert.deepEqual(liveFork.entries, state.entries);
-      await post('stop', { agentId: liveFork.agentId });
+      await api.stop({ agentId: liveFork.agentId });
       await settled(right.agentId, 6);
-      await post('stop', { agentId: left.agentId });
-      const stopped = await get(left.agentId);
+      await api.stop({ agentId: left.agentId });
+      const stopped = await api.info({ agentId: left.agentId });
       assert.equal(stopped.connected, false);
-      assert.equal((await get(right.agentId)).connected, true);
-      const resumed = await post('start', { agentId: left.agentId });
+      assert.equal((await api.info({ agentId: right.agentId })).connected, true);
+      const resumed = await api.start({ agentId: left.agentId });
       assert.equal(resumed.state.sessionFile, stopped.state.sessionFile);
       assert.deepEqual(resumed.entries, stopped.entries);
-      await post('stop', { agentId: left.agentId });
+      await api.stop({ agentId: left.agentId });
       const savedRight = await readFile(rightDone.state.sessionFile, 'utf8');
       assert.ok(savedRight.includes('Right branch'));
       assert.ok(!savedRight.includes('Left branch'));
-
       const project = path.join(temporary, 'different-project');
       await mkdir(project);
-      const other = await post('agents', { cwd: project }, 201);
+      const other = await api.agents.create({ cwd: project });
       assert.equal(other.cwd, project);
       assert.equal(other.entries.length, 0);
-      await post('command', { agentId: other.agentId, type: 'prompt', message: 'Other project' });
+      await api.command({ agentId: other.agentId, type: 'prompt', message: 'Other project' });
       await settled(other.agentId, 2);
-      assert.equal((await get(right.agentId)).entries.length, 6);
-      const listed = await (await fetch(`${base}/api/agents`)).json();
+      assert.equal((await api.info({ agentId: right.agentId })).entries.length, 6);
+      const listed = await api.agents.list({});
       assert.equal(listed.length, 5);
       assert.equal(listed.find(agent => agent.agentId === other.agentId).cwd, project);
-      await post('command', { agentId: 'missing-agent', type: 'abort' }, 400);
+      await assert.rejects(api.command({ agentId: 'missing-agent', type: 'abort' }), error => error.code === 'BAD_REQUEST');
     } finally {
       for (const controller of controllers) controller.abort();
       await Promise.all(streams);
     }
-    assert.equal((await get(right.agentId)).connected, true);
-    await post('stop');
-    assert.equal((await (await fetch(`${base}/api/info`)).json()).connected, false);
+    assert.equal((await api.info({ agentId: right.agentId })).connected, true);
+    await api.stop({});
+    assert.equal((await api.info({})).connected, false);
   } finally {
     child.kill('SIGTERM');
-    await once(child, 'exit');
+    const killTimer = setTimeout(() => child.kill('SIGKILL'), 10000);
+    try {
+      const [code, signal] = await exited;
+      assert.equal(code, 0, `Test backend did not exit cleanly (${signal}): ${logs}`);
+    } finally { clearTimeout(killTimer); }
     await rm(temporary, { recursive: true, force: true });
   }
 });
