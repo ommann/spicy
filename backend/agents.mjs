@@ -31,6 +31,9 @@ export class AgentConnection {
         this.snapshot = { ...this.snapshot, entries: record.entries, leafId: record.leafId };
         this.live = [];
       }
+      if (record.type === 'context_usage') {
+        this.snapshot = { ...this.snapshot, state: { ...this.snapshot.state, contextUsage: record.usage } };
+      }
       if (record.type === 'provider_connection') this.providerConnection = record.state;
       if (record.type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(record.method)) {
         this.dialogs.set(record.id, record);

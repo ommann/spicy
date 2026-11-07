@@ -3,9 +3,13 @@
     "stage1": {
       "rules": {
         "no-debugger": "error",
-        "eqeqeq": "error",
-        "curly": "error",
         "no-duplicate-imports": "error"
+      }
+    },
+    "noisy": {
+      "rules": {
+        "curly": "error",
+        "eqeqeq": "error"
       }
     },
     "stage2": {
@@ -17,7 +21,9 @@
       }
     },
     "stage3": {
-      "files": ["frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"],
+      "files": [
+        "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+      ],
       "rules": {
         "solid/reactivity": "error",
         "solid/no-destructure": "error",
@@ -25,7 +31,35 @@
         "solid/no-react-deps": "error",
         "solid/no-react-specific-props": "error",
         "solid/prefer-for": "error",
-        "solid/style-prop": "error"
+        "solid/style-prop": "error",
+        "solid/event-handlers": "error",
+        "solid/no-accessor-as-prop": "error",
+        "solid/prefer-classlist": "error",
+        "solid/no-unused-signal": "error",
+        "solid/no-write-in-pure-computation": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "solid-js",
+                "importNames": [
+                  "untrack",
+                  "createRoot",
+                  "runWithOwner"
+                ],
+                "message": "Reactive escape hatch: review tracking/ownership and disposal; document justified use with a narrow suppression."
+              },
+              {
+                "name": "solid-js/store",
+                "importNames": [
+                  "createMutable"
+                ],
+                "message": "Mutable-store escape hatch: review direct mutation; document justified use with a narrow suppression."
+              }
+            ]
+          }
+        ]
       }
     }
   },
@@ -43,6 +77,9 @@
     ],
     [
       "eslint:stage3"
+    ],
+    [
+      "eslint:noisy"
     ]
   ],
   "policies": {
@@ -53,6 +90,7 @@
     "ast-grep-no-subscribe": "off",
     "npm:build": "agent",
     "eslint:stage1": "agent",
+    "eslint:noisy": "off",
     "eslint:stage2": "user",
     "eslint:stage3": "user",
     "npm:lint": "agent",

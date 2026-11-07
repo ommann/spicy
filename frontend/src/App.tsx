@@ -318,6 +318,7 @@ export default function App(props: ParentProps) {
         const providerConnection = record.type === 'provider_connection' ? record.state : previous.providerConnection;
         return { ...previous, live, running, generating, compacting, dialogs, providerConnection,
           ...(record.type === 'history_root' ? { entries: record.entries, leafId: record.leafId } : {}),
+          ...(record.type === 'context_usage' ? { state: { ...previous.state, contextUsage: record.usage } } : {}),
         };
       });
       if (record.type === 'history_root' && id === selectedAgentId()) {
@@ -763,7 +764,7 @@ export default function App(props: ParentProps) {
           return <Show when={composerScope()} keyed>{_sessionKey => (
           <Conversation graph={graph()} active lanes={composerLanes()}
             drafts={composerState().drafts} onDraftChange={composerState().setDraft}
-            running={id => !!leafAgent(id)?.running} health={agentHealth} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
+            running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt} pendingPromptKey={id => pendingPrompts()[id]?.key}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}

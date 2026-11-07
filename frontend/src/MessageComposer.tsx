@@ -2,6 +2,7 @@ import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX
 import ScrollableTextarea from './ScrollableTextarea';
 import type { AgentHealthStatus } from './AgentHealth';
 import './message-composer.css';
+import { formatContextWindow, type ContextWindowUsage } from './context-window';
 import { pasteImagePaths } from './image-paste-mode';
 import { clipboardImages, imageSource, type ImageAttachment } from './image-attachments';
 
@@ -16,6 +17,7 @@ interface Props {
   leafId?: string;
   running?: boolean;
   health?: AgentHealthStatus;
+  contextUsage?: ContextWindowUsage | null;
   busy?: boolean;
   class?: string;
   hidden?: boolean;
@@ -97,7 +99,7 @@ export default function MessageComposer(props: Props) {
     setSize(previous => previous.height === height && previous.scrollable === scrollable ? previous : { height, scrollable });
   }
 
-  createEffect(on([() => props.value, () => props.hidden], resize));
+  createEffect(on([() => props.value, () => props.hidden, () => formatContextWindow(props.contextUsage)], resize));
 
   onMount(() => {
     const observer = new ResizeObserver(resize);
@@ -125,7 +127,7 @@ export default function MessageComposer(props: Props) {
         <button type="button" aria-label="Remove attached image" onClick={() => setImages(current => current.filter(item => item !== image))}>Remove</button></div>}</For>
     </div></Show>
     <Show when={attachmentError()}><div role="alert">{attachmentError()}</div></Show>
-    <div class="editor" data-leaf-id={props.leafId} style={{ position: 'relative', top: 'auto', margin: '0' }}>
+    <div class="editor" data-leaf-id={props.leafId} style={{ position: 'relative', top: 'auto', margin: '0', '--context-width': `${formatContextWindow(props.contextUsage).length + 1}ch` }}>
     <ScrollableTextarea ref={element => { input = element; props.inputRef?.(element); }}
       aria-label={props.label || 'Message draft (not sent)'} rows="1" wrap="soft" spellcheck={false}
       value={props.value} style={{ height: `${size().height}px`, 'overflow-y': size().scrollable ? 'auto' : 'hidden' }}
@@ -136,6 +138,9 @@ export default function MessageComposer(props: Props) {
         if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); void submit(); }
         if (event.key === 'Escape') { event.preventDefault(); props.onAbort?.(); }
       }} />
+    <Show when={formatContextWindow(props.contextUsage)}>{status =>
+      <span class="composer-context" aria-label={`Context window: ${status()}`}>{status()}</span>
+    }</Show>
     <div ref={measure} class="composer-measure" aria-hidden="true">{props.value + '\u200b'}</div>
     </div>
   </div>;

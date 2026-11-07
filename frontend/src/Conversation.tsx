@@ -11,6 +11,7 @@ import ChatToolbar from './ChatToolbar';
 import { viewMode as mode, setViewMode as setMode } from './view-mode';
 import { ChatEntryPart } from './ChatContent';
 import MessageComposer from './MessageComposer';
+import type { ContextWindowUsage } from './context-window';
 import ScrollBar from './ScrollBar';
 import SystemPromptReference from './SystemPromptReference';
 import type { AgentHealthStatus } from './AgentHealth';
@@ -43,6 +44,7 @@ interface Props {
   active: boolean;
   running: (leafId: string) => boolean;
   health: (leafId: string) => AgentHealthStatus;
+  contextUsage?: (leafId: string) => ContextWindowUsage | null | undefined;
   busy: (leafId: string) => boolean;
   onFocusLeaf: (leafId: string) => void;
   focusRequest?: { id: string; revision: number };
@@ -568,6 +570,7 @@ export default function Conversation(props: Props) {
             top: inline() ? `${layout().composers[index()]?.top || 0}px` : '0px' }}
           onFocus={() => selectLane(index(), false)} onSubmit={images => submit(key, lane().leafId, images)}
           running={props.running(lane()?.leafId)} health={props.health(lane()?.leafId)} busy={props.busy(lane()?.leafId)}
+          contextUsage={props.contextUsage?.(lane()?.leafId)}
           onAbort={() => { if (props.running(lane()?.leafId)) props.onAbort(lane().leafId); }} />
       </Portal>;
     }}</For>

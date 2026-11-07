@@ -106,6 +106,26 @@ test('pasted images preview, survive failed sends, and clear after accepted send
   } finally { dispose(); }
 });
 
+test('context window hint updates inside the input without changing the draft', async () => {
+  const dispose = components.mountComposer(root);
+  try {
+    assert.equal(root.querySelector('.composer-context'), null);
+    dispose.setContextUsage({ percent: 8.3, contextWindow: 500_000 });
+    await flush();
+    assert.equal(root.querySelector('.editor .composer-context').textContent, '8.3%/500k');
+    const input = root.querySelector('textarea');
+    input.value = 'Keep this draft';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    dispose.setContextUsage({ percent: 12.5, contextWindow: 500_000 });
+    await flush();
+    assert.equal(root.querySelector('.composer-context').textContent, '12.5%/500k');
+    assert.equal(input.value, 'Keep this draft');
+    dispose.setContextUsage({ percent: null, contextWindow: 500_000 });
+    await flush();
+    assert.equal(root.querySelector('.composer-context').textContent, '?/500k');
+  } finally { dispose(); }
+});
+
 test('working status and Stop stay outside the input without replacing it or losing its draft', async () => {
   const dispose = components.mountComposer(root);
   try {

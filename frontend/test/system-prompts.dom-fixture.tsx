@@ -46,8 +46,9 @@ export function mountComposer(root: HTMLElement, onSubmit?: Parameters<typeof Me
   const [running, setRunning] = createSignal(false);
   const [health, setHealth] = createSignal<'ready' | 'socket-lost'>('ready');
   const [value, setValue] = createSignal('');
-  const dispose = render(() => <MessageComposer value={value()} onChange={setValue} running={running()} health={health()} onSubmit={onSubmit} />, root);
-  return Object.assign(dispose, { setRunning, setHealth });
+  const [contextUsage, setContextUsage] = createSignal<Parameters<typeof MessageComposer>[0]['contextUsage']>();
+  const dispose = render(() => <MessageComposer value={value()} onChange={setValue} running={running()} health={health()} contextUsage={contextUsage()} onSubmit={onSubmit} />, root);
+  return Object.assign(dispose, { setRunning, setHealth, setContextUsage });
 }
 
 export function mountScrollArea(root: HTMLElement) {

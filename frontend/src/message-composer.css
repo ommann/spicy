@@ -7,6 +7,18 @@
   top: 0;
   margin-right: 0;
 }
+.editor:has(.composer-context) textarea,
+.editor:has(.composer-context) .composer-measure {
+  padding-right: calc(var(--input-padding-inline) + var(--context-width, 0ch));
+}
+.composer-context {
+  position: absolute;
+  top: var(--input-padding-block);
+  right: var(--input-padding-inline);
+  color: var(--muted);
+  pointer-events: none;
+  user-select: none;
+}
 .composer-attachments {
   display: flex;
   flex-wrap: wrap;

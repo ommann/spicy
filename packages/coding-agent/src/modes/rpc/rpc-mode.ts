@@ -280,6 +280,9 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			output(process.env.SPICY_STREAM_TIMING === "1"
 				? { ...toJsonEvent(event), spicyEmittedAt: Date.now() }
 				: toJsonEvent(event));
+			if (event.type === "turn_end" || event.type === "history_root") {
+				output({ type: "context_usage", usage: session.getContextUsage() ?? null });
+			}
 			if (event.type === "agent_settled") {
 				void checkShutdownRequested();
 			}
@@ -393,6 +396,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			case "get_state": {
 				const state: RpcSessionState = {
 					model: session.model,
+					contextUsage: session.getContextUsage(),
 					thinkingLevel: session.thinkingLevel,
 					isStreaming: session.isStreaming,
 					isCompacting: session.isCompacting,
