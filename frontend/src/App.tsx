@@ -35,7 +35,7 @@ import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import ToolApps from './ToolApps';
-import { api, mutations, type MutationInputs, type UiReply } from './api';
+import { api, type UiReply } from './api';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
@@ -257,21 +257,15 @@ export default function App(props: ParentProps) {
     });
   }
 
-  async function post<K extends keyof MutationInputs>(endpoint: K, data: MutationInputs[K]) {
-    return mutations[endpoint]({ ...(selectedAgentId() ? { agentId: selectedAgentId() } : {}), ...data }, {
-      signal: appLifecycle.signal, context: { token },
-    });
-  }
+  const rpcOptions = {
+    signal: appLifecycle.signal,
+    context: { get token() { return token; } },
+  };
 
   function reportFailure(failure: unknown) {
     if (appLifecycle.signal.aborted) return;
     const message = failure instanceof Error ? failure.message : String(failure);
     setNotification({ message, isError: true });
-  }
-
-  async function requestLogin<K extends 'auth/login' | 'auth/reply' | 'auth/cancel'>(endpoint: K, data: MutationInputs[K]) {
-    await bridgeReady;
-    return post(endpoint, data);
   }
 
   function accept(value: Snapshot) {
@@ -359,11 +353,11 @@ export default function App(props: ParentProps) {
     setBusy(true);
     try {
       const info = await loadInfo(id);
-      const value = info.state?.sessionUrlId ? await post('agents', { sessionUrlId: info.state.sessionUrlId }) : info;
+      const value = info.state?.sessionUrlId ? await api.agents.create({ sessionUrlId: info.state.sessionUrlId }, rpcOptions) : info;
       showAgent(value, true);
       setModels([]);
       if (value.connected) {
-        const available = await post('command', { agentId: id, type: 'get_available_models' });
+        const available = await api.command({ agentId: id, type: 'get_available_models' }, rpcOptions);
         setModels(available.models || []);
       }
       chatDialog.close();
@@ -411,7 +405,7 @@ export default function App(props: ParentProps) {
 
   async function prepareHomeChat() {
     await bridgeReady;
-    if (!homeAgent) homeAgent = await post('agents', { cwd: sessionCwd() || bridgeCwd() });
+    if (!homeAgent) homeAgent = await api.agents.create({ cwd: sessionCwd() || bridgeCwd() }, rpcOptions);
     return homeAgent!;
   }
 
@@ -421,7 +415,7 @@ export default function App(props: ParentProps) {
     setBusy(true);
     try {
       const agent = await prepareHomeChat();
-      await post('command', { agentId: agent.agentId, type: 'prompt', message, images, systemPrompt: { choice: 'current' } });
+      await api.command({ agentId: agent.agentId, type: 'prompt', message, images, systemPrompt: { choice: 'current' } }, rpcOptions);
       showAgent(agent, true);
       homeAgent = undefined;
       if (homeDraft() === message) setHomeDraft('');
@@ -448,7 +442,7 @@ export default function App(props: ParentProps) {
     if (busy()) return;
     setBusy(true);
     try {
-      const agent = await post('agents', { openSessionId: session.id });
+      const agent = await api.agents.create({ openSessionId: session.id }, rpcOptions);
       showAgent(agent, true);
       setViewMode('focused');
       openFocusedChat();
@@ -460,10 +454,10 @@ export default function App(props: ParentProps) {
     await bridgeReady;
     setBusy(true);
     try {
-      const result = await post('agents', { ...(cwd ? { cwd } : {}), ...(sessionId ? { sessionId } : {}) });
+      const result = await api.agents.create({ ...(cwd ? { cwd } : {}), ...(sessionId ? { sessionId } : {}) }, rpcOptions);
       showAgent(result, true);
       chatDialog.close();
-      const available = await post('command', { agentId: result.agentId, type: 'get_available_models' });
+      const available = await api.command({ agentId: result.agentId, type: 'get_available_models' }, rpcOptions);
       setModels(available.models || []);
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
@@ -497,9 +491,9 @@ export default function App(props: ParentProps) {
     if (!id) return;
     setBusy(true);
     try {
-      const queue = await post('command', { agentId: id, type: 'clear_queue' });
+      const queue = await api.command({ agentId: id, type: 'clear_queue' }, rpcOptions);
       if (id === selectedAgentId()) conversation?.setDraft([...(queue.steering || []), ...(queue.followUp || [])].join('\n'));
-      await post('command', { agentId: id, type: 'abort' });
+      await api.command({ agentId: id, type: 'abort' }, rpcOptions);
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
@@ -509,7 +503,7 @@ export default function App(props: ParentProps) {
     const agentId = selectedAgentId();
     setBusy(true);
     try {
-      const result = await post('command', { type: 'fork', agentId, entryId });
+      const result = await api.command({ type: 'fork', agentId, entryId }, rpcOptions);
       if (!result.cancelled) {
         accept(await loadInfo(agentId));
         conversation?.setDraft(result.text || '');
@@ -524,7 +518,7 @@ export default function App(props: ParentProps) {
     if (!model) return;
     setBusy(true);
     try {
-      await post('command', { type: 'set_model', provider: model.provider, modelId: model.id });
+      await api.command({ agentId: selectedAgentId() || undefined, type: 'set_model', provider: model.provider, modelId: model.id }, rpcOptions);
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
@@ -533,7 +527,7 @@ export default function App(props: ParentProps) {
     const { agentId, id } = dialog;
     setBusy(true);
     try {
-      await post('ui', { agentId, id, ...response });
+      await api.ui({ agentId, id, ...response }, rpcOptions);
       updateAgent(agentId, previous => ({ ...previous, dialogs: previous.dialogs.filter(item => item.id !== id) }));
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
@@ -569,7 +563,7 @@ export default function App(props: ParentProps) {
         const entryId = draft?.sourceId || target;
         const source = agentForEntry(visibleAgents(), entryId, selectedAgentId());
         if (!source) throw new Error('Could not find the source agent for this branch');
-        agent = await post('agents', { sourceAgentId: source.agentId, entryId });
+        agent = await api.agents.create({ sourceAgentId: source.agentId, entryId }, rpcOptions);
         if (draft) setLaneOrigins(previous => ({ ...previous, [agent!.agentId!]: { draftId: draft.id, baseline: agent!.entries.map(entry => entry.id) } }));
         if (branchKey() === key) showAgent(agent!, false);
         sendingAgentId = agent!.agentId;
@@ -578,13 +572,13 @@ export default function App(props: ParentProps) {
       if (!agent?.agentId) throw new Error('No agent selected');
       if (!agent.connected) {
         watchAgent(agent.agentId);
-        agent = await post('start', { agentId: agent.agentId });
+        agent = await api.start({ agentId: agent.agentId }, rpcOptions);
         accept(agent!);
       }
       if (!agent?.agentId) throw new Error('Agent did not start');
       if (compact) {
-        const result = await post('command', { agentId: agent.agentId, type: 'compact',
-          customInstructions: message.trim().slice('/compact'.length).trim() || undefined });
+        const result = await api.command({ agentId: agent.agentId, type: 'compact',
+          customInstructions: message.trim().slice('/compact'.length).trim() || undefined }, rpcOptions);
         accept(result.snapshot);
         const targetId = graph().ancestors(result.snapshot.leafId).find((id: string) => graph().nodes.has(id));
         if (targetId) setFocusRequest(previous => ({ id: targetId, revision: (previous?.revision || 0) + 1 }));
@@ -592,8 +586,8 @@ export default function App(props: ParentProps) {
       } else {
         const prompt = draft?.prompt ?? pendingPrompts()[leafId];
         const systemPrompt = { choice: 'current', ...(prompt ? { selected: prompt } : {}) };
-        await post('command', { agentId: agent.agentId, type: 'prompt', message, images, systemPrompt,
-          ...(agent.running ? { streamingBehavior: 'steer' } : {}) });
+        await api.command({ agentId: agent.agentId, type: 'prompt', message, images, systemPrompt,
+          ...(agent.running ? { streamingBehavior: 'steer' } : {}) }, rpcOptions);
       }
       accepted = true;
     } catch (failure) {
@@ -618,7 +612,7 @@ export default function App(props: ParentProps) {
   async function openSessionUrl(urlId: string, isCancelled: () => boolean) {
     setBusy(true);
     try {
-      const value = await post('agents', { sessionUrlId: urlId }) as Snapshot;
+      const value = await api.agents.create({ sessionUrlId: urlId }, rpcOptions);
       if (!isCancelled()) showAgent(value, true);
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
@@ -687,17 +681,17 @@ export default function App(props: ParentProps) {
           <button class="state-toggle" aria-pressed={viewPath().startsWith('/system-prompts')} onClick={() => navigateView('/system-prompts')}>System prompts</button>
           <button class="state-toggle" aria-pressed={viewPath() === '/system-prompt-creator'} onClick={() => navigateView('/system-prompt-creator')}>Editor</button>
         </div>
-        <Login request={requestLogin} />
+        <Login ready={bridgeReady} options={rpcOptions} />
       </>}>
       <SystemPromptCreatorContext.Provider value={{
         load: async () => {
           await bridgeReady;
           if (!token) throw new Error('Could not connect to the local bridge');
           if (!snapshot().connected) {
-            if (selectedAgentId()) accept(await post('start', {}));
+            if (selectedAgentId()) accept(await api.start({ agentId: selectedAgentId() || undefined }, rpcOptions));
             else await start();
           }
-          const promptSnapshot = await post('command', { type: 'get_system_prompt_document' }) as PromptDocumentSnapshot;
+          const promptSnapshot = await api.command({ agentId: selectedAgentId() || undefined, type: 'get_system_prompt_document' }, rpcOptions) as PromptDocumentSnapshot;
           const current = createSystemPromptCatalog([{ id: 'editor-source', parentId: null, type: 'message',
             message: { role: 'system', ...promptSnapshot.current } }]).versions[0];
           const sources = [
@@ -721,7 +715,7 @@ export default function App(props: ParentProps) {
           return { ...promptSnapshot, sources, currentSourceId: current.key };
         },
         save: async value => {
-          const prompt = await post('command', { type: 'save_system_prompt', prompt: value }) as CreatedPrompt;
+          const prompt = await api.command({ agentId: selectedAgentId() || undefined, type: 'save_system_prompt', prompt: value }, rpcOptions) as CreatedPrompt;
           accept(await loadInfo());
           openSystemPrompt(prompt.id);
         },
@@ -799,7 +793,7 @@ export default function App(props: ParentProps) {
                   onClick={async () => {
                     setBusy(true);
                     try {
-                      await post("stop", {});
+                      await api.stop({ agentId: selectedAgentId() || undefined }, rpcOptions);
                       chatDialog.close();
                     } catch (failure) { reportFailure(failure); }
                     finally { setBusy(false); }

@@ -3,7 +3,7 @@ import Dialog from './Dialog';
 import Input from './Input';
 import ScrollArea from './ScrollArea';
 import './login.css';
-import { api, type MutationInputs } from './api';
+import { api } from './api';
 
 type Provider = { id: string; name: string; configured: boolean; methods: { type: string; name: string }[] };
 type LoginEvent = {
@@ -17,7 +17,7 @@ type LoginEvent = {
 };
 type Prompt = { id: string; type: string; message: string; placeholder?: string; options?: { id: string; label: string }[] };
 type LoginState = { id?: string; status: string; events: LoginEvent[]; prompt?: Prompt; error?: string };
-type Props = { request: <K extends 'auth/login' | 'auth/reply' | 'auth/cancel'>(endpoint: K, data: MutationInputs[K]) => Promise<unknown> };
+type Props = { ready: Promise<void>; options: NonNullable<Parameters<typeof api.auth.login>[1]> };
 
 export default function Login(props: Props) {
   let dialog!: HTMLDialogElement;
@@ -66,9 +66,10 @@ export default function Login(props: Props) {
     setError('');
     try {
       if (type !== 'oauth' && type !== 'api_key') throw new Error('Unsupported login method');
-      const next = await props.request('auth/login', { providerId, type }) as LoginState;
+      await props.ready;
+      const next = await api.auth.login({ providerId, type }, props.options);
       if (!dialog.open) {
-        await props.request('auth/cancel', { id: next.id });
+        await api.auth.cancel({ id: next.id }, props.options);
         return;
       }
       setState(next);
@@ -87,7 +88,8 @@ export default function Login(props: Props) {
       const id = state().id;
       const promptId = state().prompt?.id;
       if (!id || !promptId) throw new Error('This login prompt is no longer active');
-      setState(await props.request('auth/reply', { id, promptId, value }) as LoginState);
+      await props.ready;
+      setState(await api.auth.reply({ id, promptId, value }, props.options));
       poll();
     } catch (cause) {
       setError(String(cause));
@@ -100,7 +102,8 @@ export default function Login(props: Props) {
     controller.abort();
     clearTimeout(timer);
     if (state().status === 'pending') {
-      void props.request('auth/cancel', { id: state().id }).catch(() => {});
+      const id = state().id;
+      void props.ready.then(() => api.auth.cancel({ id }, props.options)).catch(() => {});
     }
     setAnswer('');
     setState({ status: 'idle', events: [] });
