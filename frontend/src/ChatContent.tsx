@@ -10,6 +10,7 @@ import { projectChatParts } from './conversation-model.mjs';
 import type { Wire } from './types';
 import { selectSource } from './source-selection';
 import { partialCommand } from './partial-command.mjs';
+import { showThinking, collapseThinkingByDefault } from './thinking-content';
 
 function Images(props: { blocks: Wire[]; caption?: string }) {
   const open = useContext(ImageContext);
@@ -53,6 +54,14 @@ function Thinking(props: { text: string }) {
   return <div class="thinking-text"><For each={parts()}>{part => <Dynamic component={part.tag}>
     <For each={part.runs}>{run => <span style={run.style as JSX.CSSProperties}>{run.text}</span>}</For>
   </Dynamic>}</For></div>;
+}
+
+function ThinkingBlock(props: { part: Wire }) {
+  const [expanded, setExpanded] = createSignal(!collapseThinkingByDefault());
+  return <section ref={useContext(SectionContext)} class="thinking real-thinking" hidden={!showThinking()} data-entry-id={props.part.entryId}>
+    <CollapseToggle text="Thinking" label="Expand or collapse thinking" expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
+    <Show when={expanded()}><Thinking text={props.part.text} /></Show>
+  </section>;
 }
 
 function CodePreview(props: { text: string; language?: string; part: string; limit: number; expanded: boolean; onToggle: () => void }) {
@@ -242,9 +251,7 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
 export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequest; onBranch?: (id: string) => void }) {
   const textBlocks = () => typeof props.part.content === 'string' ? props.part.content
     : (props.part.content || []).filter((block: Wire) => block.type === 'text');
-  const responseBody = () => <Show when={props.part.kind === 'thinking'} fallback={props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" />}>
-    <Thinking text={props.part.text} />
-  </Show>;
+  const responseBody = () => props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" />;
 
   return <Switch>
     <Match when={props.part.kind === 'error'}>
@@ -267,8 +274,9 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
         </Show>
       </section>
     </Match>
-    <Match when={['message', 'summary', 'thinking'].includes(props.part.kind)}>
-      <section ref={useContext(SectionContext)} class={props.part.kind === 'thinking' ? 'thinking real-thinking' : 'message real-message'}
+    <Match when={props.part.kind === 'thinking'}><ThinkingBlock part={props.part} /></Match>
+    <Match when={['message', 'summary'].includes(props.part.kind)}>
+      <section ref={useContext(SectionContext)} class="message real-message"
         classList={{ 'summary-content': props.part.kind === 'summary' || props.part.summary }}
         style={props.part.eos ? { color: 'var(--muted)' } : undefined} data-entry-id={props.part.entryId}>
         <Show when={props.part.kind === 'message'} fallback={

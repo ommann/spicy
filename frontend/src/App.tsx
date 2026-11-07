@@ -39,6 +39,7 @@ import { api, type UiReply } from './api';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
+import ThinkingOptions from './ThinkingOptions';
 import ImagePasteOption from './ImagePasteOption';
 import SyntaxOptions from './SyntaxOptions';
 import { streamingContent } from './streaming-content';
@@ -760,6 +761,7 @@ export default function App(props: ParentProps) {
         }</For>
         <CodeLinewrapOption />
         <StreamingContentOption />
+        <ThinkingOptions />
         <ImagePasteOption />
         <SyntaxOptions />
       </Dialog>
