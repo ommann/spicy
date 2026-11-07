@@ -206,30 +206,34 @@ export function continuationTarget(graph, id) {
   }
 }
 
-// Retain the established packing, shared-card placement, and connector paths.
-// This function has no browser or rendering dependency.
-export function layoutConversation(graph, { mode, width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {},
+export function conversationNodeHeight(node, heights, rowGap) {
+  if (node.entry.message?.role === 'system') return 0;
+  return heights[node.id] || (node.entry.type === 'branch_draft' ? (node.entry.draftSourceId ? 60 : 120 + rowGap)
+    : node.parts.reduce((sum, part) => sum + (part.kind === 'message' || part.kind === 'thinking' ? 44 : 60), 0));
+}
+
+// Tree-only packing, shared-card placement, and connector paths.
+export function layoutConversation(graph, { width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {},
   rowGap = CHAT_BLOCK_GAP, columnGap = 48, edgeGap = 24 }) {
-  const inlineComposers = mode === 'side' || graph.leaves.length === 1 && graph.leaves[0].id === 'empty-chat-draft';
+  const inlineComposers = true;
   const focused = Math.max(0, Math.min(lane, graph.leaves.length - 1));
   const gap = columnGap;
-  const inset = mode === 'focused' ? Math.max(edgeGap, (viewportWidth - width) / 2) : Math.max(edgeGap, viewportWidth / 2);
+  const inset = Math.max(edgeGap, viewportWidth / 2);
   const pending = node => node.entry.type === 'branch_draft' && node.entry.draftSourceId;
   const committed = graph.leaves.filter(node => !pending(node));
   const drafts = graph.leaves.filter(pending);
   const starts = graph.leaves.map(node => {
     const column = pending(node) ? committed.length + drafts.indexOf(node) : committed.indexOf(node);
-    return mode === 'focused' ? 0 : column * (width + gap);
+    return column * (width + gap);
   });
   const anchor = pending(graph.leaves[focused]) ? committed.find(leaf => leaf.id === graph.leaves[focused].entry.draftAnchorId) : undefined;
   const historyFocus = anchor ? graph.leaves.indexOf(anchor) : pending(graph.leaves[focused])
     ? graph.leaves.indexOf(committed.find(leaf => graph.ancestors(leaf.id).includes(graph.leaves[focused].entry.draftSourceId))) : focused;
-  const totalWidth = inset * 2 + (mode === 'focused' ? width : Math.max(0, graph.leaves.length * (width + gap) - gap));
+  const totalWidth = inset * 2 + Math.max(0, graph.leaves.length * (width + gap) - gap);
   const items = new Map();
   const prefixHeight = Math.max(0, ...[...graph.nodes.values()].filter(node => node.entry.message?.role === 'system').map(node => heights[node.id] || 60));
 
   for (const node of [...graph.nodes.values()].sort((a, b) => a.depth - b.depth)) {
-    const onPath = node.first <= focused && node.last >= focused;
     const candidates = graph.leaves.map((_, index) => index).filter(index => index >= node.first && index <= node.last
       && (pending(node) || !pending(graph.leaves[index])));
     const range = candidates.map(index => starts[index]);
@@ -237,15 +241,14 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
     const column = candidates.reduce((closest, index) =>
       Math.abs(starts[index] - starts[target]) < Math.abs(starts[closest] - starts[target]) ? index : closest, candidates[0]);
     const system = node.entry.message?.role === 'system';
-    const hidden = system || (mode === 'focused' && !onPath);
+    const hidden = system;
     let parent = node.parent;
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
     const hasPrompt = graph.prefix.get(node.id).captured || (node.entry.type === 'compaction' && node.entry.parentId === null
       && graph.leaves.slice(node.first, node.last + 1).some(leaf => graph.prefix.get(leaf.id).captured));
     const top = system ? rowGap : parent ? items.get(parent.id).top + items.get(parent.id).height + rowGap
       : rowGap + (hasPrompt ? prefixHeight + rowGap : 0);
-    const height = system ? 0 : heights[node.id] || (pending(node) ? 60 : node.entry.type === 'branch_draft' ? 120 + rowGap
-      : node.parts.reduce((sum, part) => sum + (part.kind === 'message' || part.kind === 'thinking' ? 44 : 60), 0));
+    const height = conversationNodeHeight(node, heights, rowGap);
     const first = Math.min(...range);
     items.set(node.id, { top, height, hidden, column,
       left: inset + first, span: Math.max(...range) + width - first, cardLeft: starts[column] - first });
@@ -260,10 +263,10 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
   const height = Math.max(rowGap + prefixHeight,
     ...(inlineComposers ? composers.map(composer => composer.top + composer.height) : []),
     ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden).map(node => items.get(node.id).top + items.get(node.id).height))
-    + (mode === 'focused' ? 0 : Math.max(80, viewportHeight * .75));
+    + Math.max(80, viewportHeight * .75);
   const paths = [];
 
-  if (mode === 'side') for (const node of graph.nodes.values()) {
+  for (const node of graph.nodes.values()) {
     const position = items.get(node.id);
     if (position.hidden || node.entry.message?.role === 'system') continue;
     let parent = node.parent;
@@ -276,5 +279,5 @@ export function layoutConversation(graph, { mode, width, viewportWidth, viewport
   }
 
   return { items, composers, inlineComposers, paths, inset, starts, width: totalWidth, height, lane: focused,
-    hasHorizontal: mode !== 'focused' || width + edgeGap * 2 > viewportWidth };
+    hasHorizontal: true };
 }

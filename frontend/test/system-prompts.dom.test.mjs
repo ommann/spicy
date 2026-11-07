@@ -491,7 +491,7 @@ test('chat references open the Solid view without creating a model request or mo
     agents: { list: os.handler(() => [snapshot]) },
   });
   const requests = rpc.requests;
-  const dispose = components.mountApp(root);
+  const dispose = components.mountApp(root, '/tree');
   try {
     await flush();
     await flush();
@@ -558,7 +558,7 @@ test('chat references open the Solid view without creating a model request or mo
     await flush();
     assert.equal(root.querySelector('.system-prompts-view'), null);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft', 'Returning to Chat preserves the unsent draft');
-    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.equal(dispose.history.get(), '/k7m3xqa9/tree');
     dispose.history.back();
     await flush();
     assert.ok(root.querySelector('.system-prompts-view'), 'History back restores the prompt route');
@@ -594,13 +594,13 @@ test('session URLs override tab selection, preserve deep links and restore on br
     assert.ok(!requests.some(item => item.path === 'info' && item.input.agentId === 'stale'));
     button(root, 'Chat').click();
     await flush();
-    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.equal(dispose.history.get(), '/k7m3xqa9/tree');
     dispose.history.set({ value: '/v8n4zrc2' });
     for (let i = 0; i < 6; i++) await flush();
-    assert.equal(dispose.history.get(), '/v8n4zrc2');
+    assert.equal(dispose.history.get(), '/v8n4zrc2/tree');
     dispose.history.back();
     for (let i = 0; i < 6; i++) await flush();
-    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.equal(dispose.history.get(), '/k7m3xqa9/tree');
     assert.deepEqual(requests.filter(item => item.path === 'agents/create').map(item => item.input.sessionUrlId), ['k7m3xqa9', 'v8n4zrc2', 'k7m3xqa9']);
     assert.ok(requests.every(item => ['info', 'agents/list', 'agents/create', 'events'].includes(item.path)));
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
@@ -643,7 +643,7 @@ test('default Sessions view groups and filters real sessions and opens without b
     assert.equal(root.querySelectorAll('.startup-session').length, 1);
     root.querySelector('.startup-session').click();
     for (let i = 0; i < 6; i++) await flush();
-    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.equal(dispose.history.get(), '/k7m3xqa9/single');
     assert.ok(root.querySelector('.spicy-host'));
     assert.deepEqual(requests.filter(request => request.path === 'agents/create').map(request => request.input), [{ openSessionId: 'first-file' }]);
     assert.ok(!requests.some(request => request.path === 'command' || request.path === 'start'));
@@ -692,7 +692,7 @@ test('Sessions composer keeps failed drafts, opens focused chat on success and o
     input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(created, 1, 'Retry uses the same new session');
-    assert.equal(dispose.history.get(), '/k7m3xqa9');
+    assert.equal(dispose.history.get(), '/k7m3xqa9/single');
     assert.equal(button(root, 'Single').getAttribute('aria-pressed'), 'true');
     button(root, 'Sessions').click();
     for (let i = 0; i < 6; i++) await flush();
@@ -740,7 +740,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
     }),
   });
   const streams = rpc.streams;
-  const dispose = components.mountApp(root);
+  const dispose = components.mountApp(root, '/tree');
   try {
     for (let i = 0; i < 8; i++) await flush();
     button(root, 'Options').click();
@@ -834,6 +834,90 @@ test('side-by-side chats send and stop independently while both agents stream', 
     assert.equal(requests.filter(request => request.type === 'stop').length, 0);
     window.sessionStorage.removeItem('pi-agent-view');
   }
+});
+
+test('Single routes mount only one branch and composer while preserving shared state across views', async () => {
+  const common = [original, user];
+  const makeAgent = (id, timestamp) => ({ agentId: id, entries: [...common,
+    { id: `${id}-answer`, parentId: user.id, type: 'message', message: { role: 'assistant',
+      content: [{ type: 'text', text: `${id} answer` }], timestamp } },
+  ], leafId: `${id}-answer`, state: { sessionId: id }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
+  const snapshots = { left: makeAgent('left', 10), right: makeAgent('right', 20) };
+  window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
+  rpc = createRpcFixture({
+    info: os.handler(({ input }) => ({ ...snapshots[input.agentId || 'left'], token: 'test' })),
+    agents: { list: os.handler(() => Object.values(snapshots)) },
+  });
+  const dispose = components.mountApp(root, '/single');
+  try {
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(dispose.history.get(), '/single');
+    assert.equal(root.querySelectorAll('.message-composer').length, 1);
+    assert.ok(root.querySelector('.tree-node[data-entry-id="right-answer"]'));
+    assert.equal(root.querySelector('.tree-node[data-entry-id="left-answer"]'), null);
+    assert.equal(root.querySelector('.tree-connections'), null);
+    const shared = root.querySelector('.tree-node[data-entry-id="user1"]');
+    button(root, 'Options').click();
+    const options = root.querySelector('[aria-label="Options"]');
+    const streaming = [...options.querySelectorAll('label')].find(label => label.textContent.includes('Show streaming content')).querySelector('input');
+    if (!streaming.checked) streaming.click();
+    button(options, 'Close').click();
+    let input = root.querySelector('.editor textarea');
+    input.value = 'Keep right draft';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    globalThis.FileReader = window.FileReader;
+    const paste = new window.Event('paste', { bubbles: true, cancelable: true });
+    const file = new window.File(['image bytes'], 'clipboard.png', { type: 'image/png' });
+    Object.defineProperty(paste, 'clipboardData', { value: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }] } });
+    input.dispatchEvent(paste);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    await flush();
+    assert.ok(root.querySelector('.composer-attachments img'));
+    root.querySelector('[aria-label="Previous column"]').click();
+    await flush();
+    assert.ok(root.querySelector('.tree-node[data-entry-id="left-answer"]'));
+    assert.equal(root.querySelector('.tree-node[data-entry-id="right-answer"]'), null);
+    assert.equal(root.querySelector('.tree-node[data-entry-id="user1"]'), shared, 'Shared ancestor DOM survives branch switches');
+    assert.equal(root.querySelectorAll('.message-composer').length, 1);
+    input = root.querySelector('.editor textarea');
+    assert.equal(input.value, '');
+    assert.equal(root.querySelector('.composer-attachments img'), null);
+    input.value = 'Keep left draft';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    rpc.streams.get('right').emit('record', { type: 'message_start', message: { role: 'assistant',
+      content: [{ type: 'text', text: 'Right background streaming' }], timestamp: 30, stopReason: 'pending' } });
+    await flush();
+    assert.doesNotMatch(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
+    assert.equal(root.querySelectorAll('.message-composer').length, 1);
+    button(root, 'Tree').click();
+    await flush();
+    assert.equal(dispose.history.get(), '/tree');
+    assert.ok(root.querySelector('.tree-connections'));
+    assert.equal(root.querySelectorAll('.message-composer').length, 2);
+    assert.match(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
+    assert.equal(root.querySelector('.editor[data-leaf-id="stream-right-0"] textarea').value, 'Keep right draft');
+    assert.ok(root.querySelector('.message-composer:has(.editor[data-leaf-id="stream-right-0"]) .composer-attachments img'));
+    button(root, 'Single').click();
+    await flush();
+    assert.equal(dispose.history.get(), '/single');
+    assert.equal(root.querySelectorAll('.message-composer').length, 1);
+    assert.equal(root.querySelector('.editor textarea').value, 'Keep left draft');
+    assert.equal(root.querySelector('.tree-node[data-entry-id="stream-right-0"]'), null);
+    dispose.history.back();
+    await flush();
+    assert.equal(dispose.history.get(), '/tree');
+    assert.equal(root.querySelectorAll('.message-composer').length, 2);
+    dispose.history.forward();
+    await flush();
+    assert.equal(dispose.history.get(), '/single');
+    assert.equal(root.querySelectorAll('.message-composer').length, 1);
+    root.querySelector('[aria-label="Next column"]').click();
+    await flush();
+    assert.match(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
+    assert.equal(root.querySelector('.editor textarea').value, 'Keep right draft');
+    assert.ok(root.querySelector('.composer-attachments img'));
+    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'events'].includes(request.path)), 'View navigation sends no commands or prompts');
+  } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
 test('edit results render the recorded patch with syntax, line numbers and word emphasis', () => {

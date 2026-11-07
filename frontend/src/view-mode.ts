@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 
-type ViewMode = 'focused' | 'side';
+export type ViewMode = 'focused' | 'side';
 const storageKey = 'spicy.view-mode';
 
 function savedMode(): ViewMode {
@@ -10,6 +10,10 @@ function savedMode(): ViewMode {
 
 const [viewMode, updateViewMode] = createSignal<ViewMode>(savedMode());
 export { viewMode };
+
+export function chatViewPath(mode = viewMode()) {
+  return mode === 'focused' ? '/single' : '/tree';
+}
 
 export function setViewMode(value: ViewMode) {
   updateViewMode(value);

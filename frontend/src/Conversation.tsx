@@ -8,20 +8,18 @@ import { ImageContext, SectionContext } from './conversation-dom';
 import type { PreviewImage } from './ImagePreview';
 import { modalOpen } from './modal-state';
 import ChatToolbar from './ChatToolbar';
-import { viewMode as mode, setViewMode as setMode } from './view-mode';
+import { setViewMode } from './view-mode';
+import type { ConversationMode, ConversationViewState } from './conversation-view-state';
 import { ChatEntryPart } from './ChatContent';
 import MessageComposer from './MessageComposer';
 import type { ContextWindowUsage } from './context-window';
 import ScrollBar from './ScrollBar';
-import SystemPromptReference from './SystemPromptReference';
 import type { AgentHealthStatus } from './AgentHealth';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createColumnShortcuts } from './column-shortcuts';
-import { isUnstartedCompaction, layoutConversation } from './conversation-model.mjs';
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
-import { promptLabel } from './prompt-numbers';
 import { systemPromptText } from './system-prompts.js';
 
 export interface ViewOptions {
@@ -37,6 +35,14 @@ export interface ConversationController {
 }
 
 interface Props {
+  mode: ConversationMode;
+  onMode: (mode: ConversationMode) => void;
+  viewState: ConversationViewState;
+  layout: (graph: Wire, options: {
+    mode: ConversationMode; width: number; viewportWidth: number; viewportHeight: number; lane: number;
+    heights: Record<string, number>; composerHeights: Record<string, number>; rowGap: number; columnGap: number; edgeGap: number;
+  }) => Wire;
+  children: (view: ConversationView) => JSX.Element;
   graph: Wire;
   lanes: Wire[];
   drafts: Record<string, string>;
@@ -62,7 +68,26 @@ interface Props {
   onOptions: () => void;
 }
 
-export function TreeCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; promptTitle?: string; scrollTop: number; promptRowTop: number;
+export type ConversationRouteProps = Omit<Props, 'mode' | 'layout' | 'children'>;
+
+export interface ConversationView {
+  props: Props;
+  nodeIds: () => string[];
+  focused: () => number;
+  layout: () => Wire;
+  spacing: () => { row: number; column: number; edge: number };
+  gridPlacement: (left: number, top: number, width: number) => JSX.CSSProperties;
+  workingWidth: () => number;
+  scroll: () => { top: number; left: number; width: number; height: number };
+  inheritedVersion: (id: string) => PromptVersion | undefined;
+  versionFor: (id: string) => PromptVersion | undefined;
+  registerSection: (id: string, element: HTMLElement) => () => void;
+  observe: (id: string, element: Element, kind: 'node' | 'composer') => void;
+  unobserve: (element: Element) => void;
+  dismissBranch: (id: string) => void;
+}
+
+export function ConversationCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; promptTitle?: string; scrollTop: number; promptRowTop: number;
   selection?: { value: string; options: SelectOption[]; onChange: (value: string) => void };
   registerSection: (id: string, element: HTMLElement) => () => void;
   width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
@@ -100,6 +125,8 @@ export function TreeCard(props: { id: string; node: Wire; position: Wire; gridSt
 }
 
 export default function Conversation(props: Props) {
+  const mode = () => props.mode;
+  const [viewState, setViewState] = props.viewState;
   let spacingProbe!: HTMLSpanElement;
   const [spacing, setSpacing] = createSignal({ row: 20, column: 48, edge: 24 });
   onMount(() => {
@@ -113,9 +140,10 @@ export default function Conversation(props: Props) {
     measureSpacing();
     onCleanup(() => observer.disconnect());
   });
-  const [widths, setWidths] = createStore({ focused: 720, side: 1040 });
-  const [focusedFitsWindow, setFocusedFitsWindow] = createSignal(true);
-  const [selectedLane, setSelectedLane] = createSignal(0);
+  const widths = viewState.widths;
+  const focusedFitsWindow = () => viewState.focusedFitsWindow;
+  const selectedLane = () => lanes().findIndex(lane => lane.key === viewState.selectedKey);
+  const setSelectedLane = (index: number) => setViewState('selectedKey', lanes()[index]?.key || '');
   const [dimensions, setDimensions] = createSignal({ width: window.innerWidth, height: Math.max(0, window.innerHeight - 42) });
   const [scroll, setScroll] = createSignal({ left: 0, top: 0, width: 0, height: 0 });
   const [heights, setHeights] = createStore<Record<string, number>>({});
@@ -123,7 +151,8 @@ export default function Conversation(props: Props) {
   const setDrafts = (key: string, text: string) => props.onDraftChange(key, text);
   const [jumpSizes, setJumpSizes] = createSignal({ branch: 0, latest: 0 });
   const [scrollRequest, setScrollRequest] = createSignal<{ id: string; bottom: boolean; smooth: boolean }>();
-  let followLatest = true;
+  const savedPosition = viewState.positions[props.mode] ?? viewState.lastPosition;
+  let followLatest = savedPosition?.followLatest ?? true;
   function focusedFollowTop() {
     return Math.max(0, layout().height - dimensions().height);
   }
@@ -152,16 +181,19 @@ export default function Conversation(props: Props) {
     const key = props.graph.nodes.get(id)?.entry.draftPromptKey;
     return (key ? props.prompts.find(prompt => prompt.key === key) : undefined) ?? inheritedVersion(id);
   }
-  const nodeIds = () => (props.graph.ids as string[]).filter(id => props.graph.nodes.get(id).entry.message?.role !== 'system');
-  const laneKeys = createMemo(() => lanes().map(lane => lane.key as string));
   const focused = () => Math.max(0, Math.min(selectedLane(), lanes().length - 1));
   createEffect(on(() => lanes()[focused()]?.leafId, id => { if (id) props.onFocusLeaf(id); }));
   const maxWidth = () => Math.max(480, dimensions().width - spacing().edge * 2);
   const workingWidth = () => mode() === 'focused' && focusedFitsWindow() ? maxWidth() : widths[mode()];
-  const layout = createMemo(() => layoutConversation(props.graph, {
+  const layout = createMemo(() => props.layout(props.graph, {
     mode: mode(), width: workingWidth(), viewportWidth: dimensions().width, viewportHeight: dimensions().height,
     lane: focused(), heights, rowGap: spacing().row, columnGap: spacing().column, edgeGap: spacing().edge, composerHeights: Object.fromEntries(lanes().map((lane, index) => [index, composerHeights[lane.key] || 40])),
   }));
+  const nodeIds = createMemo<string[]>(() => {
+    const ids: string[] = mode() === 'focused' ? [...layout().items.keys()] : props.graph.ids;
+    return ids.filter(id => props.graph.nodes.get(id).entry.message?.role !== 'system');
+  }, [], { equals: (previous, next) => previous.length === next.length && previous.every((id, index) => id === next[index]) });
+  const laneKeys = createMemo(() => mode() === 'focused' ? [lanes()[focused()].key as string] : lanes().map(lane => lane.key as string));
   // Grid lines retain the measured branch geometry used by connectors and scrolling.
   const tracks = createMemo(() => {
     const value = layout();
@@ -199,7 +231,7 @@ export default function Conversation(props: Props) {
   let composerRow!: HTMLDivElement;
   let jumpUp!: HTMLButtonElement;
   let jumpLatest!: HTMLButtonElement;
-  let readingAnchor: { id: string; offset: number } | undefined;
+  let readingAnchor = savedPosition?.anchor;
   let centerAfterLayout = true;
 
   function measure(element: Element) {
@@ -251,7 +283,7 @@ export default function Conversation(props: Props) {
 
   function captureAnchor(lane = focused()) {
     const positions = layout().items;
-    const candidates = [...props.graph.nodes.values()].filter((node: Wire) => !node.isPrefixDelta && node.first <= lane && node.last >= lane)
+    const candidates = [...props.graph.nodes.values()].filter((node: Wire) => positions.has(node.id) && !node.isPrefixDelta && node.first <= lane && node.last >= lane)
       .sort((a: Wire, b: Wire) => positions.get(a.id).top - positions.get(b.id).top);
     const node = candidates.find((item: Wire) => {
       const position = positions.get(item.id);
@@ -263,7 +295,7 @@ export default function Conversation(props: Props) {
   function selectLane(lane: number, preserveReading = true) {
     const next = Math.max(0, Math.min(lanes().length - 1, lane));
     if (next === focused()) return;
-    if (preserveReading) readingAnchor = captureAnchor(next);
+    if (preserveReading) readingAnchor = captureAnchor(mode() === 'focused' ? focused() : next);
     setSelectedLane(next);
   }
 
@@ -272,7 +304,8 @@ export default function Conversation(props: Props) {
     readingAnchor = captureAnchor();
     interaction.resetPointer();
     centerAfterLayout = true;
-    setMode(value);
+    setViewMode(value);
+    props.onMode(value);
   }
 
   function focus(id: string, bottom = false, smooth = true) {
@@ -323,8 +356,8 @@ export default function Conversation(props: Props) {
       setModeWidth: (target, value) => {
         readingAnchor = captureAnchor();
         batch(() => {
-          setWidths(target, value === 'auto' ? maxWidth() : Math.max(480, Math.round(value)));
-          if (target === 'focused') setFocusedFitsWindow(value === 'auto');
+          setViewState('widths', target, value === 'auto' ? maxWidth() : Math.max(480, Math.round(value)));
+          if (target === 'focused') setViewState('focusedFitsWindow', value === 'auto');
         });
       },
     });
@@ -365,7 +398,12 @@ export default function Conversation(props: Props) {
     });
   });
 
-  onCleanup(() => observer.disconnect());
+  onCleanup(() => {
+    const position = { anchor: captureAnchor(), followLatest };
+    setViewState('positions', props.mode, position);
+    setViewState('lastPosition', position);
+    observer.disconnect();
+  });
 
   createEffect(on(() => props.focusRequest, request => {
     if (!request || !props.graph.nodes.has(request.id)) return;
@@ -423,12 +461,13 @@ export default function Conversation(props: Props) {
     return latest;
   });
 
-  let initialScrollPending = true;
+  let initialScrollPending = !viewState.initialized;
   createEffect(() => {
     const latest = latestMessage();
     if (!initialScrollPending || !latest || !props.active) return;
     const frame = requestAnimationFrame(() => {
       initialScrollPending = false;
+      setViewState('initialized', true);
       batch(() => {
         for (const element of observed.keys()) measure(element);
         updateViewport();
@@ -455,55 +494,16 @@ export default function Conversation(props: Props) {
 
   function openImage(image: PreviewImage) { props.onImage(image); }
 
+  const view: ConversationView = { props, nodeIds, focused, layout, spacing, gridPlacement, workingWidth, scroll,
+    inheritedVersion, versionFor, registerSection, observe, unobserve, dismissBranch };
+
   const canvas = <ImageContext.Provider value={openImage}><div class="canvas-scroll-shell" classList={{ 'no-horizontal': !layout().hasHorizontal }}>
-    <main ref={viewport} id="trace-viewport" class="transcript" aria-label="Conversation tree — scroll vertically through time, horizontally between branches"
+    <main ref={viewport} id="trace-viewport" class="transcript" aria-label={mode() === 'focused' ? 'Conversation — selected branch' : 'Conversation tree — scroll vertically through time, horizontally between branches'}
       classList={{ 'pan-ready': interaction.space(), panning: interaction.dragging() }}
       {...interaction.handlers}>
       <div ref={stage} class="tree-stage" style={{ width: `${layout().width}px`, height: `${layout().height}px`,
         'grid-template-columns': tracks().columns, 'grid-template-rows': tracks().rows }}>
-        <svg class="tree-connections" aria-hidden="true" width={layout().width} height={layout().height}>
-          <For each={layout().paths}>{path => <path d={path.d} classList={{ 'fork-connection': path.fork }} />}</For>
-        </svg>
-        <For each={props.graph.leaves}>{(leaf: Wire, index) => <Show when={leaf.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf.id).captured}>
-          <article class="tree-node" hidden={mode() === 'focused' && index() !== focused()}
-            style={{ ...gridPlacement(layout().inset + layout().starts[index()], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
-            <Card><Show when={isUnstartedCompaction(props.graph, leaf.id)} fallback={
-              <SystemPromptReference entryId={leaf.id} promptId={versionFor(leaf.id)?.full?.id || ''}
-                title={versionFor(leaf.id)?.title} number={versionFor(leaf.id)?.number || 1}
-                health={props.health(leaf.id)} onOpen={props.onOpenSystemPrompt} />
-            }>
-              <SystemPromptPlaceholder
-                number={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf.id)) ?? versionFor(leaf.id))?.number}
-                title={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf.id)) ?? versionFor(leaf.id))?.title}
-                selection={{
-                  value: props.pendingPromptKey?.(leaf.id) ?? versionFor(leaf.id)?.key ?? '',
-                  options: props.prompts.map(prompt => ({ value: prompt.key,
-                    label: `${promptLabel(prompt.number, prompt.title)}${prompt.key === versionFor(leaf.id)?.key ? ' (inherited)' : ''}` })),
-                  onChange: key => props.onSelectBranchPrompt(leaf.id, key === versionFor(leaf.id)?.key ? undefined : key),
-                }} />
-            </Show></Card>
-          </article>
-        </Show>}</For>
-        <For each={nodeIds()}>{id => {
-          const node = () => props.graph.nodes.get(id);
-          const inheritedKey = () => inheritedVersion(id)?.key;
-          const number = () => versionFor(id)?.number;
-          const selection = () => node().entry.type === 'branch_draft' && node().entry.draftSourceId ? {
-            value: node().entry.draftPromptKey ?? inheritedKey() ?? '',
-            options: props.prompts.map(prompt => ({ value: prompt.key,
-              label: `${promptLabel(prompt.number, prompt.title)}${prompt.key === inheritedKey() ? ' (inherited)' : ''}` })),
-            onChange: (key: string) => props.onSelectBranchPrompt(id, key === inheritedKey() ? undefined : key),
-          } : undefined;
-
-          const promptRoot = () => props.graph.prefix.get(id).rootId;
-          return <TreeCard id={id} node={node()} position={layout().items.get(id)}
-            gridStyle={gridPlacement(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)}
-            promptNumber={number()} promptTitle={versionFor(id)?.title} scrollTop={scroll().top}
-            promptRowTop={layout().items.get(promptRoot())?.top ?? spacing().row} selection={selection()}
-            registerSection={registerSection} width={workingWidth()}
-            onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch}
-            measure={(key, element) => observe(key, element, 'node')} unmeasure={unobserve} />;
-        }}</For>
+        {props.children(view)}
       </div>
     </main>
       <ScrollBar vertical position={scroll().top} client={dimensions().height} extent={Math.max(scroll().height, layout().height)}
@@ -523,7 +523,7 @@ export default function Conversation(props: Props) {
     <div ref={composerRow} class="composer-row" style={{ height: layout().inlineComposers ? '0px' : `${composerHeights[lanes()[focused()].key] || 40}px` }} />
   </div>;
 
-  return <div class="spicy-host" classList={{ 'route-hidden': !props.active, 'tree-mode': true, 'has-horizontal-scrollbar': layout().hasHorizontal }}
+  return <div class="spicy-host" classList={{ 'route-hidden': !props.active, 'tree-mode': true, 'single-mode': mode() === 'focused', 'has-horizontal-scrollbar': layout().hasHorizontal }}
     aria-hidden={!props.active} inert={!props.active} tabIndex={-1}
     onKeyDown={keydown} onKeyUp={release} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) blur();
@@ -563,6 +563,7 @@ export default function Conversation(props: Props) {
       return <Portal mount={inline() ? stage : composerRow}>
         <MessageComposer ref={value => { element = value; }} inputRef={value => { input = value; }}
           value={props.drafts[key] || ''} history={history()} onChange={value => setDrafts(key, value)} leafId={lane()?.leafId}
+          images={viewState.images[key] || []} onImagesChange={images => setViewState('images', key, images)}
           label={index() ? `Message draft (not sent), branch ${index() + 1}` : 'Message draft (not sent)'}
           class={inline() ? 'inline-composer' : undefined} hidden={mode() === 'focused' && index() !== focused()}
           style={{ width: `${workingWidth()}px`, 'margin-left': '0',

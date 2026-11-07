@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createConversationGraph, layoutConversation } from '../src/conversation-model.mjs';
+import { layoutSingleConversation } from '../src/single-conversation-model.mjs';
 
 const entries = [
   { id: 'original', parentId: null, type: 'message', message: { role: 'system', content: 'Instructions' } },
@@ -32,8 +33,8 @@ test('loaded tools add a parallel prompt lane without replacing earlier history'
     assert.ok(layout.items.get('answer').top > layout.items.get('search').top);
     assert.ok(layout.paths.some(path => path.id === 'answer' && path.fork));
   }
-  const focused = layoutConversation(graph, { ...options, mode: 'focused', lane: 0 });
-  assert.equal(focused.items.get('answer').hidden, true);
+  const focused = layoutSingleConversation(graph, { ...options, lane: 0 });
+  assert.equal(focused.items.has('answer'), false);
   assert.deepEqual(entries, original);
 });
 

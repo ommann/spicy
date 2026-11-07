@@ -7,16 +7,16 @@ import { render } from 'solid-js/web';
 import { MemoryRouter, Route, createMemoryHistory } from '@solidjs/router';
 import SystemPromptRoute from '../src/SystemPromptRoute';
 import App from '../src/App';
-import ChatRoute from '../src/ChatRoute';
+import ChatRoute, { SingleChatRoute, TreeChatRoute } from '../src/ChatRoute';
 import { SessionsRoute } from '../src/Sessions';
 import SystemPrompts from '../src/SystemPrompts';
 import SystemPromptContent from '../src/SystemPromptContent';
 import ChatContent from '../src/ChatContent';
-import { TreeCard } from '../src/Conversation';
+import { ConversationCard } from '../src/Conversation';
 
 export function mountStreamingCard(root: HTMLElement, initial: any) {
   const [node, setNode] = createSignal(initial);
-  const dispose = render(() => <TreeCard id="stream-test" node={node()} position={{ span: 720, cardLeft: 0, top: 0 }}
+  const dispose = render(() => <ConversationCard id="stream-test" node={node()} position={{ span: 720, cardLeft: 0, top: 0 }}
     gridStyle={{}} scrollTop={0} promptRowTop={0} width={720}
     registerSection={() => () => {}} onBranch={() => {}} onDismiss={() => {}}
     measure={() => {}} unmeasure={() => {}} />, root);
@@ -62,9 +62,13 @@ export function mountApp(root: HTMLElement, path = '/chat') {
   const dispose = render(() => <MemoryRouter root={App} history={history}>
     <Route path="/" component={SessionsRoute} />
     <Route path="/chat" component={ChatRoute} />
+    <Route path="/single" component={SingleChatRoute} />
+    <Route path="/tree" component={TreeChatRoute} />
     <Route path="/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/system-prompt-creator" component={SystemPromptCreator} />
     <Route path="/:sessionUrlId" component={ChatRoute} />
+    <Route path="/:sessionUrlId/single" component={SingleChatRoute} />
+    <Route path="/:sessionUrlId/tree" component={TreeChatRoute} />
     <Route path="/:sessionUrlId/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/:sessionUrlId/system-prompt-creator" component={SystemPromptCreator} />
   </MemoryRouter>, root);

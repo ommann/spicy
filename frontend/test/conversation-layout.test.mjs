@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createConversationGraph, isUnstartedCompaction, layoutConversation, projectChatParts } from '../src/conversation-model.mjs';
+import { layoutSingleConversation } from '../src/single-conversation-model.mjs';
 
 test('compaction roots get independent columns and a switchable prompt until their first message', () => {
   const entries = [
@@ -32,7 +33,7 @@ test('Single view ends at the last card as it grows, while side view retains ove
   ]);
   const options = { width: 720, viewportWidth: 1200, viewportHeight: 800, lane: 0 };
   for (const height of [100, 1200, 1800]) {
-    const focused = layoutConversation(graph, { ...options, mode: 'focused', heights: { reply: height } });
+    const focused = layoutSingleConversation(graph, { ...options, heights: { reply: height } });
     const last = focused.items.get('reply');
     assert.equal(focused.height, last.top + last.height, 'no blank scrollable tail');
     const side = layoutConversation(graph, { ...options, mode: 'side', heights: { reply: height } });
@@ -45,8 +46,8 @@ test('empty chats use a normal first column and composer in both modes', () => {
   for (const mode of ['side', 'focused']) {
     const graph = createConversationGraph([]);
     assert.equal(graph.leaves[0].parts[0].kind, 'draft');
-    const layout = layoutConversation(graph, {
-      mode, width: 720, viewportWidth: 1200, viewportHeight: 800, lane: 0,
+    const layout = (mode === 'focused' ? layoutSingleConversation : layoutConversation)(graph, {
+      width: 720, viewportWidth: 1200, viewportHeight: 800, lane: 0,
     });
     assert.deepEqual(layout.starts, [0]);
     assert.equal(layout.composers.length, 1);

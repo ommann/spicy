@@ -3,7 +3,9 @@ import Input from './Input';
 import Login from './Login';
 import { ChatRouteContext } from './ChatRoute';
 import Sessions, { SessionsRouteContext } from './Sessions';
-import { setViewMode } from './view-mode';
+import { chatViewPath, setViewMode } from './view-mode';
+import { Dynamic } from 'solid-js/web';
+import { createConversationViewState, type ConversationViewState } from './conversation-view-state';
 import { sessionPath, sessionUrlIdFromPath, sessionViewPath } from './session-urls';
 import {
   For,
@@ -21,7 +23,9 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { createStore } from 'solid-js/store';
 import Dialog from './Dialog';
 import SelectWithDialog from './SelectWithDialog';
-import Conversation, { type ConversationController, type ViewOptions } from './Conversation';
+import { type ConversationController, type ViewOptions } from './Conversation';
+import SingleConversation from './SingleConversation';
+import TreeConversation from './TreeConversation';
 import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes } from './conversation-model.mjs';
 import { applyRecord } from "./stream.mjs";
 import { traceRecord } from './stream-timing';
@@ -117,7 +121,7 @@ export default function App(props: ParentProps) {
   const [projectQuery, setProjectQuery] = createSignal('');
   const [sessionNameQuery, setSessionNameQuery] = createSignal('');
   let homeAgent: Snapshot | undefined;
-  const openFocusedChat = () => navigate(sessionPath('/', selectedSessionUrlId()) === '/' ? '/chat' : sessionPath('/', selectedSessionUrlId()));
+  const openFocusedChat = () => navigate(sessionPath(chatViewPath(), selectedSessionUrlId()));
 
   let chatDialog!: HTMLDialogElement;
   let optionsDialog!: HTMLDialogElement;
@@ -193,7 +197,7 @@ export default function App(props: ParentProps) {
   });
 
   const composerStates = new Map<string, {
-    drafts: Record<string, string>; setDraft: (key: string, text: string) => void; lanes: Wire[];
+    drafts: Record<string, string>; setDraft: (key: string, text: string) => void; lanes: Wire[]; view: ConversationViewState;
   }>();
   const composerScope = createMemo(() => JSON.stringify([
     branchKey(), agentSnapshots()[visibleAgentIds()[0]]?.state?.sessionId || '',
@@ -203,7 +207,7 @@ export default function App(props: ParentProps) {
     let state = composerStates.get(scope);
     if (!state) {
       const [drafts, setDraft] = createStore<Record<string, string>>({});
-      state = { drafts, setDraft, lanes: [] };
+      state = { drafts, setDraft, lanes: [], view: createConversationViewState() };
       composerStates.set(scope, state);
     }
     return state;
@@ -678,7 +682,7 @@ export default function App(props: ParentProps) {
         <button class="tree-title" onClick={openChat}>{sessionCwd()}</button>
         <div class="view-switch" role="group" aria-label="Views">
           <button class="state-toggle" aria-pressed={location.pathname === '/'} onClick={() => navigate('/')}>Sessions</button>
-          <button class="state-toggle" aria-pressed={location.pathname !== '/' && (viewPath() === '/' || viewPath() === '/chat')} onClick={openFocusedChat}>Chat</button>
+          <button class="state-toggle" aria-pressed={location.pathname !== '/' && ['/', '/chat', '/single', '/tree'].includes(viewPath())} onClick={openFocusedChat}>Chat</button>
           <button class="state-toggle" aria-pressed={viewPath().startsWith('/system-prompts')} onClick={() => navigateView('/system-prompts')}>System prompts</button>
           <button class="state-toggle" aria-pressed={viewPath() === '/system-prompt-creator'} onClick={() => navigateView('/system-prompt-creator')}>Editor</button>
         </div>
@@ -727,10 +731,12 @@ export default function App(props: ParentProps) {
           draft={homeDraft()} onDraft={setHomeDraft} projectQuery={projectQuery()} onProjectQuery={setProjectQuery}
           nameQuery={sessionNameQuery()} onNameQuery={setSessionNameQuery} onSubmit={sendHomeChat}
           onEditPrompt={editHomePrompt} onOpen={openHomeSession} busy={busy()} notification={notification()} />}>
-        <ChatRouteContext.Provider value={() => {
+        <ChatRouteContext.Provider value={route => {
           onCleanup(() => { conversation = undefined; });
           return <Show when={composerScope()} keyed>{_sessionKey => (
-          <Conversation graph={graph()} active lanes={composerLanes()}
+          <Dynamic component={route.mode === 'focused' ? SingleConversation : TreeConversation}
+            graph={graph()} active lanes={composerLanes()} viewState={composerState().view}
+            onMode={mode => navigateView(chatViewPath(mode))}
             drafts={composerState().drafts} onDraftChange={composerState().setDraft}
             running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}

@@ -11,6 +11,8 @@ interface Props {
   value: string;
   history?: string[];
   onChange: (text: string) => void;
+  images?: ImageAttachment[];
+  onImagesChange?: (images: ImageAttachment[]) => void;
   onSubmit?: (images?: ImageAttachment[]) => void | boolean | Promise<boolean>;
   onAbort?: () => void;
   onFocus?: () => void;
@@ -50,7 +52,13 @@ export default function MessageComposer(props: Props) {
     input.value = value;
     input.setSelectionRange(value.length, value.length);
   }
-  const [images, setImages] = createSignal<ImageAttachment[]>([]);
+  const [localImages, updateLocalImages] = createSignal<ImageAttachment[]>([]);
+  const images = () => props.images ?? localImages();
+  function setImages(update: ImageAttachment[] | ((current: ImageAttachment[]) => ImageAttachment[])) {
+    const next = typeof update === 'function' ? update(images()) : update;
+    if (props.onImagesChange) props.onImagesChange(next);
+    else updateLocalImages(next);
+  }
   const [pasting, setPasting] = createSignal(false);
   const [attachmentError, setAttachmentError] = createSignal('');
   async function submit() {
