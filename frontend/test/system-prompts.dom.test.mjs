@@ -920,6 +920,88 @@ test('Single routes mount only one branch and composer while preserving shared s
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
+test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses through hidden-only mode', async () => {
+  const scope = 'visibility-poc-session';
+  const makeAgent = (id, timestamp) => ({ agentId: id, entries: [original, user,
+    { id: `${id}-answer`, parentId: user.id, type: 'message', message: { role: 'assistant',
+      content: [{ type: 'text', text: `${id} answer` }], timestamp } },
+  ], leafId: `${id}-answer`, state: { sessionId: scope }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
+  const snapshots = { left: makeAgent('left', 10), right: makeAgent('right', 20) };
+  window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
+  rpc = createRpcFixture({
+    info: os.handler(({ input }) => ({ ...snapshots[input.agentId || 'left'], token: 'test' })),
+    agents: { list: os.handler(() => Object.values(snapshots)) },
+  });
+  const dispose = components.mountApp(root, '/tree');
+  const stored = () => JSON.parse(window.localStorage.getItem('spicy.hidden-branches'));
+  const hide = async id => {
+    const input = root.querySelector(`.editor[data-leaf-id="${id}"] textarea`);
+    assert.ok(input, `Shown composer for ${id}`);
+    input.value = '/hide';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    await flush();
+  };
+  const onlyHidden = async value => {
+    button(root, 'Options').click();
+    await flush();
+    const dialog = root.querySelector('[aria-label="Options"]');
+    const checkbox = [...dialog.querySelectorAll('label')].find(label => label.textContent.includes('Show only hidden branches')).querySelector('input');
+    if (checkbox.checked !== value) checkbox.click();
+    await flush();
+    button(dialog, 'Close').click();
+    await flush();
+  };
+  try {
+    for (let i = 0; i < 8; i++) await flush();
+    const shared = root.querySelector('.tree-node[data-entry-id="user1"]');
+    const initialWidth = parseFloat(root.querySelector('.tree-stage').style.width);
+    assert.equal(root.querySelectorAll('.message-composer').length, 2);
+    await hide('right-answer');
+    assert.equal(root.querySelector('.tree-node[data-entry-id="right-answer"]'), null);
+    assert.equal(root.querySelector('.editor[data-leaf-id="right-answer"]'), null);
+    assert.equal(root.querySelector('.tree-node[data-entry-id="user1"]'), shared);
+    assert.ok(root.querySelector('.tree-node[data-entry-id="left-answer"]'));
+    assert.equal(root.querySelectorAll('.message-composer').length, 1);
+    assert.ok(parseFloat(root.querySelector('.tree-stage').style.width) < initialWidth);
+    assert.deepEqual(stored(), ['right-answer']);
+    rpc.streams.get('right').emit('record', { type: 'message_start', message: { role: 'assistant',
+      content: [{ type: 'text', text: 'Hidden right update' }], timestamp: 30, stopReason: 'pending' } });
+    await flush();
+    assert.doesNotMatch(root.querySelector('#trace-viewport').textContent, /Hidden right update/);
+    assert.equal(root.querySelector('.tree-node[data-entry-id="user1"]'), shared);
+    assert.deepEqual(stored(), ['stream-right-0'], 'Stored leaf follows the growing hidden column');
+    await onlyHidden(true);
+    assert.equal(root.querySelector('.tree-node[data-entry-id="left-answer"]'), null);
+    assert.match(root.querySelector('#trace-viewport').textContent, /Hidden right update/);
+    assert.equal(root.querySelector('.tree-node[data-entry-id="user1"]'), shared, 'Shared card stays mounted when switching sets');
+    assert.deepEqual(stored(), ['stream-right-0'], 'Switching sets does not rewrite hidden marks');
+    await hide('stream-right-0');
+    assert.equal(root.querySelectorAll('.tree-node').length, 0);
+    assert.equal(root.querySelectorAll('.message-composer').length, 0);
+    assert.deepEqual(stored(), []);
+    await onlyHidden(false);
+    assert.equal(root.querySelectorAll('.message-composer').length, 2);
+    await hide('left-answer');
+    await hide('stream-right-0');
+    assert.equal(root.querySelectorAll('.tree-node').length, 0);
+    assert.equal(root.querySelectorAll('.message-composer').length, 0);
+    await onlyHidden(true);
+    assert.equal(root.querySelectorAll('.message-composer').length, 2);
+    assert.ok(root.querySelector('.tree-node[data-entry-id="left-answer"]'));
+    assert.ok(root.querySelector('.tree-node[data-entry-id="stream-right-0"]'));
+    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'events'].includes(request.path)), '/hide never reaches the backend');
+  } finally {
+    try { await onlyHidden(false); }
+    finally {
+      dispose();
+      window.sessionStorage.removeItem('pi-agent-view');
+      window.localStorage.removeItem('spicy.hidden-branches');
+    }
+  }
+});
+
 test('edit results render the recorded patch with syntax, line numbers and word emphasis', () => {
   const patch = '--- demo.ts\n+++ demo.ts\n@@ -1,2 +1,2 @@\n const unchanged = true;\n-const value = 1;\n+const value = 2;\n';
   const dispose = components.mountChatContent(root, [

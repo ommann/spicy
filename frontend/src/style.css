@@ -396,6 +396,10 @@
   gap: 20px;
 }
 
+.options-dialog[open] {
+  gap: 0;
+}
+
 .chat-dialog p {
   margin: 0;
 }

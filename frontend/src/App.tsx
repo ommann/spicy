@@ -44,6 +44,10 @@ import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnap
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
 import ThinkingOptions from './ThinkingOptions';
+import HiddenBranchesOption from './HiddenBranchesOption';
+import { createBranchVisibility, showOnlyHiddenBranches } from './branch-visibility';
+import { filterConversationBranches } from './branch-visibility-model.mjs';
+import ChatToolbar from './ChatToolbar';
 import ImagePasteOption from './ImagePasteOption';
 import SyntaxOptions from './SyntaxOptions';
 import { streamingContent } from './streaming-content';
@@ -212,10 +216,15 @@ export default function App(props: ParentProps) {
     }
     return state;
   });
-  const composerLanes = createMemo(() => {
+  const visibility = createBranchVisibility();
+  const composerLanes = createMemo<Wire[]>(() => {
     const state = composerState();
-    return state.lanes = matchConversationLanes(graph(), state.lanes);
+    const next = matchConversationLanes(graph(), state.lanes);
+    visibility.follow(state.lanes, next);
+    return state.lanes = next;
   });
+  const shownLanes = createMemo(() => composerLanes().filter(lane => visibility.hiddenLeaves().has(lane.leafId) === showOnlyHiddenBranches()));
+  const shownGraph = createMemo(() => filterConversationBranches(graph(), shownLanes().map(lane => lane.leafId)));
 
   function createBranch(sourceId: string, anchorId?: string) {
     const source = actualEntries().find(entry => entry.id === sourceId && entry.message?.role === 'user');
@@ -380,8 +389,7 @@ export default function App(props: ParentProps) {
   }
 
   function openOptions() {
-    if (!conversation) return;
-    setViewOptions(conversation.options());
+    setViewOptions(conversation?.options() ?? null);
     optionsDialog.showModal();
   }
 
@@ -539,6 +547,15 @@ export default function App(props: ParentProps) {
   }
 
   async function send(message: string, leafId: string, images: import('./image-attachments').ImageAttachment[] = []): Promise<boolean> {
+    if (message.trim() === '/hide') {
+      const lane = composerLanes().find(lane => lane.leafId === leafId);
+      if (lane) {
+        composerState().setDraft(lane.key, '');
+        visibility.toggle(leafId);
+      }
+      // No prompt or attachments were sent. Keep this column's attachments.
+      return false;
+    }
     if ((!message.trim() && !images.length) || leafBusy(leafId)) return false;
     const originatingConversation = conversation;
     if (!selectedAgentId()) {
@@ -734,8 +751,14 @@ export default function App(props: ParentProps) {
         <ChatRouteContext.Provider value={route => {
           onCleanup(() => { conversation = undefined; });
           return <Show when={composerScope()} keyed>{_sessionKey => (
+          <Show when={shownLanes().length} fallback={
+            <div class="spicy-host" classList={{ 'single-mode': route.mode === 'focused' }}>
+              <ChatToolbar active empty mode={route.mode} notification={notification()} onOptions={openOptions}
+                onMode={mode => { setViewMode(mode); navigateView(chatViewPath(mode)); }} onFork={() => {}} />
+            </div>
+          }>
           <Dynamic component={route.mode === 'focused' ? SingleConversation : TreeConversation}
-            graph={graph()} active lanes={composerLanes()} viewState={composerState().view}
+            graph={shownGraph()} active lanes={shownLanes()} viewState={composerState().view}
             onMode={mode => navigateView(chatViewPath(mode))}
             drafts={composerState().drafts} onDraftChange={composerState().setDraft}
             running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
@@ -743,6 +766,7 @@ export default function App(props: ParentProps) {
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt} pendingPromptKey={id => pendingPrompts()[id]?.key}
             onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}
             onOptions={openOptions} />
+          </Show>
         )}</Show>;
         }}>
           {props.children}
@@ -753,6 +777,7 @@ export default function App(props: ParentProps) {
       </SystemPromptCreatorContext.Provider>
       </NavigationLinksContext.Provider>
       <Dialog ref={optionsDialog} class="chat-dialog options-dialog" title="Options">
+        <Show when={viewOptions()}>
         <For each={['focused', 'side'] as const}>{mode =>
           <label class="width-option">
             <span>{mode === 'focused' ? 'Single' : 'Tree'}</span>
@@ -765,7 +790,9 @@ export default function App(props: ParentProps) {
               onChange={value => changeWidth(mode, value)} />
           </label>
         }</For>
+        </Show>
         <CodeLinewrapOption />
+        <HiddenBranchesOption />
         <StreamingContentOption />
         <ThinkingOptions />
         <ImagePasteOption />

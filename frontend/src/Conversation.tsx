@@ -55,7 +55,7 @@ interface Props {
   onFocusLeaf: (leafId: string) => void;
   focusRequest?: { id: string; revision: number };
   notification: { message: string; isError: boolean };
-  onReady: (controller: ConversationController) => void;
+  onReady: (controller: ConversationController | undefined) => void;
   onSubmit: (text: string, leafId: string, images?: ImageAttachment[]) => Promise<boolean>;
   onBranch: (sourceId: string, anchorId?: string) => void;
   onDismissBranch: (id: string) => void;
@@ -399,6 +399,7 @@ export default function Conversation(props: Props) {
   });
 
   onCleanup(() => {
+    props.onReady(undefined);
     const position = { anchor: captureAnchor(), followLatest };
     setViewState('positions', props.mode, position);
     setViewState('lastPosition', position);
@@ -441,8 +442,9 @@ export default function Conversation(props: Props) {
     if (!position) return;
     const composer = layout().composers[focused()];
     const targetBottom = request.bottom && mode() === 'side' ? composer.top + composer.height : position.top + position.height;
-    const top = Math.max(0, Math.min(request.bottom ? targetBottom - dimensions().height + 48 : position.top - 150,
-      Math.max(0, layout().height - dimensions().height)));
+    const top = request.bottom && mode() === 'focused' ? focusedFollowTop()
+      : Math.max(0, Math.min(request.bottom ? targetBottom - dimensions().height + 48 : position.top - 150,
+        Math.max(0, layout().height - dimensions().height)));
     const left = Math.max(0, layout().inset + layout().starts[focused()] + workingWidth() / 2 - dimensions().width / 2);
     interaction.setJumping(request.smooth && (Math.abs(viewport.scrollLeft - left) > 1 || Math.abs(viewport.scrollTop - top) > 1));
     viewport.scrollTo({ left, top, behavior: request.smooth ? 'smooth' : 'instant' });
