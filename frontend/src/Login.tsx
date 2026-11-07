@@ -3,7 +3,7 @@ import Dialog from './Dialog';
 import Input from './Input';
 import ScrollArea from './ScrollArea';
 import './login.css';
-import { api } from './api';
+import { api, type MutationInputs } from './api';
 
 type Provider = { id: string; name: string; configured: boolean; methods: { type: string; name: string }[] };
 type LoginEvent = {
@@ -17,7 +17,7 @@ type LoginEvent = {
 };
 type Prompt = { id: string; type: string; message: string; placeholder?: string; options?: { id: string; label: string }[] };
 type LoginState = { id?: string; status: string; events: LoginEvent[]; prompt?: Prompt; error?: string };
-type Props = { request: (endpoint: 'auth/login' | 'auth/reply' | 'auth/cancel', data?: Record<string, unknown>) => Promise<unknown> };
+type Props = { request: <K extends 'auth/login' | 'auth/reply' | 'auth/cancel'>(endpoint: K, data: MutationInputs[K]) => Promise<unknown> };
 
 export default function Login(props: Props) {
   let dialog!: HTMLDialogElement;
@@ -65,6 +65,7 @@ export default function Login(props: Props) {
     setBusy(true);
     setError('');
     try {
+      if (type !== 'oauth' && type !== 'api_key') throw new Error('Unsupported login method');
       const next = await props.request('auth/login', { providerId, type }) as LoginState;
       if (!dialog.open) {
         await props.request('auth/cancel', { id: next.id });
@@ -83,7 +84,10 @@ export default function Login(props: Props) {
     setBusy(true);
     setError('');
     try {
-      setState(await props.request('auth/reply', { id: state().id, promptId: state().prompt?.id, value }) as LoginState);
+      const id = state().id;
+      const promptId = state().prompt?.id;
+      if (!id || !promptId) throw new Error('This login prompt is no longer active');
+      setState(await props.request('auth/reply', { id, promptId, value }) as LoginState);
       poll();
     } catch (cause) {
       setError(String(cause));

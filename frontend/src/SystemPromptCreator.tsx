@@ -1,6 +1,6 @@
 import { For, Index, Show, createMemo, createSignal, onMount, useContext } from 'solid-js';
 import { renderSystemPromptDocument, type SystemPromptDocument, type SystemPromptPart } from '../../packages/coding-agent/src/core/system-prompt-document';
-import { SystemPromptCreatorContext, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
+import { SystemPromptCreatorContext, type PromptDocumentSnapshot, type PromptTool } from './SystemPromptCreatorContext';
 import SystemPromptContent from './SystemPromptContent';
 import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
@@ -11,7 +11,6 @@ import Dialog from './Dialog';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import SelectWithDialog from './SelectWithDialog';
 import Navigation from './Navigation';
-import type { Wire } from './types';
 import { promptDocument } from './system-prompts.js';
 
 function PartEditor(props: {
@@ -55,7 +54,7 @@ function PartEditor(props: {
   </li>;
 }
 
-const promptState = (state: { content: string; sections?: Record<string, string>; toolsAdded?: Wire[] }) => ({
+const promptState = (state: { content: string; sections?: Record<string, string>; toolsAdded?: PromptTool[] }) => ({
   content: state.content,
   sections: new Map(Object.entries(state.sections || {})),
   tools: new Map((state.toolsAdded || []).map(tool => [tool.name, tool])),
@@ -70,12 +69,12 @@ export default function SystemPromptCreator() {
   const [snapshot, setSnapshot] = createSignal<PromptDocumentSnapshot>();
   const [document, setDocument] = createSignal<SystemPromptDocument>();
   const [excluded, setExcluded] = createSignal<ReadonlySet<string>>(new Set());
-  const [tools, setTools] = createSignal<Wire[]>([]);
-  const [toolChoices, setToolChoices] = createSignal<Wire[]>([]);
+  const [tools, setTools] = createSignal<PromptTool[]>([]);
+  const [toolChoices, setToolChoices] = createSignal<PromptTool[]>([]);
   const [expandedTools, setExpandedTools] = createSignal(true);
   const [expandedToolSources, setExpandedToolSources] = createSignal<ReadonlySet<string>>(new Set());
   const toolGroups = createMemo(() => {
-    const groups = new Map<string, Wire[]>();
+    const groups = new Map<string, PromptTool[]>();
     for (const tool of toolChoices()) {
       const source = snapshot()?.toolSources?.[tool.name] || 'Recorded tools';
       const group = groups.get(source) || [];
@@ -91,7 +90,7 @@ export default function SystemPromptCreator() {
       return next;
     });
   }
-  function loadTools(selected: Wire[]) {
+  function loadTools(selected: PromptTool[]) {
     const choices = new Map((snapshot()?.availableTools || []).map(tool => [tool.name, tool]));
     selected.forEach(tool => choices.set(tool.name, tool));
     setToolChoices([...choices.values()]);

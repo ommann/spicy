@@ -4,11 +4,8 @@ import os from 'node:os';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { os as rpc, ORPCError } from '@orpc/server';
-import { z } from 'zod';
 import { agentEvents } from './agent-events.mjs';
-
-const input = z.object({ agentId: z.string().optional() }).catchall(z.any()).default({});
-const allowed = new Set(['prompt', 'abort', 'clear_queue', 'fork', 'new_session', 'set_model', 'set_thinking_level', 'get_available_models', 'get_available_thinking_levels', 'get_system_prompt_document', 'save_system_prompt', 'compact']);
+import { agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
 const fail = (message, code = 'BAD_REQUEST') => { throw new ORPCError(code, { message }); };
 
 export function createRouter({ agents, login, cwd, managed, token }) {
@@ -18,7 +15,7 @@ export function createRouter({ agents, login, cwd, managed, token }) {
       if (error instanceof ORPCError) throw error;
       throw new ORPCError('BAD_REQUEST', { message: error.message, cause: error });
     }
-  }).input(input);
+  });
   const mutation = procedure.use(async ({ context, next }) => {
     const value = context.headers.get('x-spicy-token');
     const actual = Buffer.from(value || '');
@@ -117,8 +114,8 @@ export function createRouter({ agents, login, cwd, managed, token }) {
     } finally { agent.mutating = false; }
   }
   return {
-    info: procedure.handler(({ input }) => ({ token, ...getAgent(input).payload() })),
-    sessions: procedure.handler(async ({ input }) => {
+    info: procedure.input(agentInput).handler(({ input }) => ({ token, ...getAgent(input).payload() })),
+    sessions: procedure.input(sessionsInput).handler(async ({ input }) => {
       const agent = getAgent(input);
       const available = input.scope === 'all' ? (await allSessions()).map(session => ({
         id: Buffer.from(session.path).toString('base64url'), urlId: session.urlId,
@@ -126,31 +123,31 @@ export function createRouter({ agents, login, cwd, managed, token }) {
       })).sort((a, b) => b.modified - a.modified) : await catalog(agent.cwd);
       return available.filter(entry => input.scope !== 'cwd' || entry.cwd === agent.cwd).map(({ file: _file, ...entry }) => entry);
     }),
-    session: procedure.handler(async ({ input }) => {
+    session: procedure.input(sessionInput).handler(async ({ input }) => {
       const entry = (await catalog(getAgent(input).cwd)).find(entry => entry.id === input.id);
       if (!entry) fail('Session not found', 'NOT_FOUND');
       return readFile(entry.file, 'utf8');
     }),
     agents: {
-      list: procedure.handler(() => [...agents.agents.values()].map(agent => {
+      list: procedure.input(emptyInput).handler(() => [...agents.agents.values()].map(agent => {
         const { agentId, cwd, connected, running, state, source } = agent.payload();
         return { agentId, cwd, connected, running, state, source };
       })),
-      create: mutation.handler(({ input }) => createAgent(input)),
+      create: mutation.input(createAgentInput).handler(({ input }) => createAgent(input)),
     },
-    events: procedure.input(z.object({ agentIds: z.array(z.string()).max(256) })).handler(async function* ({ input, signal }) {
+    events: procedure.input(eventsInput).handler(async function* ({ input, signal }) {
       const ids = [...new Set(input.agentIds)];
       if (ids.some(id => !agents.agents.has(id))) { yield { type: 'reset' }; return; }
       yield* agentEvents(ids.map(id => agents.get(id)), signal);
     }),
     auth: {
-      providers: procedure.handler(() => login.providers()),
-      state: procedure.handler(() => login.state()),
-      login: mutation.handler(({ input }) => login.start(input.providerId, input.type)),
-      reply: mutation.handler(({ input }) => login.reply(input.id, input.promptId, input.value)),
-      cancel: mutation.handler(({ input }) => login.cancel(input.id)),
+      providers: procedure.input(emptyInput).handler(() => login.providers()),
+      state: procedure.input(emptyInput).handler(() => login.state()),
+      login: mutation.input(loginInput).handler(({ input }) => login.start(input.providerId, input.type)),
+      reply: mutation.input(loginReplyInput).handler(({ input }) => login.reply(input.id, input.promptId, input.value)),
+      cancel: mutation.input(loginCancelInput).handler(({ input }) => login.cancel(input.id)),
     },
-    attachments: mutation.handler(async ({ input }) => {
+    attachments: mutation.input(attachmentsInput).handler(async ({ input }) => {
       const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
       if (!Array.isArray(input.images) || !input.images.length) fail('No images supplied');
       const images = input.images.map(image => {
@@ -168,27 +165,26 @@ export function createRouter({ agents, login, cwd, managed, token }) {
       }
       return { paths };
     }),
-    ui: mutation.handler(async ({ input }) => {
+    ui: mutation.input(uiInput).handler(async ({ input }) => {
       const agent = getAgent(input);
       if (!agent.dialogs.has(input.id)) fail('Dialog expired');
       await agent.rpc.write({ type: 'extension_ui_response', id: input.id, value: input.value, confirmed: input.confirmed, cancelled: input.cancelled });
       agent.dialogs.delete(input.id);
       return {};
     }),
-    stop: mutation.handler(async ({ input }) => { await agents.stop(getAgent(input)); return {}; }),
-    start: mutation.handler(async ({ input }) => {
+    stop: mutation.input(agentInput).handler(async ({ input }) => { await agents.stop(getAgent(input)); return {}; }),
+    start: mutation.input(startInput).handler(async ({ input }) => {
       const agent = getAgent(input);
       const selected = input.sessionId ? (await catalog(agent.cwd)).find(entry => entry.id === input.sessionId) : null;
       if (input.sessionId && !selected) fail('Session not found', 'NOT_FOUND');
       return agents.start(agent, selected);
     }),
-    branch: mutation.handler(({ input }) => navigate(input, false)),
-    continue: mutation.handler(({ input }) => navigate(input, true)),
-    command: mutation.handler(async ({ input }) => {
+    branch: mutation.input(branchInput).handler(({ input }) => navigate(input, false)),
+    continue: mutation.input(branchInput).handler(({ input }) => navigate(input, true)),
+    command: mutation.input(commandInput).handler(async ({ input }) => {
       const { agentId: _agentId, ...command } = input;
       const agent = getAgent(input);
       const { rpc } = agent;
-      if (!allowed.has(command.type)) fail('Unsupported command');
       const reload = command.type === 'prompt' && command.message?.trim() === '/reload';
       if (reload && rpc.running) fail('Stop the agent before reloading');
       const changesBranch = reload || ['fork', 'new_session', 'set_model', 'set_thinking_level', 'save_system_prompt', 'compact'].includes(command.type);

@@ -8,7 +8,7 @@ export const api: RouterClient<ReturnType<typeof createRouter>, { token?: string
   headers: ({ context }: { context: { token?: string } }) => context.token ? { 'X-Spicy-Token': context.token } : {},
 }));
 
-export const mutations = {
+const procedures = {
   agents: api.agents.create,
   command: api.command,
   start: api.start,
@@ -20,3 +20,9 @@ export const mutations = {
   'auth/reply': api.auth.reply,
   'auth/cancel': api.auth.cancel,
 };
+export type MutationInputs = { [K in keyof typeof procedures]: Exclude<Parameters<(typeof procedures)[K]>[0], undefined> };
+type ReplyPayload<T> = T extends unknown ? Omit<T, 'agentId' | 'id'> : never;
+export type UiReply = ReplyPayload<MutationInputs['ui']>;
+export type SavedPromptInput = Extract<MutationInputs['command'], { type: 'save_system_prompt' }>['prompt'];
+type MutationOutputs = { [K in keyof typeof procedures]: Awaited<ReturnType<(typeof procedures)[K]>> };
+export const mutations: { [K in keyof MutationInputs]: (input: MutationInputs[K], options: { signal: AbortSignal; context: { token: string } }) => Promise<MutationOutputs[K]> } = procedures;

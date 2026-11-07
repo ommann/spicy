@@ -1,34 +1,31 @@
 import { createContext } from 'solid-js';
 import type { SystemPromptBuilder, SystemPromptDocument } from '../../packages/coding-agent/src/core/system-prompt-document';
-import type { Wire } from './types';
+import type { SavedPromptInput } from './api';
+export type PromptTool = SavedPromptInput['toolsAdded'][number];
 
 export interface PromptSource {
   id: string;
   label: string;
   document: SystemPromptDocument;
   excludedIds?: string[];
-  toolsAdded?: Wire[];
+  toolsAdded?: PromptTool[];
   diagnostic?: string;
 }
 
 export interface PromptDocumentSnapshot {
-  availableTools?: Wire[];
+  availableTools?: PromptTool[];
   toolSources?: Record<string, string>;
   document: SystemPromptDocument;
   excludedIds?: string[];
   currentBuilder?: SystemPromptBuilder;
   diagnostic?: string;
-  current: { content: string; sections: Record<string, string>; toolsAdded?: Wire[]; systemPromptKey?: string };
+  current: { content: string; sections: Record<string, string>; toolsAdded?: PromptTool[]; systemPromptKey?: string };
   sources?: PromptSource[];
   currentSourceId?: string;
 }
 
-export interface CreatedPrompt {
+export interface CreatedPrompt extends SavedPromptInput {
   id: string;
-  title: string;
-  document: SystemPromptDocument;
-  excludedIds: string[];
-  toolsAdded: Wire[];
   output: { content: string; sections?: Record<string, string> };
 }
 

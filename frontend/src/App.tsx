@@ -35,7 +35,7 @@ import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import ToolApps from './ToolApps';
-import { api, mutations } from './api';
+import { api, mutations, type MutationInputs, type UiReply } from './api';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
@@ -257,10 +257,10 @@ export default function App(props: ParentProps) {
     });
   }
 
-  async function post<K extends keyof typeof mutations>(endpoint: K, data: Wire = {}): Promise<Awaited<ReturnType<(typeof mutations)[K]>>> {
-    return await mutations[endpoint]({ ...(selectedAgentId() ? { agentId: selectedAgentId() } : {}), ...data }, {
+  async function post<K extends keyof MutationInputs>(endpoint: K, data: MutationInputs[K]) {
+    return mutations[endpoint]({ ...(selectedAgentId() ? { agentId: selectedAgentId() } : {}), ...data }, {
       signal: appLifecycle.signal, context: { token },
-    }) as Awaited<ReturnType<(typeof mutations)[K]>>;
+    });
   }
 
   function reportFailure(failure: unknown) {
@@ -269,7 +269,7 @@ export default function App(props: ParentProps) {
     setNotification({ message, isError: true });
   }
 
-  async function requestLogin(endpoint: 'auth/login' | 'auth/reply' | 'auth/cancel', data?: Record<string, unknown>) {
+  async function requestLogin<K extends 'auth/login' | 'auth/reply' | 'auth/cancel'>(endpoint: K, data: MutationInputs[K]) {
     await bridgeReady;
     return post(endpoint, data);
   }
@@ -529,7 +529,7 @@ export default function App(props: ParentProps) {
     finally { setBusy(false); }
   }
 
-  async function replyToDialog(dialog: Wire, response: Wire) {
+  async function replyToDialog(dialog: Wire, response: UiReply) {
     const { agentId, id } = dialog;
     setBusy(true);
     try {
@@ -694,7 +694,7 @@ export default function App(props: ParentProps) {
           await bridgeReady;
           if (!token) throw new Error('Could not connect to the local bridge');
           if (!snapshot().connected) {
-            if (selectedAgentId()) accept(await post('start'));
+            if (selectedAgentId()) accept(await post('start', {}));
             else await start();
           }
           const promptSnapshot = await post('command', { type: 'get_system_prompt_document' }) as PromptDocumentSnapshot;
@@ -799,7 +799,7 @@ export default function App(props: ParentProps) {
                   onClick={async () => {
                     setBusy(true);
                     try {
-                      await post("stop");
+                      await post("stop", {});
                       chatDialog.close();
                     } catch (failure) { reportFailure(failure); }
                     finally { setBusy(false); }
@@ -860,7 +860,7 @@ export default function App(props: ParentProps) {
 
 function ExtensionDialog(props: {
   dialog: Wire;
-  reply: (response: Wire) => void;
+  reply: (response: UiReply) => void;
 }) {
   const [editedValue, setValue] = createSignal<string>();
   const value = () => editedValue() ?? props.dialog.prefill ?? '';
