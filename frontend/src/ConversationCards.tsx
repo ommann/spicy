@@ -11,7 +11,7 @@ export function ConversationPrompt(value: { view: ConversationView; index: numbe
   const leaf = () => props.graph.leaves[value.index];
   return <Show when={leaf()?.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf().id).captured}>
     <article class="tree-node"
-      style={{ ...gridPlacement(layout().inset + layout().starts[value.index], spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
+      style={{ ...gridPlacement(layout().inset + layout().starts[value.index], layout().promptTop ?? spacing().row, workingWidth()), width: `${workingWidth()}px` }}>
       <Card><Show when={isUnstartedCompaction(props.graph, leaf().id)} fallback={
         <SystemPromptReference entryId={leaf().id} promptId={versionFor(leaf().id)?.full?.id || ''}
           title={versionFor(leaf().id)?.title} number={versionFor(leaf().id)?.number || 1}
@@ -47,7 +47,7 @@ export function ConversationNodes(value: { view: ConversationView }) {
     return <ConversationCard id={id} node={node()} position={layout().items.get(id)}
       gridStyle={gridPlacement(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)}
       promptNumber={versionFor(id)?.number} promptTitle={versionFor(id)?.title} scrollTop={scroll().top}
-      promptRowTop={layout().items.get(promptRoot())?.top ?? spacing().row} selection={selection()}
+      promptRowTop={layout().items.get(promptRoot())?.top ?? layout().promptTop ?? spacing().row} selection={selection()}
       registerSection={registerSection} width={workingWidth()}
       onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch}
       measure={(key, element) => observe(key, element, 'node')} unmeasure={unobserve} />;

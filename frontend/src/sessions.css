@@ -5,7 +5,14 @@
 .startup-session-scroll {
   margin-top: var(--app-toolbar-height);
   height: calc(100dvh - var(--app-toolbar-height));
-  padding-right: var(--chat-scrollbar-width);
+}
+
+.startup-session-scroll.scroll-area-vertical {
+  padding-right: 0;
+}
+
+.sessions-view .app-toolbar {
+  padding-inline: 2.5ch;
 }
 
 .startup-session-scroll > .scroll-area-viewport {
@@ -13,7 +20,7 @@
 }
 
 .startup-sessions {
-  padding: var(--chat-row-gap) var(--chat-edge-gap);
+  padding: 2.5ch;
 }
 
 .startup-empty-chat {

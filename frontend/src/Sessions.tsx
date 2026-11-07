@@ -56,7 +56,7 @@ export default function Sessions(props: {
     if (minutes < 2880) return 'yesterday';
     return `${Math.floor(minutes / 1440)} days ago`;
   }
-  return <>
+  return <div class="sessions-view">
     <Navigation />
     <ScrollArea class="startup-session-scroll" vertical>
     <main class="startup-sessions" aria-label="Sessions">
@@ -81,5 +81,5 @@ export default function Sessions(props: {
       </section>}</For>
     </main>
     </ScrollArea>
-  </>;
+  </div>;
 }

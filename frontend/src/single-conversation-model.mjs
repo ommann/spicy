@@ -27,17 +27,17 @@ export function layoutSingleConversation(graph, { width, viewportWidth, lane, he
     const system = node.entry.message?.role === 'system';
     const hasPrompt = graph.prefix.get(node.id).captured || (node.entry.type === 'compaction' && node.entry.parentId === null
       && graph.prefix.get(leaf.id).captured);
-    const top = system ? rowGap : previous ? previous.top + previous.height + rowGap
-      : rowGap + (hasPrompt ? prefixHeight + rowGap : 0);
+    const top = system ? 0 : previous ? previous.top + previous.height + rowGap
+      : hasPrompt ? prefixHeight + rowGap : 0;
     const height = conversationNodeHeight(node, heights, rowGap);
     const position = { top, height, hidden: system, column: focused, left: inset, span: width, cardLeft: 0 };
     items.set(node.id, position);
     if (!system) previous = position;
   }
-  const bottom = Math.max(rowGap + prefixHeight, previous ? previous.top + previous.height : 0);
+  const bottom = Math.max(prefixHeight, previous ? previous.top + previous.height : 0);
   const inlineComposers = graph.leaves.length === 1 && leaf.id === 'empty-chat-draft';
   const composers = graph.leaves.map((_, index) => ({ left: inset, top: bottom + rowGap, height: composerHeights[index] || 40 }));
-  return { items, composers, inlineComposers, paths: [], inset, starts: graph.leaves.map(() => 0),
+  return { items, composers, inlineComposers, paths: [], inset, promptTop: 0, starts: graph.leaves.map(() => 0),
     width: inset * 2 + width, height: inlineComposers ? composers[focused].top + composers[focused].height : bottom,
     lane: focused, hasHorizontal: width + edgeGap * 2 > viewportWidth };
 }
