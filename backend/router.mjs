@@ -8,7 +8,7 @@ import { agentEvents } from './agent-events.mjs';
 import { agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
 const fail = (message, code = 'BAD_REQUEST') => { throw new ORPCError(code, { message }); };
 
-export function createRouter({ agents, login, cwd, managed, token }) {
+export function createRouter({ agents, login, cwd, managed, token, signal: shutdownSignal }) {
   const procedure = rpc.use(async ({ next }) => {
     try { return await next(); }
     catch (error) {
@@ -138,7 +138,11 @@ export function createRouter({ agents, login, cwd, managed, token }) {
     events: procedure.input(eventsInput).handler(async function* ({ input, signal }) {
       const ids = [...new Set(input.agentIds)];
       if (ids.some(id => !agents.agents.has(id))) { yield { type: 'reset' }; return; }
-      yield* agentEvents(ids.map(id => agents.get(id)), signal);
+      const lifetime = shutdownSignal ? AbortSignal.any([shutdownSignal, ...(signal ? [signal] : [])]) : signal;
+      try { yield* agentEvents(ids.map(id => agents.get(id)), lifetime); }
+      catch (error) {
+        if (!shutdownSignal?.aborted || error !== shutdownSignal.reason) throw error;
+      }
     }),
     auth: {
       providers: procedure.input(emptyInput).handler(() => login.providers()),

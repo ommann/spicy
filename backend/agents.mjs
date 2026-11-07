@@ -296,10 +296,6 @@ export class AgentRegistry {
   }
 
   async shutdown() {
-    for (const agent of this.agents.values()) {
-      for (const client of agent.clients) client.end();
-      agent.clients.clear();
-    }
     await Promise.all([...this.agents.values()].map(agent => agent.rpc.stop()));
   }
 }

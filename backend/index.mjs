@@ -25,10 +25,12 @@ const agents = new AgentRegistry({
   fixture: process.env.PI_RPC_FIXTURE && path.resolve(process.env.PI_RPC_FIXTURE),
 });
 const app = new Hono();
-const handler = new RPCHandler(createRouter({ agents, login, cwd, managed, token }), {
+const lifetime = new AbortController();
+const handler = new RPCHandler(createRouter({ agents, login, cwd, managed, token, signal: lifetime.signal }), {
   plugins: [new BodyLimitPlugin({ maxBodySize: 32 * 1024 * 1024 })],
 });
 app.use('/rpc/*', async (c, next) => {
+  if (lifetime.signal.aborted) return c.json({ error: 'Server is shutting down' }, 503);
   // Loopback-only capability bridge: reject DNS rebinding and cross-origin calls.
   const host = c.req.header('host');
   if (host !== `localhost:${port}` && host !== `127.0.0.1:${port}`) return c.json({ error: 'Invalid host' }, 403);
@@ -51,5 +53,18 @@ const server = http.createServer((req, res) => {
 });
 const vite = await createServer({ root, server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
 server.listen(port, '127.0.0.1', () => console.log(`Spicy: http://localhost:${port}\nWorking directory: ${cwd}\nAgent starts only when requested in the UI.`));
-async function shutdown() { await login.cancel(); await agents.shutdown(); await vite.close(); server.close(); }
+let shutdownTask;
+function shutdown() {
+  return shutdownTask ??= (async () => {
+    lifetime.abort();
+    const closed = new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    const results = await Promise.allSettled([login.cancel(), agents.shutdown(), vite.close(), closed]);
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('Spicy shutdown failed:', result.reason);
+        process.exitCode = 1;
+      }
+    }
+  })();
+}
 process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);
