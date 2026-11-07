@@ -11,28 +11,26 @@ import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-te
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Agent } from "@earendil-works/pi-agent-core";
-import type {
-	AssistantMessage,
-	AssistantMessageEvent,
-	AssistantMessageEventStream,
-	JsonObject,
-	Model,
-	SimpleStreamOptions,
-	StopReason,
-	TextContent,
-	ThinkingContent,
-	ToolCall,
-	TranscriptContext,
-	Usage,
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
+import {
+	type AssistantMessage,
+	type AssistantMessageEvent,
+	type AssistantMessageEventStream,
+	createAssistantMessageEventStream,
+	type JsonObject,
+	type Model,
+	type SimpleStreamOptions,
+	type StopReason,
+	type TextContent,
+	type ThinkingContent,
+	type ToolCall,
+	type TranscriptContext,
+	type Usage,
 } from "@earendil-works/pi-ai";
-import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
-import type { Settings } from "../src/core/settings-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import { type Settings, SettingsManager } from "../src/core/settings-manager.ts";
 import type { InlineExtension, ResourceLoader } from "../src/index.ts";
 import {
 	type CreateTestExtensionsResultInput,

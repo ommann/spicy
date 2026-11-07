@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { FileEntry, SessionEntry, SessionMessageEntry } from "../../src/core/session-manager.ts";
-import { SessionManager } from "../../src/core/session-manager.ts";
+import { type FileEntry, type SessionEntry, SessionManager, type SessionMessageEntry } from "../../src/core/session-manager.ts";
 
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 

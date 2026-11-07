@@ -13,8 +13,7 @@ import { createToolNameMatcher } from "./mcp-servers.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
-import type { ResourceLoader } from "./resource-loader.ts";
-import { DefaultResourceLoader } from "./resource-loader.ts";
+import { DefaultResourceLoader, type ResourceLoader } from "./resource-loader.ts";
 import { getDefaultSessionDir, SessionManager } from "./session-manager.ts";
 import {
 	applyToolModifiers,

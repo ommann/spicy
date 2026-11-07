@@ -1,7 +1,6 @@
 import { crc32, deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import type { ToolResultContent } from "../src/utils/tool-result-images.ts";
-import { normalizeToolResultImages } from "../src/utils/tool-result-images.ts";
+import { normalizeToolResultImages, type ToolResultContent } from "../src/utils/tool-result-images.ts";
 
 const TINY_PNG_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";

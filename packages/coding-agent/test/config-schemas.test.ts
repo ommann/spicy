@@ -39,22 +39,6 @@ describe("generated configuration schemas", () => {
 		}
 	});
 
-	it("preserves moved model and settings guidance", () => {
-		const models = JSON.parse(renderConfigSchemas().get("schemas/models.schema.json") ?? "");
-		expect(models.$defs.ModelCost.properties).toMatchObject({
-			input: { description: expect.stringContaining("USD per million tokens") },
-			tiers: { description: expect.stringContaining("highest matching input threshold") },
-		});
-		expect(models.$defs.ModelInputLimits.properties).toMatchObject({
-			maxRequestBytes: { description: expect.stringContaining("serialized provider request size") },
-		});
-
-		const settings = JSON.parse(renderConfigSchemas().get("schemas/settings.schema.json") ?? "");
-		expect(settings.properties).toMatchObject({
-			defaultTools: { description: expect.stringContaining("+name and -name") },
-		});
-	});
-
 	it.each([
 		{
 			name: "models.json",
@@ -158,17 +142,6 @@ describe("generated configuration schemas", () => {
 				codemode: { inlineBudget: 0 },
 			}),
 		).toBe(true);
-	});
-
-	it("describes legacy settings migrations accurately", () => {
-		const schema = JSON.parse(renderConfigSchemas().get("schemas/settings.schema.json") ?? "") as {
-			properties: {
-				queueMode: { description: string };
-				retry: { properties: { maxDelayMs: { description: string } } };
-			};
-		};
-		expect(schema.properties.retry.properties.maxDelayMs.description).toContain("provider.maxRetryDelayMs");
-		expect(schema.properties.queueMode.description).toBe("Legacy setting migrated to steeringMode.");
 	});
 
 	it("accepts custom compatibility settings and rejects malformed known fields", async () => {

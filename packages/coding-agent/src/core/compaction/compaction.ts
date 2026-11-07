@@ -19,15 +19,15 @@ import {
 	retryAssistantCall,
 	uuidv7,
 } from "@earendil-works/pi-ai";
-import type {
-	AssistantMessage,
-	Model,
-	SimpleStreamOptions,
-	SystemMessage,
-	TranscriptContext,
-	Usage,
+import {
+	type AssistantMessage,
+	type Model,
+	type SimpleStreamOptions,
+	type SystemMessage,
+	type TranscriptContext,
+	type Usage,
+	completeSimple,
 } from "@earendil-works/pi-ai/compat";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { convertToLlm } from "../messages.ts";
 import {
 	buildSessionProjection,

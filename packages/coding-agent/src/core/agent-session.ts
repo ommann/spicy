@@ -41,18 +41,16 @@ import {
 	retryDelayMs,
 	toToolDeclaration,
 } from "@earendil-works/pi-ai";
-import type {
-	AssistantMessage,
-	AuthResult,
-	ImageContent,
-	Model,
-	ProviderHeaders,
-	SystemMessage,
-	TextContent,
-	ToolResultMessage,
-	Usage,
-} from "@earendil-works/pi-ai/compat";
 import {
+	type AssistantMessage,
+	type AuthResult,
+	type ImageContent,
+	type Model,
+	type ProviderHeaders,
+	type SystemMessage,
+	type TextContent,
+	type ToolResultMessage,
+	type Usage,
 	clampThinkingLevel,
 	cleanupSessionResources,
 	getSupportedThinkingLevels,

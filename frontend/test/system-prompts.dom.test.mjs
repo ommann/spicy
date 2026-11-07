@@ -1,6 +1,8 @@
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
+import { os, ORPCError } from '@orpc/server';
+import { createRpcFixture } from './rpc-fixture.mjs';
 import { build } from 'vite';
 import solid from 'vite-plugin-solid';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +31,7 @@ const bundle = await build({
 const code = (Array.isArray(bundle) ? bundle[0] : bundle).output.find(output => output.type === 'chunk').code;
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'http://localhost:5173/', pretendToBeVisual: true });
 const { window } = dom;
-for (const name of ['window', 'document', 'HTMLElement', 'HTMLTextAreaElement', 'HTMLDialogElement', 'HTMLHeadElement', 'Element', 'Node', 'NodeFilter', 'Event', 'KeyboardEvent', 'CustomEvent', 'AbortController', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame']) {
+for (const name of ['window', 'document', 'HTMLElement', 'HTMLTextAreaElement', 'HTMLDialogElement', 'HTMLHeadElement', 'Element', 'Node', 'NodeFilter', 'Event', 'KeyboardEvent', 'CustomEvent', 'MutationObserver', 'requestAnimationFrame', 'cancelAnimationFrame']) {
   globalThis[name] = name === 'window' ? window : window[name];
 }
 globalThis.location = window.location;
@@ -45,7 +47,14 @@ window.HTMLDialogElement.prototype.close = function () {
   this.open = false;
   this.dispatchEvent(new window.Event('close'));
 };
+let rpc;
+// RPCLink captures fetch at construction; keep one function and replace only the test server.
+globalThis.fetch = request => {
+  assert.ok(rpc, `Unexpected request outside an RPC fixture: ${request.url}`);
+  return rpc.fetch(request);
+};
 const components = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+afterEach(async () => { rpc?.close(); await flush(); rpc = undefined; });
 const root = window.document.getElementById('root');
 const flush = async () => {
   await Promise.resolve();
@@ -191,21 +200,17 @@ test('creator selects parts and saves a named prompt without sending a chat mess
 });
 
 test('in-app login shows OAuth navigation, retains typed redirects while polling, and cancels on close', async () => {
-  const previousFetch = globalThis.fetch;
-  const requests = [];
   let state = { status: 'idle', events: [] };
-  globalThis.fetch = async url => new Response(JSON.stringify(String(url).endsWith('/providers')
-    ? [{ id: 'example', name: 'Example', methods: [{ type: 'oauth', name: 'Example OAuth' }] }]
-    : state), { status: 200 });
-  const dispose = components.mountLogin(root, async (endpoint, data) => {
-    requests.push({ endpoint, data });
-    if (endpoint === 'auth/login') state = { id: 'login1', status: 'pending',
+  rpc = createRpcFixture({ auth: {
+    providers: os.handler(() => [{ id: 'example', name: 'Example', methods: [{ type: 'oauth', name: 'Example OAuth' }] }]),
+    state: os.handler(() => state),
+    login: os.handler(() => state = { id: 'login1', status: 'pending',
       events: [{ type: 'auth_url', url: 'https://example.com/oauth' }],
-      prompt: { id: 'prompt1', type: 'manual_code', message: 'Paste redirect URL' } };
-    if (endpoint === 'auth/reply') state = { id: 'login1', status: 'success', events: [] };
-    if (endpoint === 'auth/cancel') state = { id: 'login1', status: 'cancelled', events: [] };
-    return state;
-  });
+      prompt: { id: 'prompt1', type: 'manual_code', message: 'Paste redirect URL' } }),
+    reply: os.handler(() => state = { id: 'login1', status: 'success', events: [] }),
+    cancel: os.handler(() => state = { id: 'login1', status: 'cancelled', events: [] }),
+  } });
+  const dispose = components.mountLogin(root);
   try {
     button(root, 'Login').click();
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -224,17 +229,15 @@ test('in-app login shows OAuth navigation, retains typed redirects while polling
     assert.equal(document.activeElement, input);
     root.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await flush();
-    assert.equal(requests[1].data.value, 'redirect-code');
+    assert.equal(rpc.requests.find(request => request.path === 'auth/reply').input.value, 'redirect-code');
     assert.match(root.textContent, /Logged in\./);
     button(root, 'Example OAuth').click();
     await flush();
     root.querySelector('dialog').close();
-    assert.equal(requests.at(-1).endpoint, 'auth/cancel');
+    await flush();
+    assert.equal(rpc.requests.at(-1).path, 'auth/cancel');
     assert.equal(root.querySelector('input'), null);
-  } finally {
-    dispose();
-    globalThis.fetch = previousFetch;
-  }
+  } finally { dispose(); }
 });
 
 test('shared Input forwards native attributes, refs and events and updates without replacing the element', async () => {
@@ -413,7 +416,6 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
 
 test('saving adds a persistent prompt to the viewer and leaves chat requests and entries alone', async () => {
   globalThis.localStorage = window.localStorage;
-  const requests = [];
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
   const snapshot = { agentId: 'default', entries, leafId: 'user2', state: { sessionId: 'creator-test' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test', token: 'test' };
   const before = JSON.stringify(snapshot.entries);
@@ -422,20 +424,21 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
     { id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Original instructions' },
     { id: 'tools', section: 'tools', label: 'Tool rules', source: 'core', text: 'Optional tool rules' },
   ] };
-  globalThis.fetch = async (url, options) => {
-    const body = options?.body && JSON.parse(options.body);
-    requests.push({ url, body });
-    if (body?.type === 'save_system_prompt') {
-      const prompt = { ...body.prompt, id: 'saved-prompt', output: renderSystemPromptDocument(body.prompt.document, body.prompt.excludedIds) };
+  rpc = createRpcFixture({
+    info: os.handler(() => snapshot),
+    agents: { list: os.handler(() => [snapshot]) },
+    command: os.handler(({ input }) => {
+      if (input.type === 'get_system_prompt_document') return {
+        document: promptDocument,
+        current: { content: 'Original instructions', sections: {}, toolsAdded: [] },
+      };
+      assert.equal(input.type, 'save_system_prompt');
+      const prompt = { ...input.prompt, id: 'saved-prompt', output: renderSystemPromptDocument(input.prompt.document, input.prompt.excludedIds) };
       snapshot.entries = [...snapshot.entries, { id: prompt.id, type: 'custom', customType: SAVED_SYSTEM_PROMPT_ENTRY, parentId: snapshot.leafId, data: prompt }];
-      return { ok: true, json: async () => prompt };
-    }
-    return { ok: true, json: async () => url.startsWith('/api/info') ? snapshot : url === '/api/agents' ? [snapshot] : {
-      document: promptDocument,
-      current: { content: 'Original instructions', sections: {}, toolsAdded: [] },
-    } };
-  };
-  globalThis.EventSource = class { addEventListener() {} close() {} };
+      return prompt;
+    }),
+  });
+  const requests = rpc.requests;
   let dispose = components.mountApp(root, '/system-prompt-creator');
   try {
     for (let i = 0; i < 6; i++) await flush();
@@ -458,8 +461,8 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
     assert.deepEqual(saved.data.excludedIds, ['tools']);
     assert.doesNotMatch(saved.data.output.content, /Optional tool rules/);
     assert.equal(JSON.stringify(snapshot.entries.filter(entry => entry !== saved)), before, 'Existing chat entries remain untouched');
-    assert.deepEqual([...new Set(requests.filter(item => item.body).map(item => item.body.type))], ['get_system_prompt_document', 'save_system_prompt']);
-    assert.equal(requests.filter(item => item.body?.type === 'save_system_prompt').length, 1);
+    assert.deepEqual([...new Set(requests.filter(item => item.path === 'command').map(item => item.input.type))], ['get_system_prompt_document', 'save_system_prompt']);
+    assert.equal(requests.filter(item => item.input?.type === 'save_system_prompt').length, 1);
     assert.equal(JSON.stringify(localStorage), storageBefore, 'Saving does not use local storage');
     dispose();
     dispose = components.mountApp(root, '/system-prompts');
@@ -471,7 +474,6 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
 
 test('chat references open the Solid view without creating a model request or modifying session entries', async () => {
   const before = JSON.stringify(entries);
-  const requests = [];
   const imageSource = 'data:image/png;base64,aGVsbG8=';
   const imageEntries = entries.map(entry => entry.id === delta.id
     ? { ...entry, message: { ...entry.message, toolsAdded: [{ name: 'read', description: 'Read files' }] } }
@@ -484,20 +486,11 @@ test('chat references open the Solid view without creating a model request or mo
     message: { role: 'user', content: 'Other branch', timestamp: 0 },
   }], leafId: 'user2', state: { sessionId: 'test', sessionUrlId: 'k7m3xqa9' }, live: [], dialogs: [],
     connected: true, running: false, cwd: '/test/project', token: 'test' };
-  globalThis.fetch = async (url, options) => {
-    requests.push({ url, options });
-    return { ok: true, json: async () => url.startsWith('/api/info') ? snapshot : url === '/api/agents' ? [snapshot] : [] };
-  };
-  let eventSource;
-  globalThis.EventSource = class {
-    listeners = new Map();
-    // Expose the fake transport so the test can emit server events.
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    constructor() { eventSource = this; }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
-    emit(type, data) { this.listeners.get('agent')?.({ data: JSON.stringify({ agentId: snapshot.agentId, event: type, data }) }); }
-    close() {}
-  };
+  rpc = createRpcFixture({
+    info: os.handler(() => snapshot),
+    agents: { list: os.handler(() => [snapshot]) },
+  });
+  const requests = rpc.requests;
   const dispose = components.mountApp(root);
   try {
     await flush();
@@ -548,10 +541,12 @@ test('chat references open the Solid view without creating a model request or mo
     input.value = 'Keep this draft';
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
     assert.equal(input.value, 'Keep this draft');
-    eventSource.emit('record', { type: 'agent_start' });
-    eventSource.emit('record', { type: 'agent_settled' });
+    rpc.streams.get('default').emit('record', { type: 'agent_start' });
+    rpc.streams.get('default').emit('record', { type: 'agent_settled' });
+    await flush();
     assert.equal(root.querySelector('.editor textarea'), input, 'Run status does not rebuild the conversation');
-    eventSource.emit('record', { type: 'extension_ui_request', method: 'set_editor_text', text: 'Keep this draft' });
+    rpc.streams.get('default').emit('record', { type: 'extension_ui_request', method: 'set_editor_text', text: 'Keep this draft' });
+    await flush();
     assert.equal(input.value, 'Keep this draft');
     root.querySelector('[data-system-prompt="2"]').click();
     await flush();
@@ -572,31 +567,31 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(root.querySelector('.system-prompts-view'), null);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft');
     assert.equal(JSON.stringify(entries), before);
-    assert.ok(requests.every(request => !request.options?.method || request.options.method === 'GET'));
+    assert.ok(requests.every(request => ['info', 'agents/list', 'events'].includes(request.path)), 'Viewing prompts does not mutate the session');
   } finally { dispose(); }
 });
 
 test('session URLs override tab selection, preserve deep links and restore on browser navigation', async () => {
-  const requests = [];
   const makeSnapshot = urlId => ({ agentId: urlId, entries, leafId: 'user2',
     state: { sessionId: `uuid-${urlId}`, sessionUrlId: urlId }, live: [], dialogs: [],
     connected: true, running: false, cwd: '/test/project', token: 'test' });
   const stale = makeSnapshot('stale');
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['stale'], selected: 'stale' }));
-  globalThis.fetch = async (url, options) => {
-    const body = options?.body && JSON.parse(options.body);
-    requests.push({ url, body });
-    return { ok: true, json: async () => body?.sessionUrlId ? makeSnapshot(body.sessionUrlId)
-      : url === '/api/agents' ? [stale] : stale };
-  };
-  globalThis.EventSource = class { addEventListener() {} close() {} };
+  rpc = createRpcFixture({
+    info: os.handler(() => stale),
+    agents: {
+      list: os.handler(() => [stale]),
+      create: os.handler(({ input }) => makeSnapshot(input.sessionUrlId)),
+    },
+  });
+  const requests = rpc.requests;
   const dispose = components.mountApp(root, '/k7m3xqa9/system-prompts/system2');
   try {
     for (let i = 0; i < 8; i++) await flush();
     assert.equal(dispose.history.get(), '/k7m3xqa9/system-prompts/system2');
     assert.ok(root.querySelector('.system-prompts-view'));
-    assert.deepEqual(requests.filter(item => item.body).map(item => item.body.sessionUrlId), ['k7m3xqa9']);
-    assert.ok(!requests.some(item => item.url.includes('agentId=stale')));
+    assert.deepEqual(requests.filter(item => item.path === 'agents/create').map(item => item.input.sessionUrlId), ['k7m3xqa9']);
+    assert.ok(!requests.some(item => item.path === 'info' && item.input.agentId === 'stale'));
     button(root, 'Chat').click();
     await flush();
     assert.equal(dispose.history.get(), '/k7m3xqa9');
@@ -606,27 +601,28 @@ test('session URLs override tab selection, preserve deep links and restore on br
     dispose.history.back();
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(dispose.history.get(), '/k7m3xqa9');
-    assert.deepEqual(requests.filter(item => item.body).map(item => item.body.sessionUrlId), ['k7m3xqa9', 'v8n4zrc2', 'k7m3xqa9']);
-    assert.ok(requests.filter(item => item.body).every(item => item.url === '/api/agents'));
+    assert.deepEqual(requests.filter(item => item.path === 'agents/create').map(item => item.input.sessionUrlId), ['k7m3xqa9', 'v8n4zrc2', 'k7m3xqa9']);
+    assert.ok(requests.every(item => ['info', 'agents/list', 'agents/create', 'events'].includes(item.path)));
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
 test('default Sessions view groups and filters real sessions and opens without branching', async () => {
   window.sessionStorage.removeItem('pi-agent-view');
-  const requests = [];
   const empty = { entries: [], leafId: null, state: null, live: [], dialogs: [], connected: false, running: false, cwd: '/work/spicy', token: 'test' };
   const saved = [
     { id: 'first-file', urlId: 'k7m3xqa9', cwd: '/work/spicy', name: 'Prompt history', modified: Date.now() },
     { id: 'second-file', cwd: '/work/spicy', name: 'Branch tests', modified: Date.now() },
     { id: 'third-file', cwd: '/work/extensions', name: 'Prompt loading', modified: Date.now() },
   ];
-  globalThis.fetch = async (url, options) => {
-    const body = options?.body && JSON.parse(options.body);
-    requests.push({ url, body });
-    return { ok: true, json: async () => body?.openSessionId ? { ...empty, agentId: 'opened', connected: true, entries, leafId: 'user2', state: { sessionId: 'uuid', sessionUrlId: 'k7m3xqa9' } }
-      : url.startsWith('/api/sessions') ? saved : url === '/api/agents' ? [] : empty };
-  };
-  globalThis.EventSource = class { addEventListener() {} close() {} };
+  rpc = createRpcFixture({
+    info: os.handler(() => empty),
+    sessions: os.handler(() => saved),
+    agents: {
+      list: os.handler(() => []),
+      create: os.handler(() => ({ ...empty, agentId: 'opened', connected: true, entries, leafId: 'user2', state: { sessionId: 'uuid', sessionUrlId: 'k7m3xqa9' } })),
+    },
+  });
+  const requests = rpc.requests;
   const dispose = components.mountApp(root, '/');
   try {
     for (let i = 0; i < 8; i++) await flush();
@@ -635,7 +631,7 @@ test('default Sessions view groups and filters real sessions and opens without b
     assert.equal(root.querySelectorAll('.startup-session').length, 3);
     assert.equal(root.querySelectorAll('.startup-empty-chat .branch-draft').length, 2);
     assert.ok(root.querySelector('.startup-empty-chat .editor textarea'));
-    assert.equal(requests.filter(request => request.body).length, 0, 'Listing does not start agents or send prompts');
+    assert.ok(requests.every(request => ['info', 'agents/list', 'sessions', 'events'].includes(request.path)), 'Listing does not start agents or send prompts');
     const path = root.querySelector('[aria-label="Search project paths"]');
     path.value = 'spicy';
     path.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -649,32 +645,38 @@ test('default Sessions view groups and filters real sessions and opens without b
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(dispose.history.get(), '/k7m3xqa9');
     assert.ok(root.querySelector('.spicy-host'));
-    assert.deepEqual(requests.filter(request => request.body).map(request => request.body), [{ openSessionId: 'first-file' }]);
+    assert.deepEqual(requests.filter(request => request.path === 'agents/create').map(request => request.input), [{ openSessionId: 'first-file' }]);
+    assert.ok(!requests.some(request => request.path === 'command' || request.path === 'start'));
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
 test('Sessions composer keeps failed drafts, opens focused chat on success and opens the prompt editor', async () => {
   window.sessionStorage.removeItem('pi-agent-view');
-  const requests = [];
   let fail = true;
   let created = 0;
   const empty = { entries: [], leafId: null, state: null, live: [], dialogs: [], connected: false, running: false, cwd: '/work/spicy', token: 'test' };
-  globalThis.fetch = async (url, options) => {
-    const body = options?.body && JSON.parse(options.body);
-    requests.push({ url, body });
-    if (body?.type === 'prompt') return { ok: !fail, json: async () => fail ? { error: 'Send failed' } : { disposition: 'started' } };
-    if (body?.type === 'get_system_prompt_document') return { ok: true, json: async () => ({
-      document: { version: 1, parts: [{ id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Instructions' }] },
-      current: { content: 'Instructions', sections: {}, toolsAdded: [] },
-    }) };
-    if (url === '/api/agents' && body) {
-      created++;
-      return { ok: true, json: async () => ({ ...empty, agentId: `new-${created}`, connected: true,
-        state: { sessionId: `uuid-${created}`, sessionUrlId: created === 1 ? 'k7m3xqa9' : 'v8n4zrc2' } }) };
-    }
-    return { ok: true, json: async () => url.startsWith('/api/sessions') || url === '/api/agents' ? [] : empty };
-  };
-  globalThis.EventSource = class { addEventListener() {} close() {} };
+  rpc = createRpcFixture({
+    info: os.handler(() => empty),
+    sessions: os.handler(() => []),
+    agents: {
+      list: os.handler(() => []),
+      create: os.handler(() => {
+        created++;
+        return { ...empty, agentId: `new-${created}`, connected: true,
+          state: { sessionId: `uuid-${created}`, sessionUrlId: created === 1 ? 'k7m3xqa9' : 'v8n4zrc2' } };
+      }),
+    },
+    command: os.handler(({ input }) => {
+      if (input.type === 'get_system_prompt_document') return {
+        document: { version: 1, parts: [{ id: 'preamble', section: 'preamble', label: 'Instructions', source: 'core', text: 'Instructions' }] },
+        current: { content: 'Instructions', sections: {}, toolsAdded: [] },
+      };
+      assert.equal(input.type, 'prompt');
+      if (fail) throw new ORPCError('BAD_REQUEST', { message: 'Send failed' });
+      return { disposition: 'started' };
+    }),
+  });
+  const requests = rpc.requests;
   const dispose = components.mountApp(root, '/');
   try {
     for (let i = 0; i < 6; i++) await flush();
@@ -703,7 +705,7 @@ test('Sessions composer keeps failed drafts, opens focused chat on success and o
     for (let i = 0; i < 8; i++) await flush();
     assert.equal(dispose.history.get(), '/v8n4zrc2/system-prompt-creator');
     assert.ok(root.querySelector('.system-prompt-creator'));
-    assert.equal(requests.filter(request => request.body?.type === 'prompt').length, 2);
+    assert.equal(requests.filter(request => request.input?.type === 'prompt').length, 2);
     button(root, 'Sessions').click();
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(root.querySelector('.startup-empty-chat textarea').value, 'Keep while editing');
@@ -720,35 +722,24 @@ test('side-by-side chats send and stop independently while both agents stream', 
   const snapshots = { left: makeAgent('left'), right: makeAgent('right') };
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
   const requests = [];
-  globalThis.fetch = async (url, options) => {
-    const body = options?.body && JSON.parse(options.body);
-    if (body) requests.push(body);
-    if (url === '/api/agents' && body) {
-      const source = snapshots[body.sourceAgentId];
-      const index = source.entries.findIndex(entry => entry.id === body.entryId);
-      snapshots.fork = { ...makeAgent('fork'), entries: source.entries.slice(0, index), leafId: source.entries[index].parentId };
-      return { ok: true, json: async () => snapshots.fork };
-    }
-    const value = url === '/api/agents' ? Object.values(snapshots)
-      : url.startsWith('/api/info') ? { ...snapshots[new URL(url, window.location.href).searchParams.get('agentId') || 'left'], token: 'test' }
-      : body?.type === 'clear_queue' ? { steering: [], followUp: [] } : { disposition: 'started' };
-    return { ok: true, json: async () => value };
-  };
-  const streams = new Map();
-  globalThis.EventSource = class {
-    listeners = new Map();
-    constructor(url) {
-      const source = this;
-      for (const id of new URL(url, window.location.href).searchParams.get('agentIds').split(',')) {
-        streams.set(id, {
-          emit(type, data) { source.listeners.get('agent')?.({ data: JSON.stringify({ agentId: id, event: type, data }) }); },
-          get closed() { return source.closed; },
-        });
-      }
-    }
-    addEventListener(type, listener) { this.listeners.set(type, listener); }
-    close() { this.closed = true; }
-  };
+  rpc = createRpcFixture({
+    info: os.handler(({ input }) => ({ ...snapshots[input.agentId || 'left'], token: 'test' })),
+    agents: {
+      list: os.handler(() => Object.values(snapshots)),
+      create: os.handler(({ input }) => {
+        requests.push(input);
+        const source = snapshots[input.sourceAgentId];
+        const index = source.entries.findIndex(entry => entry.id === input.entryId);
+        snapshots.fork = { ...makeAgent('fork'), entries: source.entries.slice(0, index), leafId: source.entries[index].parentId };
+        return snapshots.fork;
+      }),
+    },
+    command: os.handler(({ input }) => {
+      requests.push(input);
+      return input.type === 'clear_queue' ? { steering: [], followUp: [] } : { disposition: 'started' };
+    }),
+  });
+  const streams = rpc.streams;
   const dispose = components.mountApp(root);
   try {
     for (let i = 0; i < 8; i++) await flush();
@@ -771,6 +762,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
     send('right', 'Continue right');
     await flush();
     streams.get('right').emit('record', { type: 'agent_start' });
+    await flush();
     assert.deepEqual(requests.filter(request => request.type === 'prompt').map(request => [request.agentId, request.message]),
       [['left', 'Continue left'], ['right', 'Continue right']]);
     for (const id of ['left', 'right']) {
@@ -837,6 +829,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
     const streaming = [...root.querySelectorAll('[aria-label="Options"] label')].find(label => label.textContent.includes('Show streaming content'))?.querySelector('input');
     if (streaming?.checked) streaming.click();
     dispose();
+    await flush();
     assert.ok([...streams.values()].every(stream => stream.closed));
     assert.equal(requests.filter(request => request.type === 'stop').length, 0);
     window.sessionStorage.removeItem('pi-agent-view');

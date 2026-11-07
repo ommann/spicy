@@ -2,7 +2,6 @@
 const colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
 const palette = [...colors, ...colors.map(color => `bright-${color}`)].map(color => `var(--ansi-${color})`);
 // Terminal controls are the input this tokenizer is specifically designed to parse.
-// eslint-disable-next-line no-control-regex
 const control = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][\s\S]*?(?:\x07|\x1b\\)|\x1b[()][0-2A-Z]|\x1b[@-_]/g;
 
 function indexed(n) {

@@ -32,8 +32,8 @@ export function mountCreator(root: HTMLElement, snapshot: PromptDocumentSnapshot
   </MemoryRouter>, root);
 }
 
-export function mountLogin(root: HTMLElement, request: Parameters<typeof Login>[0]['request']) {
-  return render(() => <Login request={request} />, root);
+export function mountLogin(root: HTMLElement) {
+  return render(() => <Login ready={Promise.resolve()} options={{ context: { token: 'test' } }} />, root);
 }
 
 export function mountInput(root: HTMLElement, props: JSX.InputHTMLAttributes<HTMLInputElement>) {

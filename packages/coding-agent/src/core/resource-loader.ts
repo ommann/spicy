@@ -24,11 +24,9 @@ import type {
 } from "./extensions/types.ts";
 import { findGitPaths } from "../utils/git-paths.ts";
 import { DefaultPackageManager, type PathMetadata, type ResolvedResource } from "./package-manager.ts";
-import type { PromptTemplate } from "./prompt-templates.ts";
-import { loadPromptTemplates } from "./prompt-templates.ts";
+import { loadPromptTemplates, type PromptTemplate } from "./prompt-templates.ts";
 import { SettingsManager } from "./settings-manager.ts";
-import type { Skill } from "./skills.ts";
-import { loadSkills } from "./skills.ts";
+import { loadSkills, type Skill } from "./skills.ts";
 import {
 	BUILTIN_PATH_PREFIX,
 	createSourceInfo,

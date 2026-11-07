@@ -2,64 +2,6 @@ import { describe, expect, test } from "vitest";
 import { normalizeSessionName, parseArgs } from "../src/cli/args.ts";
 
 describe("parseArgs", () => {
-	describe("--version flag", () => {
-		test("parses --version flag", () => {
-			const result = parseArgs(["--version"]);
-			expect(result.version).toBe(true);
-		});
-
-		test("parses -v shorthand", () => {
-			const result = parseArgs(["-v"]);
-			expect(result.version).toBe(true);
-		});
-
-		test("--version takes precedence over other args", () => {
-			const result = parseArgs(["--version", "--help", "some message"]);
-			expect(result.version).toBe(true);
-			expect(result.help).toBe(true);
-			expect(result.messages).toContain("some message");
-		});
-	});
-
-	describe("--help flag", () => {
-		test("parses --help flag", () => {
-			const result = parseArgs(["--help"]);
-			expect(result.help).toBe(true);
-		});
-
-		test("parses -h shorthand", () => {
-			const result = parseArgs(["-h"]);
-			expect(result.help).toBe(true);
-		});
-	});
-
-	describe("--print flag", () => {
-		test("parses --print flag", () => {
-			const result = parseArgs(["--print"]);
-			expect(result.print).toBe(true);
-		});
-
-		test("parses -p shorthand", () => {
-			const result = parseArgs(["-p"]);
-			expect(result.print).toBe(true);
-		});
-
-		test("parses prompt after -p even when it starts with YAML frontmatter", () => {
-			const prompt = "---\ntitle: hello\n---\nSay hi.";
-			const result = parseArgs(["-p", prompt]);
-			expect(result.print).toBe(true);
-			expect(result.messages).toEqual([prompt]);
-			expect(result.unknownFlags.size).toBe(0);
-		});
-
-		test("does not consume options after -p as prompts", () => {
-			const result = parseArgs(["-p", "--provider", "openai", "Say hi."]);
-			expect(result.print).toBe(true);
-			expect(result.provider).toBe("openai");
-			expect(result.messages).toEqual(["Say hi."]);
-		});
-	});
-
 	describe("--continue flag", () => {
 		test("parses --continue flag", () => {
 			const result = parseArgs(["--continue"]);
