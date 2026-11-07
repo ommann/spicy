@@ -91,11 +91,13 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
     assert.deepEqual((await reset.next()).value, { type: 'reset' });
     assert.equal((await reset.next()).done, true);
     const controllers = [];
+    const iterators = [];
     const streams = [];
     const subscribe = async agentIds => {
       const controller = new AbortController();
       controllers.push(controller);
       const iterator = await api.events({ agentIds }, { signal: controller.signal });
+      iterators.push(iterator);
       const initial = await iterator.next();
       assert.equal(initial.value.agentId, agentIds[0]);
       assert.equal(initial.value.event, 'snapshot');
@@ -173,6 +175,7 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
       await assert.rejects(api.command({ agentId: 'missing-agent', type: 'abort' }), error => error.code === 'BAD_REQUEST');
     } finally {
       for (const controller of controllers) controller.abort();
+      await Promise.all(iterators.map(iterator => iterator.return()));
       await Promise.all(streams);
     }
     assert.equal((await api.info({ agentId: right.agentId })).connected, true);
