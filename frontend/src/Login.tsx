@@ -3,6 +3,7 @@ import Dialog from './Dialog';
 import Input from './Input';
 import ScrollArea from './ScrollArea';
 import './login.css';
+import { api } from './api';
 
 type Provider = { id: string; name: string; configured: boolean; methods: { type: string; name: string }[] };
 type LoginEvent = {
@@ -16,7 +17,7 @@ type LoginEvent = {
 };
 type Prompt = { id: string; type: string; message: string; placeholder?: string; options?: { id: string; label: string }[] };
 type LoginState = { id?: string; status: string; events: LoginEvent[]; prompt?: Prompt; error?: string };
-type Props = { request: (endpoint: string, data?: Record<string, unknown>) => Promise<unknown> };
+type Props = { request: (endpoint: 'auth/login' | 'auth/reply' | 'auth/cancel', data?: Record<string, unknown>) => Promise<unknown> };
 
 export default function Login(props: Props) {
   let dialog!: HTMLDialogElement;
@@ -31,19 +32,12 @@ export default function Login(props: Props) {
   const promptId = createMemo(() => state().prompt?.id);
   createEffect(on(promptId, () => setAnswer('')));
 
-  async function get(endpoint: string) {
-    const response = await fetch(`/api/auth/${endpoint}`, { signal: controller.signal });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || response.statusText);
-    return data;
-  }
-
   function poll() {
     clearTimeout(timer);
     if (state().status !== 'pending' || !dialog.open) return;
     timer = setTimeout(async () => {
       try {
-        setState(await get('state'));
+        setState(await api.auth.state({}, { signal: controller.signal }));
         poll();
       } catch (cause) {
         if (!controller.signal.aborted) setError(String(cause));
@@ -57,8 +51,8 @@ export default function Login(props: Props) {
     setError('');
     setBusy(true);
     try {
-      setProviders(await get('providers'));
-      setState(await get('state'));
+      setProviders(await api.auth.providers({}, { signal: controller.signal }));
+      setState(await api.auth.state({}, { signal: controller.signal }));
       poll();
     } catch (cause) {
       if (!controller.signal.aborted) setError(String(cause));

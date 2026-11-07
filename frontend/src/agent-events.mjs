@@ -1,38 +1,69 @@
-/** One SSE socket per tab. Reopening always starts with authoritative snapshots. */
+import { api } from './api.ts';
+
+/** One oRPC SSE iterator per tab; reconnecting always obtains fresh snapshots. */
 export function createAgentEvents({ onError, onOpen, onReset = () => {}, timeoutMs = 45000 }) {
   const channels = new Map();
   let source;
   let timer;
+  let retryTimer;
   let revision = 0;
   let disposed = false;
-  const arm = () => {
+  let retryMs = 500;
+  function retry() {
     clearTimeout(timer);
-    timer = setTimeout(() => { onError(); reconnect(); }, timeoutMs);
-  };
+    clearTimeout(retryTimer);
+    if (disposed || !channels.size) return;
+    retryTimer = setTimeout(reconnect, retryMs);
+    retryMs = Math.min(10000, retryMs * 2);
+  }
+  function arm(current) {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (source !== current) return;
+      source = undefined;
+      current.abort();
+      onError();
+      retry();
+    }, timeoutMs);
+  }
   function reconnect() {
-    source?.close();
+    source?.abort();
     source = undefined;
     clearTimeout(timer);
+    clearTimeout(retryTimer);
     if (disposed || !channels.size) return;
-    const current = new EventSource(`/api/events?${new URLSearchParams({ agentIds: [...channels.keys()].join(',') })}`);
+    const current = new AbortController();
     source = current;
-    current.addEventListener('agent', event => {
+    arm(current);
+    void (async () => {
+      try {
+        const events = await api.events({ agentIds: [...channels.keys()] }, { signal: current.signal });
+        if (source !== current) { await events.return(); return; }
+        onOpen();
+        for await (const envelope of events) {
+          if (source !== current) return;
+          arm(current);
+          retryMs = 500;
+          if (envelope.type === 'reset') {
+            source = undefined;
+            clearTimeout(timer);
+            current.abort();
+            onReset();
+            return;
+          }
+          if (envelope.type === 'agent') {
+            channels.get(envelope.agentId)?.dispatchEvent(new MessageEvent(envelope.event, { data: JSON.stringify(envelope.data) }));
+          }
+        }
+      } catch {
+        if (source !== current || current.signal.aborted) return;
+      }
       if (source !== current) return;
-      arm();
-      const envelope = JSON.parse(event.data);
-      channels.get(envelope.agentId)?.dispatchEvent(new MessageEvent(envelope.event, { data: JSON.stringify(envelope.data) }));
-    });
-    current.addEventListener('reset', () => {
-      if (source !== current) return;
-      current.close();
       source = undefined;
-      clearTimeout(timer);
-      onReset();
-    });
-    current.addEventListener('heartbeat', () => { if (source === current) arm(); });
-    current.onopen = () => { if (source === current) { arm(); onOpen(); } };
-    current.onerror = () => { if (source === current) { arm(); onError(); } };
-    arm();
+      current.abort();
+      onError();
+      retry();
+    })();
   }
   function schedule() {
     const next = ++revision;
@@ -51,7 +82,9 @@ export function createAgentEvents({ onError, onOpen, onReset = () => {}, timeout
       disposed = true;
       ++revision;
       clearTimeout(timer);
-      source?.close();
+      clearTimeout(retryTimer);
+      source?.abort();
+      source = undefined;
       channels.clear();
     },
   };

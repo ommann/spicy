@@ -1,262 +1,53 @@
 import http from 'node:http';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { SessionManager } from '@earendil-works/pi-coding-agent';
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
-import { AgentRegistry } from './agents.mjs';
-import { serveAgentEvents } from './agent-events.mjs';
-import { LoginBridge } from './auth.mjs';
-import { proxyUtw, utwBase } from './utw.mjs';
+import { randomUUID } from 'node:crypto';
+import { Hono } from 'hono';
+import { getRequestListener } from '@hono/node-server';
+import { RPCHandler, BodyLimitPlugin } from '@orpc/server/fetch';
 import { createServer } from 'vite';
+import { AgentRegistry } from './agents.mjs';
+import { LoginBridge } from './auth.mjs';
+import { createRouter } from './router.mjs';
 
 const root = fileURLToPath(new URL('../frontend', import.meta.url));
 const repository = fileURLToPath(new URL('..', import.meta.url));
-const cli = path.join(repository, 'packages/coding-agent/src/cli.ts');
-const resolver = new URL('../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
 const cwd = path.resolve(process.env.PI_CWD || repository);
 const port = Number(process.env.PORT || 5174);
 const managed = process.env.PI_SESSION_DIR ? path.resolve(process.env.PI_SESSION_DIR) : fileURLToPath(new URL('./.sessions', import.meta.url));
 const token = randomUUID();
 const login = new LoginBridge();
-const utw = utwBase();
 const agents = new AgentRegistry({
-  cwd, managed, cli, resolver,
+  cwd, managed,
+  cli: path.join(repository, 'packages/coding-agent/src/cli.ts'),
+  resolver: new URL('../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href,
   extension: fileURLToPath(new URL('./tree-navigation.mjs', import.meta.url)),
   fixture: process.env.PI_RPC_FIXTURE && path.resolve(process.env.PI_RPC_FIXTURE),
-  extraExtension: process.env.UTW_EXTENSION && path.resolve(process.env.UTW_EXTENSION),
 });
-
-async function allSessions() {
-  return [...new Map([...await SessionManager.listAll(), ...await SessionManager.listAll(managed)]
-    .map(session => [path.resolve(session.path), session])).values()];
-}
-
-async function openSessionView(session, sessions) {
-  const selectedPath = path.resolve(session.path);
-  const family = new Set([selectedPath]);
-  // Fork headers persist parentSession even after the agent processes are gone.
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const candidate of sessions) {
-      if (!candidate.parentSessionPath) continue;
-      const file = path.resolve(candidate.path);
-      const parent = path.resolve(candidate.parentSessionPath);
-      if (!family.has(file) && !family.has(parent)) continue;
-      if (!family.has(file) || !family.has(parent)) changed = true;
-      family.add(file);
-      family.add(parent);
-    }
-  }
-  const opened = await agents.openSession({ file: session.path, cwd: session.cwd });
-  const relatedAgents = [];
-  for (const candidate of sessions) {
-    const file = path.resolve(candidate.path);
-    if (file === selectedPath || !family.has(file)) continue;
-    const related = await agents.openSession({ file: candidate.path, cwd: candidate.cwd });
-    relatedAgents.push(related.payload());
-  }
-  return { ...opened.payload(), relatedAgents };
-}
-
-async function catalog(projectCwd = cwd) {
-  const projects = [projectCwd];
-  const directories = [...new Set(projects)].map(project => ({
-    directory: path.join(os.homedir(), '.pi/agent/sessions', `--${project.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`), project, managed: false,
-  }));
-  directories.push({ directory: managed, project: projectCwd, managed: true });
-  const found = [];
-  for (const location of directories) {
-    const sessions = await SessionManager.list(location.project, location.directory);
-    for (const session of sessions) {
-      const sessionCwd = session.cwd || location.project;
-      if (path.resolve(sessionCwd) !== projectCwd) continue;
-      const project = path.relative(path.join(os.homedir(), 'Development'), sessionCwd);
-      const title = (session.name || session.firstMessage || 'Empty chat').replace(/\s+/g, ' ').trim();
-      found.push({
-        id: Buffer.from(session.path).toString('base64url'), file: session.path,
-        cwd: sessionCwd, project, label: title, name: title, urlId: session.urlId,
-        messageCount: session.messageCount, modified: session.modified.getTime(),
-        managed: location.managed,
-      });
-    }
-  }
-  return found.sort((a, b) => b.modified - a.modified);
-}
-const json = (res, data, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
-async function body(req) {
-  let text = '';
-  for await (const chunk of req) { text += chunk; if (text.length > 32 * 1024 * 1024) throw new Error('Request exceeds 32 MB'); }
-  return JSON.parse(text || '{}');
-}
-function authorized(req) {
-  const value = req.headers['x-spicy-token'];
-  return typeof value === 'string' && value.length === token.length && timingSafeEqual(Buffer.from(value), Buffer.from(token));
-}
-const allowed = new Set(['prompt', 'abort', 'clear_queue', 'fork', 'new_session', 'set_model', 'set_thinking_level', 'get_available_models', 'get_available_thinking_levels', 'get_system_prompt_document', 'save_system_prompt', 'compact']);
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://127.0.0.1:${port}`);
-  try {
-    if (url.pathname.startsWith('/utw/')) {
-      const host = req.headers.host;
-      if (host !== `localhost:${port}` && host !== `127.0.0.1:${port}`) return json(res, { error: 'Invalid host' }, 403);
-      if (req.headers.origin && req.headers.origin !== `http://${host}`) return json(res, { error: 'Invalid origin' }, 403);
-      if (await proxyUtw(req, res, utw)) return;
-    }
-    if (url.pathname.startsWith('/api/')) {
-      // The desktop bridge is loopback-only. Reject DNS rebinding, require a
-      // capability token for mutations, and do not grant cross-origin reads.
-      const host = req.headers.host;
-      if (host !== `localhost:${port}` && host !== `127.0.0.1:${port}`) return json(res, { error: 'Invalid host' }, 403);
-      if (req.method === 'GET') {
-        if (url.pathname === '/api/auth/providers') return json(res, await login.providers());
-        if (url.pathname === '/api/auth/state') return json(res, login.state());
-        if (url.pathname === '/api/agents') return json(res, [...agents.agents.values()].map(agent => {
-          const { agentId, cwd, connected, running, state, source } = agent.payload();
-          return { agentId, cwd, connected, running, state, source };
-        }));
-        if (url.pathname === '/api/events' && url.searchParams.has('agentIds')) {
-          const ids = [...new Set(url.searchParams.get('agentIds').split(',').filter(Boolean))];
-          if (ids.some(id => !agents.agents.has(id))) {
-            res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
-            return res.end('event: reset\ndata: {}\n\n');
-          }
-          return serveAgentEvents(req, res, ids.map(id => agents.get(id)));
-        }
-        const agent = agents.get(url.searchParams.get('agentId') ?? undefined);
-        if (url.pathname === '/api/info') return json(res, { token, ...agent.payload() });
-        if (url.pathname === '/api/sessions') {
-          const available = url.searchParams.get('scope') === 'all'
-            ? (await allSessions()).map(session => ({
-              id: Buffer.from(session.path).toString('base64url'), urlId: session.urlId,
-              cwd: session.cwd, name: session.name || session.firstMessage || 'Empty chat',
-              modified: session.modified.getTime(),
-            })).sort((a, b) => b.modified - a.modified)
-            : await catalog(agent.cwd);
-          return json(res, available.filter(entry => url.searchParams.get('scope') !== 'cwd' || entry.cwd === agent.cwd).map(({ file: _file, ...entry }) => entry));
-        }
-        if (url.pathname === '/api/session') {
-          const entry = (await catalog(agent.cwd)).find(entry => entry.id === url.searchParams.get('id'));
-          if (!entry) return json(res, { error: 'Session not found' }, 404);
-          res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' });
-          return res.end(await readFile(entry.file));
-        }
-        if (url.pathname === '/api/events') {
-          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-          res.write(`event: snapshot\ndata: ${JSON.stringify(agent.payload())}\n\n`);
-          agent.clients.add(res);
-          req.on('close', () => { agent.clients.delete(res); });
-          return;
-        }
-      }
-      if (req.method !== 'POST') return json(res, { error: 'Not found' }, 404);
-      if (!authorized(req)) return json(res, { error: 'Invalid token' }, 403);
-      const { agentId, ...command } = await body(req);
-      if (url.pathname === '/api/attachments') {
-        const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
-        if (!Array.isArray(command.images) || !command.images.length) throw new Error('No images supplied');
-        const images = command.images.map(image => {
-          const extension = extensions[image?.mimeType];
-          if (!extension || image.type !== 'image' || typeof image.data !== 'string' || !image.data.length || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data)) throw new Error('Invalid image attachment');
-          return { extension, bytes: Buffer.from(image.data, 'base64') };
-        });
-        const directory = path.join(managed, 'attachments');
-        await mkdir(directory, { recursive: true });
-        const paths = [];
-        for (const image of images) {
-          const file = path.join(directory, `${randomUUID()}.${image.extension}`);
-          await writeFile(file, image.bytes, { flag: 'wx', mode: 0o600 });
-          paths.push(file);
-        }
-        return json(res, { paths });
-      }
-      if (url.pathname === '/api/auth/login') return json(res, await login.start(command.providerId, command.type));
-      if (url.pathname === '/api/auth/reply') return json(res, login.reply(command.id, command.promptId, command.value));
-      if (url.pathname === '/api/auth/cancel') return json(res, await login.cancel(command.id));
-      if (url.pathname === '/api/agents') {
-        if (command.openSessionId !== undefined) {
-          const sessions = await allSessions();
-          const session = sessions.find(session => Buffer.from(session.path).toString('base64url') === command.openSessionId);
-          if (!session) return json(res, { error: 'Session not found' }, 404);
-          return json(res, await openSessionView(session, sessions));
-        }
-        if (command.sessionUrlId !== undefined) {
-          if (typeof command.sessionUrlId !== 'string' || !/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/.test(command.sessionUrlId)) {
-            return json(res, { error: 'Invalid session URL ID' }, 400);
-          }
-          const active = [...agents.agents.values()].filter(agent => agent.snapshot.state?.sessionUrlId === command.sessionUrlId);
-          const sessions = await allSessions();
-          const matches = [...new Map(sessions.filter(session => session.urlId === command.sessionUrlId).map(session => [path.resolve(session.path), session])).values()];
-          const files = new Set([...matches.map(session => path.resolve(session.path)), ...active.map(agent => path.resolve(agent.snapshot.state.sessionFile))]);
-          if (files.size > 1) return json(res, { error: 'Session URL ID is ambiguous' }, 409);
-          if (active.length) return json(res, await openSessionView({ path: active[0].snapshot.state.sessionFile, cwd: active[0].cwd }, sessions));
-          if (!matches.length) return json(res, { error: 'Session not found' }, 404);
-          return json(res, await openSessionView(matches[0], sessions), 201);
-        }
-        const source = command.sourceAgentId !== undefined ? agents.get(command.sourceAgentId) : null;
-        const projectCwd = path.resolve(command.cwd ?? source?.cwd ?? cwd);
-        const selected = command.sessionId ? (await catalog(projectCwd)).find(entry => entry.id === command.sessionId) : null;
-        if (command.sessionId && !selected) throw new Error('Session not found');
-        const created = await agents.create(command, selected);
-        return json(res, created.payload(), 201);
-      }
-      const agent = agents.get(agentId ?? url.searchParams.get('agentId') ?? undefined);
-      const { rpc, dialogs } = agent;
-      const refresh = () => agent.refresh();
-      if (url.pathname === '/api/ui') {
-        if (!dialogs.has(command.id)) throw new Error('Dialog expired');
-        await rpc.write({ type: 'extension_ui_response', id: command.id, value: command.value, confirmed: command.confirmed, cancelled: command.cancelled });
-        dialogs.delete(command.id);
-        return json(res, {});
-      }
-      if (url.pathname === '/api/stop') { await agents.stop(agent); return json(res, {}); }
-      if (url.pathname === '/api/start') {
-        const selected = command.sessionId ? (await catalog(agent.cwd)).find(entry => entry.id === command.sessionId) : null;
-        if (command.sessionId && !selected) throw new Error('Session not found');
-        return json(res, await agents.start(agent, selected));
-      }
-      if (url.pathname === '/api/branch' || url.pathname === '/api/continue') {
-        if (agent.mutating || rpc.running) throw new Error('Agent is busy');
-        agent.mutating = true;
-        try {
-          const before = await rpc.command({ type: 'get_entries' });
-          const source = before.entries.find(entry => entry.id === command.entryId
-            && (url.pathname === '/api/continue' || entry.message?.role === 'user'));
-          if (!source) throw new Error('Branch entry not found');
-          if (typeof command.message !== 'string' || (!command.message.trim() && !command.images?.length)) throw new Error('Message is empty');
-          await agents.navigate(agent, source.id);
-          return json(res, await rpc.command({ type: 'prompt', message: command.message, images: command.images, systemPrompt: command.systemPrompt }));
-        } finally { agent.mutating = false; }
-      }
-      if (url.pathname === '/api/command') {
-        if (!allowed.has(command.type)) throw new Error('Unsupported command');
-        const reload = command.type === 'prompt' && command.message?.trim() === '/reload';
-        if (reload && rpc.running) throw new Error('Stop the agent before reloading');
-        const changesBranch = reload || ['fork', 'new_session', 'set_model', 'set_thinking_level', 'save_system_prompt', 'compact'].includes(command.type);
-        if ((changesBranch || command.type === 'prompt') && agent.mutating) throw new Error('Another command is in progress');
-        if (changesBranch && command.type !== 'compact' && rpc.running) throw new Error('Stop the agent before changing the session');
-        if (changesBranch || command.type === 'prompt') agent.mutating = true;
-        try {
-          if (reload) {
-            const available = await rpc.command({ type: 'get_commands' });
-            if (!available.commands.some(entry => entry.name === 'spicy-reload')) throw new Error('Reconnect Pi to enable /reload');
-            command.message = '/spicy-reload';
-          }
-          const result = await rpc.command(command);
-          if (changesBranch) {
-            await refresh();
-            agents.release(agent);
-            agents.claim(agent, agent.snapshot.state?.sessionFile);
-          }
-          return json(res, command.type === 'compact' ? { ...result, snapshot: agent.payload() } : result || {});
-        } finally { if (changesBranch || command.type === 'prompt') agent.mutating = false; }
-      }
-      return json(res, { error: 'Not found' }, 404);
-    }
-    return vite.middlewares(req, res, () => { res.writeHead(404); res.end(); });
-  } catch (error) { json(res, { error: error.message }, 400); }
+const app = new Hono();
+const handler = new RPCHandler(createRouter({ agents, login, cwd, managed, token }), {
+  plugins: [new BodyLimitPlugin({ maxBodySize: 32 * 1024 * 1024 })],
+});
+app.use('/rpc/*', async (c, next) => {
+  // Loopback-only capability bridge: reject DNS rebinding and cross-origin calls.
+  const host = c.req.header('host');
+  if (host !== `localhost:${port}` && host !== `127.0.0.1:${port}`) return c.json({ error: 'Invalid host' }, 403);
+  const origin = c.req.header('origin');
+  if (origin && origin !== `http://${host}`) return c.json({ error: 'Invalid origin' }, 403);
+  c.header('Cache-Control', 'no-store');
+  c.header('X-Content-Type-Options', 'nosniff');
+  const { matched, response } = await handler.handle(c.req.raw, {
+    prefix: '/rpc', context: { headers: c.req.raw.headers },
+  });
+  if (matched) return c.newResponse(response.body, response);
+  await next();
+});
+app.notFound(c => c.json({ error: 'Not found' }, 404));
+const listener = getRequestListener(app.fetch);
+const server = http.createServer((req, res) => {
+  const pathname = new URL(req.url, `http://127.0.0.1:${port}`).pathname;
+  if (/^\/(rpc|api|utw)(\/|$)/.test(pathname)) return listener(req, res);
+  return vite.middlewares(req, res, () => { res.writeHead(404); res.end(); });
 });
 const vite = await createServer({ root, server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
 server.listen(port, '127.0.0.1', () => console.log(`Spicy: http://localhost:${port}\nWorking directory: ${cwd}\nAgent starts only when requested in the UI.`));

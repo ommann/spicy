@@ -34,7 +34,8 @@ import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
-import Handoffs from './Handoffs';
+import ToolApps from './ToolApps';
+import { api, mutations } from './api';
 import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
@@ -131,9 +132,7 @@ export default function App(props: ParentProps) {
       const urlId = routeSessionId() || selectedSessionUrlId();
       if (!urlId) return;
       void (async () => {
-        const response = await fetch('/api/info', { signal: appLifecycle.signal });
-        if (!response.ok) throw new Error('Could not reconnect to the local bridge');
-        token = (await response.json()).token;
+        token = (await api.info({}, { signal: appLifecycle.signal })).token;
         await openSessionUrl(urlId, () => appLifecycle.signal.aborted);
       })().catch(reportFailure);
     },
@@ -258,19 +257,10 @@ export default function App(props: ParentProps) {
     });
   }
 
-  async function post(endpoint: string, data: Wire = {}) {
-    const response = await fetch(`/api/${endpoint}`, {
-      method: "POST",
-      signal: appLifecycle.signal,
-      headers: { "Content-Type": "application/json", "X-Spicy-Token": token },
-      body: JSON.stringify({ ...(selectedAgentId() ? { agentId: selectedAgentId() } : {}), ...data }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) throw new Error(result.error || response.statusText);
-
-    return result;
+  async function post<K extends keyof typeof mutations>(endpoint: K, data: Wire = {}): Promise<Awaited<ReturnType<(typeof mutations)[K]>>> {
+    return await mutations[endpoint]({ ...(selectedAgentId() ? { agentId: selectedAgentId() } : {}), ...data }, {
+      signal: appLifecycle.signal, context: { token },
+    }) as Awaited<ReturnType<(typeof mutations)[K]>>;
   }
 
   function reportFailure(failure: unknown) {
@@ -279,7 +269,7 @@ export default function App(props: ParentProps) {
     setNotification({ message, isError: true });
   }
 
-  async function requestLogin(endpoint: string, data?: Record<string, unknown>) {
+  async function requestLogin(endpoint: 'auth/login' | 'auth/reply' | 'auth/cancel', data?: Record<string, unknown>) {
     await bridgeReady;
     return post(endpoint, data);
   }
@@ -295,8 +285,8 @@ export default function App(props: ParentProps) {
     setAgentSnapshots(previous => previous[id] ? { ...previous, [id]: update(previous[id]) } : previous);
   }
 
-  function infoUrl(id = selectedAgentId()) {
-    return `/api/info?agentId=${encodeURIComponent(id)}`;
+  function loadInfo(id = selectedAgentId()) {
+    return api.info({ agentId: id || undefined }, { signal: appLifecycle.signal });
   }
 
   function watchAgent(id: string) {
@@ -360,9 +350,7 @@ export default function App(props: ParentProps) {
     chatDialog.showModal();
     setBusy(true);
     try {
-      const response = await fetch('/api/agents', { signal: appLifecycle.signal });
-      if (!response.ok) throw new Error('Could not list agents');
-      setAvailableAgents(await response.json());
+      setAvailableAgents(await api.agents.list({}, { signal: appLifecycle.signal }));
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
@@ -370,9 +358,7 @@ export default function App(props: ParentProps) {
   async function chooseAgent(id: string) {
     setBusy(true);
     try {
-      const response = await fetch(infoUrl(id), { signal: appLifecycle.signal });
-      if (!response.ok) throw new Error('Could not load the agent');
-      const info = await response.json();
+      const info = await loadInfo(id);
       const value = info.state?.sessionUrlId ? await post('agents', { sessionUrlId: info.state.sessionUrlId }) : info;
       showAgent(value, true);
       setModels([]);
@@ -415,12 +401,10 @@ export default function App(props: ParentProps) {
 
   async function loadHomeSessions() {
     await bridgeReady;
-    const response = await fetch('/api/sessions?scope=all', { signal: appLifecycle.signal });
-    if (!response.ok) throw new Error('Could not list sessions');
-    const sessions: Wire[] = await response.json();
-    const listed = await fetch('/api/agents', { signal: appLifecycle.signal });
-    if (!listed.ok) throw new Error('Could not list agents');
-    const agents: Wire[] = await listed.json();
+    const [sessions, agents] = await Promise.all([
+      api.sessions({ scope: 'all' }, { signal: appLifecycle.signal }),
+      api.agents.list({}, { signal: appLifecycle.signal }),
+    ]);
     return sessions.map(session => ({ ...session, running: agents.some(agent =>
       agent.running && session.urlId && agent.state?.sessionUrlId === session.urlId) }));
   }
@@ -527,9 +511,7 @@ export default function App(props: ParentProps) {
     try {
       const result = await post('command', { type: 'fork', agentId, entryId });
       if (!result.cancelled) {
-        const response = await fetch(infoUrl(agentId), { signal: appLifecycle.signal });
-        if (!response.ok) throw new Error('Could not refresh the forked session');
-        accept(await response.json());
+        accept(await loadInfo(agentId));
         conversation?.setDraft(result.text || '');
       }
       chatDialog.close();
@@ -657,14 +639,10 @@ export default function App(props: ParentProps) {
   async function restoreBridge() {
     setBusy(true);
     try {
-      const response = await fetch('/api/info', { signal: appLifecycle.signal });
-      if (!response.ok) throw new Error('Could not connect to the local bridge');
-      const info = await response.json();
+      const info = await api.info({}, { signal: appLifecycle.signal });
       token = info.token;
       setBridgeCwd(info.cwd);
-      const listed = await fetch('/api/agents', { signal: appLifecycle.signal });
-      if (!listed.ok) throw new Error('Could not list agents');
-      const agents: Wire[] = await listed.json();
+      const agents = await api.agents.list({}, { signal: appLifecycle.signal });
       setAvailableAgents(agents);
       // A copied link takes precedence over the tab's previous agent selection.
       if (routeSessionId()) {
@@ -677,10 +655,7 @@ export default function App(props: ParentProps) {
       if (!ids.includes(selectedAgentId())) setSelectedAgentId(ids[0] || '');
       const pending = [];
       for (const id of ids) {
-        pending.push(fetch(infoUrl(id), { signal: appLifecycle.signal }).then(async response => {
-          if (!response.ok) throw new Error('Could not restore the selected agent');
-          accept(await response.json());
-        }));
+        pending.push(loadInfo(id).then(accept));
       }
       await Promise.all(pending);
       if (ids.length) setLive(true);
@@ -747,14 +722,12 @@ export default function App(props: ParentProps) {
         },
         save: async value => {
           const prompt = await post('command', { type: 'save_system_prompt', prompt: value }) as CreatedPrompt;
-          const response = await fetch(infoUrl(), { signal: appLifecycle.signal });
-          if (!response.ok) throw new Error('Could not reload the saved prompt');
-          accept(await response.json());
+          accept(await loadInfo());
           openSystemPrompt(prompt.id);
         },
       }}>
       <SystemPromptContext.Provider value={systemPrompts}>
-        <Handoffs sessionKey={branchKey()}>
+        <ToolApps sessionKey={branchKey()}>
         <SessionsRouteContext.Provider value={() => <Sessions load={loadHomeSessions}
           draft={homeDraft()} onDraft={setHomeDraft} projectQuery={projectQuery()} onProjectQuery={setProjectQuery}
           nameQuery={sessionNameQuery()} onNameQuery={setSessionNameQuery} onSubmit={sendHomeChat}
@@ -774,7 +747,7 @@ export default function App(props: ParentProps) {
           {props.children}
         </ChatRouteContext.Provider>
         </SessionsRouteContext.Provider>
-        </Handoffs>
+        </ToolApps>
       </SystemPromptContext.Provider>
       </SystemPromptCreatorContext.Provider>
       </NavigationLinksContext.Provider>

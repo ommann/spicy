@@ -9,7 +9,11 @@
     "test": "node --import ../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.mjs"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "1.4.0"
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@hono/node-server": "2.1.6",
+    "@orpc/server": "1.16.1",
+    "hono": "4.13.16",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "vite": "8.0.16"

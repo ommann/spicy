@@ -9,7 +9,6 @@ import { createAnsiTokenizer } from './ansi.mjs';
 import { projectChatParts } from './conversation-model.mjs';
 import type { Wire } from './types';
 import { selectSource } from './source-selection';
-import { HandoffTool } from './Handoffs';
 import { partialCommand } from './partial-command.mjs';
 
 function Images(props: { blocks: Wire[]; caption?: string }) {
@@ -252,9 +251,6 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
       <section ref={useContext(SectionContext)} class="message real-message notification-error" role="alert" data-entry-id={props.part.entryId}>{props.part.text}</section>
     </Match>
     <Match when={props.part.kind === 'draft'}><section ref={useContext(SectionContext)} class="branch-draft" data-entry-id={props.part.entryId} /></Match>
-    <Match when={props.part.kind === 'tool' && ['handoff_task_to_user', 'get_handoff_result'].includes(props.part.call.name)}>
-      <HandoffTool call={props.part.call} result={props.part.result} entryId={props.part.entryId} />
-    </Match>
     <Match when={props.part.kind === 'tool'}>
       <Show when={props.part.call.name === 'codemode' || props.part.call.name.endsWith('.codemode')}
         fallback={<Tool call={props.part.call} result={props.part.result} entryId={props.part.entryId} expandRequest={props.expandRequest} />}>

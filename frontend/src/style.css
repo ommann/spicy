@@ -2,7 +2,6 @@
 @import "./chat/style.css";
 @import "./chat/tree.css";
 @import "./chat/markdown.css";
-@import "./utw/handoff.css";
 
 .checkbox {
   display: inline-block;

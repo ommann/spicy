@@ -126,5 +126,5 @@ async function restartRecordedInstance() {
 }
 
 function isRuntimeSetting(name) {
-  return name.startsWith('PI_') || ['NODE_OPTIONS', 'PORT', 'UTW_EXTENSION'].includes(name);
+  return name.startsWith('PI_') || ['NODE_OPTIONS', 'PORT'].includes(name);
 }

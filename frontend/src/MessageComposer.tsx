@@ -1,5 +1,6 @@
 import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX } from 'solid-js';
 import ScrollableTextarea from './ScrollableTextarea';
+import { api } from './api';
 import type { AgentHealthStatus } from './AgentHealth';
 import './message-composer.css';
 import { formatContextWindow, type ContextWindowUsage } from './context-window';
@@ -69,10 +70,8 @@ export default function MessageComposer(props: Props) {
       const pasted = await clipboardImages(items);
       if (!pasted.length) throw new Error('Unsupported image format');
       if (asPaths) {
-        const info = await fetch('/api/info').then(response => response.json());
-        const response = await fetch('/api/attachments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Spicy-Token': info.token }, body: JSON.stringify({ images: pasted }) });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Could not save image');
+        const info = await api.info({});
+        const result = await api.attachments({ images: pasted }, { context: { token: info.token } });
         input.setRangeText(result.paths.join('\n'), input.selectionStart, input.selectionEnd, 'end');
         props.onChange(input.value);
       } else setImages(current => [...current, ...pasted]);

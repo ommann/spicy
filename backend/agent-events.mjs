@@ -1,19 +1,36 @@
-export function serveAgentEvents(req, res, agents) {
-  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-  const subscriptions = agents.map(agent => {
-    const client = { send(event, data) {
-      res.write(`event: agent\ndata: ${JSON.stringify({ agentId: agent.id, event, data })}\n\n`);
-    } };
-    agent.clients.add(client);
-    client.send('snapshot', agent.payload());
-    return { agent, client };
-  });
-  const heartbeat = setInterval(() => res.write('event: heartbeat\ndata: {}\n\n'), 15000);
-  heartbeat.unref?.();
-  const close = () => {
+import { EventPublisher } from '@orpc/server';
+
+/** One oRPC event iterator per tab, with snapshots on every subscription. */
+export async function* agentEvents(agents, signal) {
+  const controller = new AbortController();
+  const lifetime = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+  const publisher = new EventPublisher({ maxBufferedEvents: Infinity });
+  const events = publisher.subscribe('message', { signal: lifetime });
+  let pending = 0;
+  const send = message => {
+    // Never silently discard RPC deltas. A slow client must reconnect to snapshots.
+    if (++pending > 2048) { controller.abort(new Error('Event consumer fell behind')); return; }
+    publisher.publish('message', message);
+  };
+  const subscriptions = [];
+  let heartbeat;
+  try {
+    for (const agent of agents) {
+      const client = { send: (event, data) => send({ type: 'agent', agentId: agent.id, event, data }) };
+      agent.clients.add(client);
+      subscriptions.push({ agent, client });
+      client.send('snapshot', agent.payload());
+    }
+    heartbeat = setInterval(() => send({ type: 'heartbeat' }), 15000);
+    heartbeat.unref?.();
+    for await (const message of events) {
+      pending--;
+      yield message;
+    }
+  } finally {
     clearInterval(heartbeat);
     for (const { agent, client } of subscriptions) agent.clients.delete(client);
-  };
-  res.on('close', close);
-  req.on('close', close);
+    controller.abort();
+    await events.return();
+  }
 }

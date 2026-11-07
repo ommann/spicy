@@ -55,11 +55,7 @@ export class AgentConnection {
 
   broadcast(type, data) {
     if (type === 'record') data = { ...data, spicySentAt: Date.now() };
-    const wire = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const client of this.clients) {
-      if (client.send) client.send(type, data);
-      else client.write(wire);
-    }
+    for (const client of this.clients) client.send(type, data);
   }
 
   async loadSession(selected) {

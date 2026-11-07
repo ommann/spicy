@@ -10,6 +10,7 @@
     "check": "tsc --noEmit && stylelint 'src/**/*.css'"
   },
   "dependencies": {
+    "@orpc/client": "1.16.1",
     "@solidjs/router": "1.0.0",
     "diff": "8.0.4",
     "lowlight": "3.3.0",
