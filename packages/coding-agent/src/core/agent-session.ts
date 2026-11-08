@@ -70,7 +70,6 @@ import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
 import type { CacheWarmer, CacheWarmingStatus } from "./cache-warmer.ts";
 import {
-	FULL_BRANCH_COMPACTION_PROCEDURE_ID,
 	type CompactionPreparation,
 	type CompactionResult,
 	calculateContextTokens,
@@ -3045,7 +3044,7 @@ export class AgentSession {
 				: undefined;
 		const rootId = this.sessionManager.appendCompactionRoot(summary, tokensBefore, details, fromExtension, usage, {
 			...source,
-			procedureId: fromExtension ? procedureId : FULL_BRANCH_COMPACTION_PROCEDURE_ID,
+			procedureId,
 		});
 		if (inheritedPrompt) {
 			this.sessionManager.appendMessage({
@@ -3147,34 +3146,17 @@ export class AgentSession {
 				}
 			}
 
-			let summary: string;
-			let firstKeptEntryId: string;
-			let tokensBefore: number;
-			let usage: Usage | undefined;
-			let details: unknown;
-
-			if (extensionCompaction) {
-				// Extension provided compaction content
-				summary = extensionCompaction.summary;
-				firstKeptEntryId = extensionCompaction.firstKeptEntryId;
-				tokensBefore = extensionCompaction.tokensBefore;
-				usage = extensionCompaction.usage;
-				details = extensionCompaction.details;
-			} else {
-				// Shared default summary generator, also used by automatic compaction.
-				const result = await this._runDefaultCompaction(
+			const generated =
+				extensionCompaction ??
+				(await this._runDefaultCompaction(
 					preparation,
 					model,
 					customInstructions,
 					this._compactionAbortController.signal,
 					"manual",
-				);
-				summary = result.summary;
-				firstKeptEntryId = result.firstKeptEntryId;
-				tokensBefore = result.tokensBefore;
-				usage = result.usage;
-				details = result.details;
-			}
+				));
+			const { summary, tokensBefore, usage, details, procedureId } = generated;
+			let { firstKeptEntryId } = generated;
 
 			if (this._compactionAbortController.signal.aborted) {
 				throw new Error("Compaction cancelled");
@@ -3188,7 +3170,7 @@ export class AgentSession {
 				details,
 				fromExtension,
 				usage,
-				extensionCompaction?.procedureId,
+				procedureId,
 			);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
@@ -3210,6 +3192,7 @@ export class AgentSession {
 			}
 
 			const compactionResult: CompactionResult = {
+				procedureId,
 				summary,
 				firstKeptEntryId,
 				tokensBefore,
@@ -3506,34 +3489,11 @@ export class AgentSession {
 			}
 			abortController.signal.throwIfAborted();
 
-			let summary: string;
-			let firstKeptEntryId: string;
-			let tokensBefore: number;
-			let usage: Usage | undefined;
-			let details: unknown;
-
-			if (extensionCompaction) {
-				// Extension provided compaction content
-				summary = extensionCompaction.summary;
-				firstKeptEntryId = extensionCompaction.firstKeptEntryId;
-				tokensBefore = extensionCompaction.tokensBefore;
-				usage = extensionCompaction.usage;
-				details = extensionCompaction.details;
-			} else {
-				// Shared default summary generator, also used by manual compaction.
-				const compactResult = await this._runDefaultCompaction(
-					preparation,
-					model,
-					undefined,
-					abortController.signal,
-					reason,
-				);
-				summary = compactResult.summary;
-				firstKeptEntryId = compactResult.firstKeptEntryId;
-				tokensBefore = compactResult.tokensBefore;
-				usage = compactResult.usage;
-				details = compactResult.details;
-			}
+			const generated =
+				extensionCompaction ??
+				(await this._runDefaultCompaction(preparation, model, undefined, abortController.signal, reason));
+			const { summary, tokensBefore, usage, details, procedureId } = generated;
+			let { firstKeptEntryId } = generated;
 			abortController.signal.throwIfAborted();
 
 			firstKeptEntryId = this._saveCompactedHistory(
@@ -3544,7 +3504,7 @@ export class AgentSession {
 				details,
 				fromExtension,
 				usage,
-				extensionCompaction?.procedureId,
+				procedureId,
 			);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
@@ -3566,6 +3526,7 @@ export class AgentSession {
 			}
 
 			const result: CompactionResult = {
+				procedureId,
 				summary,
 				firstKeptEntryId,
 				tokensBefore,

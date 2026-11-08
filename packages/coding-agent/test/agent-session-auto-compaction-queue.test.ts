@@ -57,34 +57,36 @@ describe("AgentSession auto-compaction queue resume", () => {
 		}
 	});
 
-	it.each(["manual", "threshold", "overflow"] as const)(
-		"records a full source range for %s compaction",
-		async (reason) => {
-			const start = sessionManager.appendMessage({ role: "user", content: "Summarize this", timestamp: 1 });
-			const end = sessionManager.appendMessage(fauxAssistantMessage("A response to summarize"));
-			session.agent.state.messages = sessionManager.buildSessionContext().messages;
-			const runtime = session as unknown as {
-				_runDefaultCompaction: () => Promise<CompactionResult>;
-				_runAutoCompaction: (reason: "threshold" | "overflow", willRetry: boolean) => Promise<boolean>;
-			};
-			vi.spyOn(runtime, "_runDefaultCompaction").mockResolvedValue({
-				summary: "Checkpoint",
-				firstKeptEntryId: start,
-				tokensBefore: 100,
-			});
-			if (reason === "manual") await session.compact();
-			else await runtime._runAutoCompaction(reason, false);
-			const roots = sessionManager.getEntries().filter((entry) => entry.type === "compaction");
-			expect(roots).toHaveLength(1);
-			expect(roots[0]).toMatchObject({
-				parentId: null,
-				sourceStartId: start,
-				sourceEndId: end,
-				procedureId: FULL_BRANCH_COMPACTION_PROCEDURE_ID,
-			});
-			expect(sessionManager.getBranch().some((entry) => entry.id === start)).toBe(false);
-		},
-	);
+	it.each(
+		(["manual", "threshold", "overflow"] as const).flatMap((reason) =>
+			[FULL_BRANCH_COMPACTION_PROCEDURE_ID, "other-summary-v1"].map((procedureId) => ({ reason, procedureId })),
+		),
+	)("records $procedureId and the source range for $reason compaction", async ({ reason, procedureId }) => {
+		const start = sessionManager.appendMessage({ role: "user", content: "Summarize this", timestamp: 1 });
+		const end = sessionManager.appendMessage(fauxAssistantMessage("A response to summarize"));
+		session.agent.state.messages = sessionManager.buildSessionContext().messages;
+		const runtime = session as unknown as {
+			_runDefaultCompaction: () => Promise<CompactionResult>;
+			_runAutoCompaction: (reason: "threshold" | "overflow", willRetry: boolean) => Promise<boolean>;
+		};
+		vi.spyOn(runtime, "_runDefaultCompaction").mockResolvedValue({
+			procedureId,
+			summary: "Checkpoint",
+			firstKeptEntryId: start,
+			tokensBefore: 100,
+		});
+		if (reason === "manual") await session.compact();
+		else await runtime._runAutoCompaction(reason, false);
+		const roots = sessionManager.getEntries().filter((entry) => entry.type === "compaction");
+		expect(roots).toHaveLength(1);
+		expect(roots[0]).toMatchObject({
+			parentId: null,
+			sourceStartId: start,
+			sourceEndId: end,
+			procedureId,
+		});
+		expect(sessionManager.getBranch().some((entry) => entry.id === start)).toBe(false);
+	});
 
 	it("should resume after threshold compaction when only agent-level queued messages exist", async () => {
 		settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });

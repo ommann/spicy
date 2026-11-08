@@ -21,12 +21,12 @@ import {
 } from "@earendil-works/pi-ai";
 import {
 	type AssistantMessage,
+	completeSimple,
 	type Model,
 	type SimpleStreamOptions,
 	type SystemMessage,
 	type TranscriptContext,
 	type Usage,
-	completeSimple,
 } from "@earendil-works/pi-ai/compat";
 import { convertToLlm } from "../messages.ts";
 import {
@@ -38,6 +38,7 @@ import {
 	sessionEntryToContextMessages,
 } from "../session-manager.ts";
 import { combineUsage } from "../usage-totals.ts";
+import { type CompactionModelOptions, type CompactionProcedure, runCompaction } from "./procedure.ts";
 import {
 	computeFileLists,
 	createFileOps,
@@ -988,16 +989,57 @@ export async function compact(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
-): Promise<CompactionResult> {
+): Promise<CompactionResult<CompactionDetails>> {
+	return runCompaction(
+		preparation,
+		{
+			model,
+			apiKey,
+			headers,
+			customInstructions,
+			signal,
+			thinkingLevel,
+			streamFn,
+			env,
+			retry,
+			callbacks,
+			sessionId,
+		},
+		fullBranchCompactionProcedure,
+	);
+}
+
+/** The built-in method owns both its model calls and its file-list additions. */
+export const fullBranchCompactionProcedure: CompactionProcedure<CompactionDetails> = {
+	id: FULL_BRANCH_COMPACTION_PROCEDURE_ID,
+	generate: generateFullBranchCompaction,
+	finish(draft, preparation) {
+		const details = computeFileLists(preparation.fileOps);
+		return {
+			summary: draft.text + formatFileOperations(details.readFiles, details.modifiedFiles),
+			details,
+		};
+	},
+};
+
+async function generateFullBranchCompaction(
+	preparation: CompactionPreparation,
+	options: CompactionModelOptions,
+): Promise<{ text: string; usage: Usage }> {
+	const { messagesToSummarize, turnPrefixMessages, isSplitTurn, previousSummary } = preparation;
 	const {
-		firstKeptEntryId,
-		messagesToSummarize,
-		turnPrefixMessages,
-		isSplitTurn,
-		tokensBefore,
-		previousSummary,
-		fileOps,
-	} = preparation;
+		model,
+		apiKey,
+		headers,
+		customInstructions,
+		signal,
+		thinkingLevel,
+		streamFn,
+		env,
+		retry,
+		callbacks,
+		sessionId,
+	} = options;
 
 	// Generate summaries and merge into one
 	let summary: string;
@@ -1065,21 +1107,7 @@ export async function compact(
 		summaryUsage = result.usage;
 	}
 
-	// Compute file lists and append to summary
-	const { readFiles, modifiedFiles } = computeFileLists(fileOps);
-	summary += formatFileOperations(readFiles, modifiedFiles);
-
-	if (!firstKeptEntryId) {
-		throw new Error("First kept entry has no UUID - session may need migration");
-	}
-
-	return {
-		summary,
-		firstKeptEntryId,
-		tokensBefore,
-		usage: summaryUsage,
-		details: { readFiles, modifiedFiles } as CompactionDetails,
-	};
+	return { text: summary, usage: summaryUsage };
 }
 
 /**
