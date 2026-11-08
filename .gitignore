@@ -11,6 +11,7 @@ packages/ai/src/providers/.model-generation-*/
 *.cpuprofile
 
 # Local sessions and environment secrets
+/.pi/
 /.pid
 .pi-user/*
 !.pi-user/.gitkeep

@@ -1,5 +1,6 @@
 {
 	"name": "spicy",
+	"license": "MIT",
 	"private": true,
 	"type": "module",
 	"bin": {
