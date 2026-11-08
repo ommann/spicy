@@ -104,6 +104,27 @@ describe("system prompt updates", () => {
 		}
 	});
 
+	test("editor saves and explicit editor choices have no predecessor, even when tools change", async () => {
+		const harness = await createHarness();
+		try {
+			harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+			await harness.session.prompt("one");
+			const source = harness.session.getSystemPromptDocument();
+			const saved = harness.session.saveSystemPrompt({
+				title: "Freestyle", document: source.document, excludedIds: source.excludedIds ?? [], toolsAdded: [],
+			});
+			expect(harness.sessionManager.getEntry(saved.id)).not.toHaveProperty("predecessorId");
+			harness.session.setActiveToolsByName([]);
+			await harness.session.prompt("two", { systemPromptPolicy: {
+				selected: { key: saved.id, content: saved.output.content, sections: saved.output.sections ?? {} },
+				decide: () => "accept",
+			} });
+			const applied = harness.sessionManager.getBranch().findLast(entry => entry.type === "message" && entry.message.role === "system");
+			expect(applied).toMatchObject({ message: { systemPromptKey: saved.id } });
+			expect(applied).not.toHaveProperty("predecessorId");
+		} finally { harness.cleanup(); }
+	});
+
 	test("web tool activation is priority, without adopting unrelated instructions", async () => {
 		let instruction = "Accepted instructions.";
 		const extension: ExtensionFactory = (pi) => {
@@ -137,8 +158,12 @@ describe("system prompt updates", () => {
 				fauxAssistantMessage("three"),
 			]);
 			await harness.session.prompt("one", { systemPromptPolicy: policy });
+			const promptEntries = () => harness.sessionManager.getBranch().filter(entry => entry.type === "message" && entry.message.role === "system");
+			const firstPrompt = promptEntries().at(-1)!;
 			harness.session.setActiveToolsByName(["first", "second"]);
 			await harness.session.prompt("two", { systemPromptPolicy: policy });
+			const secondPrompt = promptEntries().at(-1)!;
+			expect(secondPrompt).toMatchObject({ predecessorId: firstPrompt.id });
 			expect(calls).toBe(0);
 			expect(getCurrentSystemMessage(harness.session.messages)?.toolsAdded?.map((tool) => tool.name)).toContain(
 				"second",
@@ -147,6 +172,7 @@ describe("system prompt updates", () => {
 			harness.session.setActiveToolsByName(["second"]);
 			instruction = "Unapproved instructions.";
 			await harness.session.prompt("three", { systemPromptPolicy: policy });
+			expect(promptEntries().at(-1)).toMatchObject({ predecessorId: secondPrompt.id });
 			expect(calls).toBe(1);
 			const current = getCurrentSystemPrompt(harness.session.messages);
 			expect(current).toBe(accepted); // Retain the complete accepted revision, not a synthetic hybrid.

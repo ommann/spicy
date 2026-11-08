@@ -71,6 +71,8 @@ export interface SessionEntryBase {
 
 export interface SessionMessageEntry extends SessionEntryBase {
 	type: "message";
+	/** Prompt changed by an automatic tool-definition update; absent for freestyle prompts. */
+	predecessorId?: string | null;
 	message: AgentMessage;
 }
 
@@ -1268,13 +1270,14 @@ export class SessionManager {
 	 * so it is easier to find them.
 	 * These need to be appended via appendCompaction() and appendBranchSummary() methods.
 	 */
-	appendMessage(message: Message | CustomMessage | BashExecutionMessage): string {
+	appendMessage(message: Message | CustomMessage | BashExecutionMessage, predecessorId?: string | null): string {
 		const entry: SessionMessageEntry = {
 			type: "message",
 			id: generateId(this.byId),
 			parentId: this.leafId,
 			timestamp: new Date().toISOString(),
 			message,
+			...(message.role === "system" && predecessorId !== undefined ? { predecessorId } : {}),
 		};
 		this._appendEntry(entry);
 		return entry.id;

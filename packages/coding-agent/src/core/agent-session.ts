@@ -1178,8 +1178,17 @@ export class AgentSession {
 				event.message.role === "assistant" ||
 				event.message.role === "toolResult"
 			) {
-				// Regular LLM message - persist as SessionMessageEntry
-				entryId = this.sessionManager.appendMessage(event.message);
+				// Tool-definition changes force a new prompt. Explicit editor choices are
+				// freestyle compositions, not revisions of the previously active prompt.
+				const priorityPrompt = event.message.role === "system" &&
+					!("systemPromptKey" in event.message) &&
+					(!!event.message.toolsAdded?.length || !!event.message.toolsRemoved?.length);
+				const predecessorId = priorityPrompt
+					? this.sessionManager.getBranch().findLast((entry) =>
+						entry.type === "message" && entry.message.role === "system",
+					)?.id ?? null
+					: undefined;
+				entryId = this.sessionManager.appendMessage(event.message, predecessorId);
 			}
 			if (entryId) this._entryIdsByMessage.set(event.message, entryId);
 			// Other message types (bashExecution, compactionSummary, branchSummary) are persisted elsewhere
