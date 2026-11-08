@@ -100,6 +100,7 @@ export interface UsageEntry extends SessionEntryBase {
 
 export interface CompactionEntry<T = unknown> extends SessionEntryBase {
 	type: "compaction";
+	summaryFormat?: "verbatim";
 	/** Inclusive source range on a single history path; does not establish tree parentage. */
 	sourceStartId?: string;
 	sourceEndId?: string;
@@ -475,7 +476,7 @@ export function sessionEntryToContextMessages(entry: SessionEntry): AgentMessage
 		return [createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp)];
 	}
 	if (entry.type === "compaction") {
-		const summary = createCompactionSummaryMessage(entry.summary, entry.tokensBefore, entry.timestamp);
+		const summary = createCompactionSummaryMessage(entry.summary, entry.tokensBefore, entry.timestamp, entry.summaryFormat);
 		return entry.systemMessage ? [entry.systemMessage, summary] : [summary];
 	}
 	return [];
@@ -1363,7 +1364,7 @@ export class SessionManager {
 		details?: T,
 		fromHook?: boolean,
 		usage?: Usage,
-		provenance?: Pick<CompactionEntry, "sourceStartId" | "sourceEndId" | "procedureId">,
+		provenance?: Pick<CompactionEntry, "sourceStartId" | "sourceEndId" | "procedureId" | "summaryFormat">,
 	): string {
 		const id = generateId(this.byId);
 		this._appendEntry({
@@ -1373,6 +1374,7 @@ export class SessionManager {
 			sourceStartId: provenance?.sourceStartId,
 			sourceEndId: provenance?.sourceEndId,
 			procedureId: provenance?.procedureId,
+			...(provenance?.summaryFormat ? { summaryFormat: provenance.summaryFormat } : {}),
 			timestamp: new Date().toISOString(),
 			summary,
 			firstKeptEntryId: id,

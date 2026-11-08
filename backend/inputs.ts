@@ -79,5 +79,5 @@ export const commandInput = z.discriminatedUnion('type', [
       ]).optional(),
     })),
   }) }),
-  z.strictObject({ ...command('compact'), customInstructions: z.string().optional() }),
+  z.strictObject({ ...command('compact'), customInstructions: z.string().optional(), method: z.union([z.literal(1), z.literal(2)]).optional() }),
 ]);

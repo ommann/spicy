@@ -88,6 +88,34 @@ describe("AgentSession auto-compaction queue resume", () => {
 		expect(sessionManager.getBranch().some((entry) => entry.id === start)).toBe(false);
 	});
 
+	it("passes method 2 to the model step and saves its plain answer", async () => {
+		const start = sessionManager.appendMessage({ role: "user", content: "Old chat", timestamp: 1 });
+		sessionManager.appendMessage(fauxAssistantMessage("Response"));
+		session.agent.state.messages = sessionManager.buildSessionContext().messages;
+		const runtime = session as unknown as {
+			_runDefaultCompaction: (...args: unknown[]) => Promise<CompactionResult>;
+		};
+		const generate = vi.spyOn(runtime, "_runDefaultCompaction").mockResolvedValue({
+			procedureId: "model-summary-v1",
+			summaryFormat: "verbatim",
+			summary: "Plain answer",
+			firstKeptEntryId: start,
+			tokensBefore: 100,
+		});
+		const result = await session.compact(undefined, 2);
+		expect(generate.mock.calls[0][5]).toBe(2);
+		expect(result).toMatchObject({
+			procedureId: "model-summary-v1",
+			summaryFormat: "verbatim",
+			summary: "Plain answer",
+		});
+		expect(sessionManager.getEntries().find((entry) => entry.type === "compaction")).toMatchObject({
+			procedureId: "model-summary-v1",
+			summaryFormat: "verbatim",
+			summary: "Plain answer",
+		});
+	});
+
 	it("should resume after threshold compaction when only agent-level queued messages exist", async () => {
 		settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
 		const model = session.model!;

@@ -108,9 +108,13 @@ function getMessagesFromProjectedEntryForCompaction(entry: ProjectedSessionEntry
 
 /** Identifies the built-in full-branch checkpoint procedure and its prompts in this module. */
 export const FULL_BRANCH_COMPACTION_PROCEDURE_ID = "full-branch-summary-v1";
+export const MODEL_ONLY_COMPACTION_PROCEDURE_ID = "model-summary-v1";
+export type CompactionMethod = 1 | 2;
 
 /** Result from compact() - SessionManager adds id/parentId when saving. */
 export interface CompactionResult<T = unknown> {
+	/** Use the model's answer without adding the usual summary wrapper. */
+	summaryFormat?: "verbatim";
 	/** Extensions may identify their own compaction procedure; omitted when unknown. */
 	procedureId?: string;
 	summary: string;
@@ -989,7 +993,8 @@ export async function compact(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
-): Promise<CompactionResult<CompactionDetails>> {
+	method: CompactionMethod = 1,
+): Promise<CompactionResult> {
 	return runCompaction(
 		preparation,
 		{
@@ -1005,7 +1010,7 @@ export async function compact(
 			callbacks,
 			sessionId,
 		},
-		fullBranchCompactionProcedure,
+		getCompactionProcedure(method),
 	);
 }
 
@@ -1021,6 +1026,43 @@ export const fullBranchCompactionProcedure: CompactionProcedure<CompactionDetail
 		};
 	},
 };
+
+/** One model answer, with no file lists, split-turn additions, or summary wrapper. */
+export const modelOnlyCompactionProcedure: CompactionProcedure = {
+	id: MODEL_ONLY_COMPACTION_PROCEDURE_ID,
+	generate(preparation, options) {
+		return generateSummaryWithUsage(
+			[...preparation.messagesToSummarize, ...preparation.turnPrefixMessages],
+			options.model,
+			undefined,
+			options.apiKey,
+			options.headers,
+			options.signal,
+			options.customInstructions,
+			preparation.previousSummary,
+			options.thinkingLevel,
+			options.streamFn,
+			options.env,
+			options.retry,
+			options.callbacks,
+			options.sessionId,
+		);
+	},
+	finish(draft) {
+		return { summary: draft.text, summaryFormat: "verbatim" };
+	},
+};
+
+export function getCompactionProcedure(method: CompactionMethod): CompactionProcedure {
+	switch (method) {
+		case 1:
+			return fullBranchCompactionProcedure;
+		case 2:
+			return modelOnlyCompactionProcedure;
+		default:
+			throw new Error(`Unknown compaction method: ${method}`);
+	}
+}
 
 async function generateFullBranchCompaction(
 	preparation: CompactionPreparation,

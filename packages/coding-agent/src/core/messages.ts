@@ -61,6 +61,7 @@ export interface BranchSummaryMessage {
 
 export interface CompactionSummaryMessage {
 	role: "compactionSummary";
+	summaryFormat?: "verbatim";
 	summary: string;
 	tokensBefore: number;
 	timestamp: number;
@@ -110,9 +111,11 @@ export function createCompactionSummaryMessage(
 	summary: string,
 	tokensBefore: number,
 	timestamp: string,
+	summaryFormat?: CompactionSummaryMessage["summaryFormat"],
 ): CompactionSummaryMessage {
 	return {
 		role: "compactionSummary",
+		...(summaryFormat ? { summaryFormat } : {}),
 		summary: summary,
 		tokensBefore,
 		timestamp: new Date(timestamp).getTime(),
@@ -177,7 +180,13 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
 					return {
 						role: "user",
 						content: [
-							{ type: "text" as const, text: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX },
+							{
+								type: "text" as const,
+								text:
+									m.summaryFormat === "verbatim"
+										? m.summary
+										: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX,
+							},
 						],
 						timestamp: m.timestamp,
 					};

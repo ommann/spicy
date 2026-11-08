@@ -70,6 +70,7 @@ import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
 import type { CacheWarmer, CacheWarmingStatus } from "./cache-warmer.ts";
 import {
+	type CompactionMethod,
 	type CompactionPreparation,
 	type CompactionResult,
 	calculateContextTokens,
@@ -3002,6 +3003,7 @@ export class AgentSession {
 		customInstructions: string | undefined,
 		signal: AbortSignal,
 		reason: "manual" | "threshold" | "overflow",
+		method: CompactionMethod = 1,
 	): Promise<CompactionResult> {
 		// Resolve the request only when Pi summarizes itself: routing may call models or fail.
 		const request = await this._getSummarizationRequestAuth(model, signal);
@@ -3018,6 +3020,7 @@ export class AgentSession {
 			this.settingsManager.getRetrySettings(),
 			this._summarizationRetryCallbacks({ source: "compaction", reason }),
 			undefined, // sessionId
+			method,
 		);
 	}
 
@@ -3034,7 +3037,7 @@ export class AgentSession {
 		details?: unknown,
 		fromExtension?: boolean,
 		usage?: Usage,
-		procedureId?: string,
+		procedure?: Pick<CompactionResult, "procedureId" | "summaryFormat">,
 	): string {
 		const inheritedPrompt = getCurrentSystemMessage(this.sessionManager.buildSessionProjection().messages);
 		const selection = this.model;
@@ -3044,7 +3047,8 @@ export class AgentSession {
 				: undefined;
 		const rootId = this.sessionManager.appendCompactionRoot(summary, tokensBefore, details, fromExtension, usage, {
 			...source,
-			procedureId,
+			procedureId: procedure?.procedureId,
+			summaryFormat: procedure?.summaryFormat,
 		});
 		if (inheritedPrompt) {
 			this.sessionManager.appendMessage({
@@ -3097,7 +3101,8 @@ export class AgentSession {
 	 *
 	 * @param customInstructions Optional instructions for the compaction summary
 	 */
-	async compact(customInstructions?: string): Promise<CompactionResult> {
+	async compact(customInstructions?: string, method: CompactionMethod = 1): Promise<CompactionResult> {
+		if (method !== 1 && method !== 2) throw new Error(`Unknown compaction method: ${method}`);
 		await this.abort();
 		this._compactionAbortController = new AbortController();
 		this._emit({ type: "compaction_start", reason: "manual" });
@@ -3154,6 +3159,7 @@ export class AgentSession {
 					customInstructions,
 					this._compactionAbortController.signal,
 					"manual",
+					method,
 				));
 			const { summary, tokensBefore, usage, details, procedureId } = generated;
 			let { firstKeptEntryId } = generated;
@@ -3170,7 +3176,7 @@ export class AgentSession {
 				details,
 				fromExtension,
 				usage,
-				procedureId,
+				generated,
 			);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
@@ -3192,6 +3198,7 @@ export class AgentSession {
 			}
 
 			const compactionResult: CompactionResult = {
+				...(generated.summaryFormat ? { summaryFormat: generated.summaryFormat } : {}),
 				procedureId,
 				summary,
 				firstKeptEntryId,
@@ -3504,7 +3511,7 @@ export class AgentSession {
 				details,
 				fromExtension,
 				usage,
-				procedureId,
+				generated,
 			);
 			const newEntries = this.sessionManager.getEntries();
 			this._refreshFinalizedContext();
@@ -3526,6 +3533,7 @@ export class AgentSession {
 			}
 
 			const result: CompactionResult = {
+				...(generated.summaryFormat ? { summaryFormat: generated.summaryFormat } : {}),
 				procedureId,
 				summary,
 				firstKeptEntryId,

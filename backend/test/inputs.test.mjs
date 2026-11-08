@@ -40,6 +40,7 @@ test('command discriminator validates required fields and preserves supported pa
     { type: 'set_thinking_level', level: 'max' },
     { type: 'save_system_prompt', prompt: saved },
     { type: 'compact', customInstructions: 'Keep the details' },
+    { type: 'compact', method: 1 }, { type: 'compact', method: 2, customInstructions: 'Keep paths' },
   ];
   for (const value of valid) assert.deepEqual(inputs.commandInput.parse(value), value);
   const invalid = [
@@ -49,6 +50,7 @@ test('command discriminator validates required fields and preserves supported pa
     { type: 'prompt', message: 'hi', systemPrompt: { selected: { key: 'x', content: 'x' } } },
     { type: 'prompt', message: 'hi', images: [{ ...image, data: 'invalid!' }] },
     { type: 'compact', customInstructions: 4 }, { type: 'abort', message: 'unexpected' },
+    { type: 'compact', method: 3 }, { type: 'compact', method: '2' },
     { type: 'save_system_prompt', prompt: { ...saved, document: { ...document, version: 2 } } },
     { type: 'save_system_prompt', prompt: { ...saved, toolsAdded: [{ name: 'missing-fields' }] } },
     { type: 'save_system_prompt', prompt: { ...saved, toolsAdded: [{ ...saved.toolsAdded[0], constrainedSampling: { type: 'json_schema', strict: 'other' } }] } },

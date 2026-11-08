@@ -25,6 +25,7 @@ export interface CompactionDraft {
 }
 
 export interface FinishedCompaction<T = unknown> {
+	summaryFormat?: "verbatim";
 	summary: string;
 	details?: T;
 }
@@ -55,6 +56,7 @@ export async function runCompaction<T>(
 	options.signal?.throwIfAborted();
 	return {
 		procedureId: procedure.id,
+		...(finished.summaryFormat ? { summaryFormat: finished.summaryFormat } : {}),
 		summary: finished.summary,
 		firstKeptEntryId: preparation.firstKeptEntryId,
 		tokensBefore: preparation.tokensBefore,

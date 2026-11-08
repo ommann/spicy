@@ -277,9 +277,11 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 		unsubscribe?.();
 		unsubscribeBackpressure?.();
 		unsubscribe = session.subscribe((event) => {
-			output(process.env.SPICY_STREAM_TIMING === "1"
-				? { ...toJsonEvent(event), spicyEmittedAt: Date.now() }
-				: toJsonEvent(event));
+			output(
+				process.env.SPICY_STREAM_TIMING === "1"
+					? { ...toJsonEvent(event), spicyEmittedAt: Date.now() }
+					: toJsonEvent(event),
+			);
 			if (event.type === "turn_end" || event.type === "history_root") {
 				output({ type: "context_usage", usage: session.getContextUsage() ?? null });
 			}
@@ -481,7 +483,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// =================================================================
 
 			case "compact": {
-				const result = await session.compact(command.customInstructions);
+				const result = await session.compact(command.customInstructions, command.method);
 				return success(id, "compact", result);
 			}
 

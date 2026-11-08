@@ -45,6 +45,7 @@ import CodeLinewrapOption from './CodeLinewrapOption';
 import StreamingContentOption from './StreamingContentOption';
 import ThinkingOptions from './ThinkingOptions';
 import HiddenBranchesOption from './HiddenBranchesOption';
+import { parseCompactionCommand } from './compaction-command.mjs';
 import { createBranchVisibility, showOnlyHiddenBranches } from './branch-visibility';
 import { filterConversationBranches } from './branch-visibility-model.mjs';
 import ChatToolbar from './ChatToolbar';
@@ -581,6 +582,7 @@ export default function App(props: ParentProps) {
       item.id === draft.id ? { ...item, text: message, sentAt: Date.now() } : item) }));
 
     try {
+      const compaction = parseCompactionCommand(message);
       if (draft || target) {
         const entryId = draft?.sourceId || target;
         const source = agentForEntry(visibleAgents(), entryId, selectedAgentId());
@@ -598,9 +600,8 @@ export default function App(props: ParentProps) {
         accept(agent!);
       }
       if (!agent?.agentId) throw new Error('Agent did not start');
-      if (compact) {
-        const result = await api.command({ agentId: agent.agentId, type: 'compact',
-          customInstructions: message.trim().slice('/compact'.length).trim() || undefined }, rpcOptions);
+      if (compaction) {
+        const result = await api.command({ agentId: agent.agentId, type: 'compact', ...compaction }, rpcOptions);
         accept(result.snapshot);
         const targetId = graph().ancestors(result.snapshot.leafId).find((id: string) => graph().nodes.has(id));
         if (targetId) setFocusRequest(previous => ({ id: targetId, revision: (previous?.revision || 0) + 1 }));
