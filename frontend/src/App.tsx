@@ -765,7 +765,7 @@ export default function App(props: ParentProps) {
         <ChatRouteContext.Provider value={route => {
           onCleanup(() => { conversation = undefined; });
           return <Show when={composerScope()} keyed>{_sessionKey => (
-          <Show when={shownLanes().length} fallback={
+          <Show when={selectedSessionUrlId() && (!routeSessionId() || selectedSessionUrlId() === routeSessionId()) && shownLanes().length} fallback={
             <div class="spicy-host" classList={{ 'single-mode': route.mode === 'focused' }}>
               <ChatToolbar active empty mode={route.mode} notification={notification()} onOptions={openOptions}
                 onMode={mode => { setViewMode(mode); navigateView(chatViewPath(mode)); }} onFork={() => {}} />
