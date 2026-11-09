@@ -12,6 +12,9 @@ import { setViewMode } from './view-mode';
 import type { ConversationMode, ConversationViewState } from './conversation-view-state';
 import { ChatEntryPart } from './ChatContent';
 import MessageComposer from './MessageComposer';
+import { branchLabel, setBranchLabel } from './branch-labels';
+import BranchLabel from './BranchLabel';
+import './branch-labels.css';
 import type { ContextWindowUsage } from './context-window';
 import ScrollBar from './ScrollBar';
 import type { AgentHealthStatus } from './AgentHealth';
@@ -126,6 +129,23 @@ export function ConversationCard(props: { id: string; node: Wire; position: Wire
 
 export default function Conversation(props: Props) {
   const mode = () => props.mode;
+  const [labelMuted, setLabelMuted] = createSignal(false);
+  const [labelArea, setLabelArea] = createSignal({ left: 0, top: 0, width: 0, height: 0 });
+  onMount(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const activity = () => {
+      if (!props.active) return;
+      setLabelMuted(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setLabelMuted(false), 60_000);
+    };
+    const events = ['keydown', 'pointerdown', 'scroll'] as const;
+    for (const event of events) document.addEventListener(event, activity, { capture: true, passive: true });
+    onCleanup(() => {
+      clearTimeout(timer);
+      for (const event of events) document.removeEventListener(event, activity, true);
+    });
+  });
   const [viewState, setViewState] = props.viewState;
   let spacingProbe!: HTMLSpanElement;
   const [spacing, setSpacing] = createSignal({ row: 20, column: 48, edge: 24 });
@@ -271,6 +291,10 @@ export default function Conversation(props: Props) {
     if (!viewport) return;
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
+    const rect = viewport.getBoundingClientRect();
+    setLabelArea(previous => previous.left === rect.left && previous.top === rect.top
+      && previous.width === width && previous.height === height ? previous
+      : { left: rect.left, top: rect.top, width, height });
     if (width || height) setDimensions(previous => previous.width === width && previous.height === height ? previous : { width, height });
     const branch = jumpUp?.getBoundingClientRect().width || 0;
     const latest = jumpLatest?.getBoundingClientRect().width || 0;
@@ -336,6 +360,21 @@ export default function Conversation(props: Props) {
     const drafts = props.drafts;
     const update = props.onDraftChange;
     const text = drafts[key] || '';
+    if (/^\/label(?:\s|$)/i.test(text.trim())) {
+      const args = text.trim().split(/\s+/).slice(1);
+      const clear = args.length === 1 && args[0].toLowerCase() === 'clear';
+      const label = args[0]?.toUpperCase();
+      const color = args[1]?.toLowerCase();
+      if (images.length || (!clear && (args.length !== 2
+        || !/^[a-z]+$/.test(color) || !CSS.supports('color', color)))) {
+        window.alert('Use /label TEXT blue (text and a color name), or /label clear. No attachments.');
+        return false;
+      }
+      try { setBranchLabel(key, clear ? undefined : { text: label, color }); }
+      catch { window.alert('Could not save the branch label to LocalStorage.'); return false; }
+      update(key, '');
+      return true;
+    }
     if ((!text.trim() && !images.length) || props.busy(leafId)) return false;
     const accepted = await props.onSubmit(text, leafId, images);
     if (accepted && drafts[key] === text) update(key, '');
@@ -563,7 +602,17 @@ export default function Conversation(props: Props) {
       onCleanup(() => { unobserve(element); inputElements.delete(key); });
 
       return <Portal mount={inline() ? stage : composerRow}>
+        <Portal mount={mode() === 'focused' ? document.body : stage}>
+        <Show when={props.active && branchLabel(key)}>{label =>
+          <BranchLabel text={label().text} color={label().color} screen={mode() === 'focused'} muted={labelMuted()}
+            style={{ width: mode() === 'focused' ? `${labelArea().width}px` : `${workingWidth()}px`,
+              height: mode() === 'focused' ? `${Math.min(525, labelArea().height * 0.9)}px` : undefined,
+              left: mode() === 'focused' ? `${labelArea().left}px` : `${layout().composers[index()]?.left || 0}px`,
+              top: mode() === 'focused' ? `${labelArea().top + labelArea().height / 2}px` : `${(layout().composers[index()]?.top || 0) - 545}px` }} />
+        }</Show>
+        </Portal>
         <MessageComposer ref={value => { element = value; }} inputRef={value => { input = value; }}
+          placeholder={branchLabel(key)?.text}
           value={props.drafts[key] || ''} history={history()} onChange={value => setDrafts(key, value)} leafId={lane()?.leafId}
           images={viewState.images[key] || []} onImagesChange={images => setViewState('images', key, images)}
           label={index() ? `Message draft (not sent), branch ${index() + 1}` : 'Message draft (not sent)'}

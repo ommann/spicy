@@ -46,6 +46,7 @@ import StreamingContentOption from './StreamingContentOption';
 import ThinkingOptions from './ThinkingOptions';
 import HiddenBranchesOption from './HiddenBranchesOption';
 import { parseCompactionCommand } from './compaction-command.mjs';
+import { transferBranchLabel } from './branch-labels';
 import { createBranchVisibility, showOnlyHiddenBranches } from './branch-visibility';
 import { filterConversationBranches } from './branch-visibility-model.mjs';
 import ChatToolbar from './ChatToolbar';
@@ -306,6 +307,9 @@ export default function App(props: ParentProps) {
     events.addEventListener('record', event => {
       const record = JSON.parse((event as MessageEvent).data);
       const finishTiming = traceRecord(id, record);
+      const labelSource = record.type === 'history_root'
+        ? composerLanes().find(lane => leafAgent(lane.leafId)?.agentId === id)?.key
+        : undefined;
       updateAgent(id, previous => {
         const live = record.type === 'history_root' ? [] : applyRecord(previous.live, record);
         const generating = record.type === 'agent_start' ? true : record.type === 'agent_settled' ? false
@@ -320,6 +324,13 @@ export default function App(props: ParentProps) {
           ...(record.type === 'context_usage' ? { state: { ...previous.state, contextUsage: record.usage } } : {}),
         };
       });
+      if (labelSource) {
+        const destination = composerLanes().find(lane => lane.path.includes(record.rootId));
+        if (destination) {
+          try { transferBranchLabel(labelSource, destination.key); }
+          catch { setNotification({ message: 'Could not transfer the branch label in LocalStorage.', isError: true }); }
+        }
+      }
       if (record.type === 'history_root' && id === selectedAgentId()) {
         setFocusRequest(previous => ({ id: record.rootId, revision: (previous?.revision || 0) + 1 }));
       }

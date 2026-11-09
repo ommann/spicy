@@ -17,6 +17,7 @@ interface Props {
   onAbort?: () => void;
   onFocus?: () => void;
   label?: string;
+  placeholder?: string;
   leafId?: string;
   running?: boolean;
   health?: AgentHealthStatus;
@@ -136,7 +137,7 @@ export default function MessageComposer(props: Props) {
     <Show when={attachmentError()}><div role="alert">{attachmentError()}</div></Show>
     <div class="editor" data-leaf-id={props.leafId} style={{ position: 'relative', top: 'auto', margin: '0', '--context-width': `${formatContextWindow(props.contextUsage).length + 1}ch` }}>
     <ScrollableTextarea ref={element => { input = element; props.inputRef?.(element); }}
-      aria-label={props.label || 'Message draft (not sent)'} rows="1" wrap="soft" spellcheck={false}
+      aria-label={props.label || 'Message draft (not sent)'} placeholder={props.placeholder} rows="1" wrap="soft" spellcheck={false}
       value={props.value} style={{ height: `${size().height}px`, 'overflow-y': size().scrollable ? 'auto' : 'hidden' }}
       onPaste={paste}
       onInput={event => { historyIndex = undefined; props.onChange(event.currentTarget.value); }} onFocus={props.onFocus}

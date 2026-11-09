@@ -1,0 +1,28 @@
+/* Decorative only: never participates in composer layout or input handling. */
+.branch-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  height: 525px;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 1;
+  z-index: 10;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.branch-label-muted {
+  opacity: 0;
+}
+
+.branch-label-screen {
+  position: fixed;
+  height: min(525px, 70vh);
+  transform: translateY(-50%);
+}
