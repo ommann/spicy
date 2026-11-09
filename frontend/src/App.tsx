@@ -1,4 +1,5 @@
 import ScrollableTextarea from './ScrollableTextarea';
+import { FileLinkCwdContext } from './file-link';
 import Input from './Input';
 import Login from './Login';
 import { ChatRouteContext } from './ChatRoute';
@@ -754,6 +755,7 @@ export default function App(props: ParentProps) {
           openSystemPrompt(prompt.id);
         },
       }}>
+      <FileLinkCwdContext.Provider value={sessionCwd}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <ToolApps sessionKey={branchKey()}>
         <SessionsRouteContext.Provider value={() => <Sessions load={loadHomeSessions}
@@ -786,6 +788,7 @@ export default function App(props: ParentProps) {
         </SessionsRouteContext.Provider>
         </ToolApps>
       </SystemPromptContext.Provider>
+      </FileLinkCwdContext.Provider>
       </SystemPromptCreatorContext.Provider>
       </NavigationLinksContext.Provider>
       <Dialog ref={optionsDialog} class="chat-dialog options-dialog" title="Options">

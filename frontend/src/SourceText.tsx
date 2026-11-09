@@ -1,9 +1,10 @@
-import { For, Index, Match, Show, Switch, createMemo, type JSX } from 'solid-js';
+import { For, Index, Match, Show, Switch, createMemo, useContext, type JSX } from 'solid-js';
 import { highlightTokens } from './syntax.mjs';
 import ScrollArea from './ScrollArea';
 import { createAnsiTokenizer } from './ansi.mjs';
 import { Lexer, type Tokens } from 'marked';
 import './markdown-table.css';
+import { FileLinkCwdContext, fileLink } from './file-link';
 import { showBoldSyntax, showItalicSyntax, showInlineCodeSyntax } from './formatting-syntax';
 
 type SourceChunk = { text: string; language?: string; code?: boolean; table?: Tokens.Table };
@@ -26,12 +27,13 @@ export function AnsiText(props: { text: string }) {
 }
 
 function MarkdownText(props: { text: string }) {
+  const cwd = useContext(FileLinkCwdContext);
   const tokens = createMemo(() => Lexer.lexInline(props.text));
   return <Index each={tokens()}>{token => <Switch fallback={<HighlightedText text={token().raw} language="markdown" />}>
     <Match when={token().type === 'link'}>
-      <Show when={/^(https?:\/\/|mailto:)/i.test((token() as Tokens.Link).href)}
+      <Show when={/^(https?:\/\/|mailto:|file:)/i.test((token() as Tokens.Link).href) || !/^[a-z][a-z\d+.-]*:/i.test((token() as Tokens.Link).href.trim())}
         fallback={<HighlightedText text={token().raw} language="markdown" />}>
-        <a href={(token() as Tokens.Link).href} target="_blank" rel="noopener noreferrer"
+        <a href={fileLink((token() as Tokens.Link).href, cwd())} target="_blank" rel="noopener noreferrer"
           title={(token() as Tokens.Link).title || undefined}>
           {(token() as Tokens.Link).text}
         </a>
