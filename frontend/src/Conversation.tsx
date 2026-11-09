@@ -446,7 +446,8 @@ export default function Conversation(props: Props) {
   });
 
   createEffect(on(() => props.focusRequest, request => {
-    if (!request || !props.graph.nodes.has(request.id)) return;
+    if (!request || request.revision === viewState.appliedFocusRevision || !props.graph.nodes.has(request.id)) return;
+    setViewState('appliedFocusRevision', request.revision);
     focus(request.id, false, false);
     const lane = lanes().find(item => item.leafId === request.id);
     if (lane) inputElements.get(lane.key)?.focus({ preventScroll: true });

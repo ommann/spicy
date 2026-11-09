@@ -11,6 +11,7 @@ export function createConversationViewState() {
   return createStore({
     selectedKey: '',
     initialized: false,
+    appliedFocusRevision: undefined as number | undefined,
     widths: { focused: 720, side: 1040 },
     focusedFitsWindow: true,
     positions: {} as Partial<Record<ConversationMode, ReadingPosition>>,
