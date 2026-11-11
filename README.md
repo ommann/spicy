@@ -37,6 +37,6 @@ Open http://localhost:5174.
 
 ## Screenshots
 
-![Spicy conversation tree view](images/tree-view.png)
+![Spicy conversation tree view](showcase/images/tree-view.png)
 
-![Spicy single conversation view](images/single-view.png)
+![Spicy single conversation view](showcase/images/single-view.png)

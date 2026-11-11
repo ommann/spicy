@@ -103,7 +103,7 @@ export default function DiffView(props: { files: Wire[]; fullDocument?: boolean;
 
   return <div ref={container} classList={{ 'tool-diff-preview': !!props.preview, 'diff-at-start': atStart(), 'diff-at-end': atEnd() }}><ScrollArea class="diff-scroll-area" contentClass="diff-view" contentClassList={{ 'diff-document-view': !!props.fullDocument, 'code-diff': props.language !== 'markdown' }}
     events={{ 'aria-label': 'Changes', onCopy: event => copySourceRows(event, event.currentTarget) }}>
-    <For each={shownFiles()}>{file => <section class="diff-document" style={{
+    <For each={shownFiles()}>{file => <section class="diff-document" classList={{ 'diff-without-line-numbers': !file.hunks.some((hunk: Wire) => hunk.rows.some((row: Wire) => row.oldLine != null || row.newLine != null)) }} style={{
       '--line-number-width': `${file.hunks.reduce((width: number, hunk: Wire) => hunk.rows.reduce((digits: number, row: Wire) =>
         Math.max(digits, String(row.kind === 'remove' ? row.oldLine || '' : row.newLine || '').length), width), 3) + 1}ch`,
     }}>

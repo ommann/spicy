@@ -41,7 +41,7 @@ export const createAgentInput = z.union([
     .refine(value => !(value.sourceAgentId && value.sessionId), { message: 'Choose sourceAgentId or sessionId, not both' })
     .refine(value => !value.entryId || Boolean(value.sourceAgentId || value.sessionId), { message: 'entryId requires sourceAgentId or sessionId', path: ['entryId'] }),
   z.strictObject({ ...agent, openSessionId: id }),
-  z.strictObject({ ...agent, sessionUrlId: z.string().regex(/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/) }),
+  z.strictObject({ ...agent, sessionUrlId: z.string().regex(/^[abcdefghjkmnopqrstuvwxyz23456789]{8}$/) }),
 ]);
 export const startInput = z.strictObject({ ...agent, sessionId: id.optional() }).default({});
 export const loginInput = z.strictObject({ ...agent, providerId: id, type: z.enum(['oauth', 'api_key']) });

@@ -72,7 +72,7 @@ export function createOperations({ agents, cwd, managed }) {
       return openSessionView(session, sessions);
     }
     if (command.sessionUrlId !== undefined) {
-      if (typeof command.sessionUrlId !== 'string' || !/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/.test(command.sessionUrlId)) fail('Invalid session URL ID');
+      if (typeof command.sessionUrlId !== 'string' || !/^[abcdefghjkmnopqrstuvwxyz23456789]{8}$/.test(command.sessionUrlId)) fail('Invalid session URL ID');
       const active = [...agents.agents.values()].filter(agent => agent.snapshot.state?.sessionUrlId === command.sessionUrlId);
       const sessions = await allSessions();
       const matches = [...new Map(sessions.filter(session => session.urlId === command.sessionUrlId).map(session => [path.resolve(session.path), session])).values()];

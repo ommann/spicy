@@ -1,4 +1,4 @@
-const sessionPrefix = /^\/([abcdefghjkmnpqrstuvwxyz23456789]{8})(?=\/|$)/;
+const sessionPrefix = /^\/([abcdefghjkmnopqrstuvwxyz23456789]{8})(?=\/|$)/;
 
 export function sessionUrlIdFromPath(path: string): string | undefined {
   return sessionPrefix.exec(path)?.[1];

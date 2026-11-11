@@ -235,6 +235,14 @@
   cursor: default;
 }
 
+.diff-without-line-numbers .diff-line {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.diff-without-line-numbers .diff-line-number {
+  display: none;
+}
+
 .diff-line {
   user-select: none;
 }
