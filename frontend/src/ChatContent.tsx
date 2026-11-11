@@ -190,9 +190,6 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
   const text = () => output().filter((block: Wire) => block.type === 'text').map((block: Wire) => block.text).join('');
   const editDiff = createMemo(() => props.call.name === 'edit' && props.result && !props.result.isError
     ? recordedEditDiff(props.result.details, args().path, args().edits || (typeof args().oldText === 'string' ? [args()] : [])) : []);
-  const lines = () => editDiff().length
-    ? editDiff().reduce((count: number, file: Wire) => count + file.hunks.reduce((sum: number, hunk: Wire) => sum + hunk.rows.length, 0), 0)
-    : text().split('\n').length;
   const language = () => languages[args().path?.split('.').at(-1)?.toLowerCase()];
   const openImage = useContext(ImageContext);
   function preview(opener: HTMLElement) {
@@ -212,28 +209,32 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
       <Show when={args().offset}><span class="range">{`:${args().offset}${args().limit ? `-${args().offset + args().limit - 1}` : ''}`}</span></Show>
     </div>
     <Show when={!compactRead()}>
-      <div class="tool-body" classList={{ 'output-collapsed': lines() > 10 && !expanded() }}>
+      <ExpandableContent measureKey={[text(), editDiff()]} initialOpen={expanded()} expandRequest={props.expandRequest} previewHeight={200} bodyClass="tool-body">
         <Show when={editDiff().length} fallback={
           <For each={output().filter((block: Wire) => block.type === 'text')}>{block =>
             <TerminalText text={block.text} language={props.call.name === 'read' || props.call.name === 'write' ? language() : undefined} />
           }</For>
         }><DiffView files={editDiff()} /></Show>
-      </div>
-      <Show when={lines() > 10}>
-        <CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
-      </Show>
+      </ExpandableContent>
     </Show>
     <Images blocks={props.result?.content || []} caption={args().path || ''} />
   </section>;
 }
 
-function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest }) {
+function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest; previewHeight?: number; bodyClass?: string }) {
   const [expanded, setExpanded] = createSignal(!!props.initialOpen);
   const [height, setHeight] = createSignal(0);
+  const [minimumSavings, setMinimumSavings] = createSignal(100);
+  const previewHeight = () => props.previewHeight ?? 440;
+  // Reserve one line for the toggle, then require four lines of net savings.
+  const worthwhile = () => height() - previewHeight() >= minimumSavings();
   let body!: HTMLDivElement;
 
   function measure() {
     if (!body.isConnected) return;
+    const style = getComputedStyle(body);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+    setMinimumSavings(lineHeight * 5);
     setHeight(body.scrollHeight);
   }
 
@@ -248,12 +249,13 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
 
 
   return <>
-    <div ref={body} class="chat-part-body" classList={{ 'part-open': expanded() }}
+    <div ref={body} class={`chat-part-body ${props.bodyClass ?? ''}`} classList={{ 'part-open': expanded() || !worthwhile() }}
+      style={{ 'max-height': expanded() || !worthwhile() ? 'none' : `${previewHeight()}px` }}
       onDblClick={event => {
         if ((event.target as Element).closest('button, input, textarea, a, img')) return;
-        if (height() > 440) { event.preventDefault(); setExpanded(value => !value); }
+        if (worthwhile()) { event.preventDefault(); setExpanded(value => !value); }
       }}>{props.children}</div>
-    <Show when={height() > 440}>
+    <Show when={worthwhile()}>
       <CollapseToggle class="part-expand" expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
     </Show>
   </>;
