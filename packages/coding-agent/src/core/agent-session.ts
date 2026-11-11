@@ -14,6 +14,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { getDiscussionTitle } from "./discussion-title.ts";
 import { basename, dirname } from "node:path";
 import {
 	type AfterToolCallContext,
@@ -3045,6 +3046,10 @@ export class AgentSession {
 			selection && isVirtualModel(selection)
 				? getVirtualModelState(this.sessionManager.getBranch(), selection.provider, selection.id)
 				: undefined;
+		const inheritedTitle = getDiscussionTitle(this.sessionManager.getBranch());
+		if (inheritedTitle !== undefined) {
+			details = { ...(details && typeof details === "object" ? details : {}), inheritedTitle };
+		}
 		const rootId = this.sessionManager.appendCompactionRoot(summary, tokensBefore, details, fromExtension, usage, {
 			...source,
 			procedureId: procedure?.procedureId,

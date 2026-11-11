@@ -38,6 +38,7 @@ import { promptLabel } from './prompt-numbers';
 import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
+import { cachedDiscussionTitle, cacheDiscussionTitle } from './discussion-titles';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import ToolApps from './ToolApps';
 import { api, type UiReply } from './api';
@@ -419,13 +420,22 @@ export default function App(props: ParentProps) {
     setViewOptions(conversation.options());
   }
 
+  createEffect(() => {
+    for (const agent of Object.values(agentSnapshots())) {
+      const id = agent.state?.sessionUrlId;
+      if (id && agent.leafId) cacheDiscussionTitle(id, agent.entries, agent.leafId);
+    }
+  });
+
   async function loadHomeSessions() {
     await bridgeReady;
     const [sessions, agents] = await Promise.all([
       api.sessions({ scope: 'all' }, { signal: appLifecycle.signal }),
       api.agents.list({}, { signal: appLifecycle.signal }),
     ]);
-    return sessions.map(session => ({ ...session, running: agents.some(agent =>
+    return sessions.map(session => ({ ...session,
+      name: (session.urlId && cachedDiscussionTitle(session.urlId)) || session.name,
+      running: agents.some(agent =>
       agent.running && session.urlId && agent.state?.sessionUrlId === session.urlId) }));
   }
 
