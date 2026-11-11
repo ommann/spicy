@@ -167,6 +167,10 @@
   display: none;
 }
 
+.tool-diff-preview .diff-view {
+  padding-inline: var(--chat-padding-inline);
+}
+
 .tool-diff-preview.diff-at-start .diff-view {
   padding-top: var(--chat-padding-block);
 }
