@@ -4,7 +4,8 @@ import CollapseToggle from './CollapseToggle';
 import DiffView from './DiffView';
 import { recordedEditDiff } from './diff-model.mjs';
 import { Dynamic } from 'solid-js/web';
-import SourceText, { AnsiText, TerminalText } from './SourceText';
+import SourceText, { AnsiText, ShellCommand, TerminalText } from './SourceText';
+import { canPrettifyCommand, prettifyCommand } from './prettify-command.mjs';
 import { createAnsiTokenizer } from './ansi.mjs';
 import { projectChatParts } from './conversation-model.mjs';
 import type { Wire } from './types';
@@ -174,6 +175,27 @@ const languages: Record<string, string> = { kt: 'kotlin', kts: 'kotlin', js: 'ja
 
 function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest?: ExpansionRequest }) {
   const [expanded, setExpanded] = createSignal(false);
+  const [pretty, setPretty] = createSignal<string>();
+  const [formatting, setFormatting] = createSignal(false);
+  const [formatError, setFormatError] = createSignal('');
+  createEffect(on(() => props.call.arguments?.command, () => { setPretty(undefined); setFormatError(''); }));
+  async function togglePretty() {
+    if (pretty()) { setPretty(undefined); return; }
+    const original = args().command;
+    setFormatting(true);
+    setFormatError('');
+    try {
+      const formatted = await prettifyCommand(original);
+      if (args().command !== original) return;
+      if (formatted) setPretty(formatted);
+      else setFormatError('Already formatted or unable to prettify.');
+    } catch { setFormatError('Unable to load formatter.'); }
+    finally { setFormatting(false); }
+  }
+  const prettifyAction = () => <Show when={isBash() && canPrettifyCommand(args().command || '')}>
+    <button type="button" class="collapse-toggle" disabled={formatting()} onClick={togglePretty}>{pretty() ? 'Original' : 'Prettify'}</button>
+    <Show when={formatError()}><span role="status">{formatError()}</span></Show>
+  </Show>;
 
   createEffect(on(() => props.expandRequest, value => { if (value) setExpanded(value.open); }));
   const args = () => props.call.arguments || {};
@@ -205,11 +227,11 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
       }}
       role={imageRead() ? 'button' : undefined} aria-label={imageRead() ? `Open image: ${props.call.name} ${label()}` : undefined}>
       <Show when={!isBash()}><strong>{props.call.name}</strong></Show><span class={args().path ? 'path' : 'tool-arguments'}
-        onDblClick={event => { if (isBash()) { event.preventDefault(); selectSource(event.currentTarget); } }}><AnsiText text={label()} /></span>
+        onDblClick={event => { if (isBash()) { event.preventDefault(); selectSource(event.currentTarget); } }}><Show when={isBash()} fallback={<AnsiText text={label()} />}><ShellCommand text={pretty() ?? label()} /></Show></span>
       <Show when={args().offset}><span class="range">{`:${args().offset}${args().limit ? `-${args().offset + args().limit - 1}` : ''}`}</span></Show>
     </div>
     <Show when={!compactRead()}>
-      <ExpandableContent measureKey={[text(), editDiff()]} initialOpen={expanded()} expandRequest={props.expandRequest} previewHeight={200} bodyClass="tool-body">
+      <ExpandableContent measureKey={[text(), editDiff()]} initialOpen={expanded()} expandRequest={props.expandRequest} previewHeight={200} bodyClass="tool-body" actions={prettifyAction()}>
         <Show when={editDiff().length} fallback={
           <For each={output().filter((block: Wire) => block.type === 'text')}>{block =>
             <TerminalText text={block.text} language={props.call.name === 'read' || props.call.name === 'write' ? language() : undefined} />
@@ -221,7 +243,7 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
   </section>;
 }
 
-function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest; previewHeight?: number; bodyClass?: string }) {
+function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest; previewHeight?: number; bodyClass?: string; actions?: JSX.Element }) {
   const [expanded, setExpanded] = createSignal(!!props.initialOpen);
   const [height, setHeight] = createSignal(0);
   const [minimumSavings, setMinimumSavings] = createSignal(100);
@@ -255,9 +277,12 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
         if ((event.target as Element).closest('button, input, textarea, a, img')) return;
         if (worthwhile()) { event.preventDefault(); setExpanded(value => !value); }
       }}>{props.children}</div>
-    <Show when={worthwhile()}>
-      <CollapseToggle class="part-expand" expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
-    </Show>
+    <div class="content-actions">
+      <Show when={worthwhile()}>
+        <CollapseToggle class="part-expand" expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
+      </Show>
+      {props.actions}
+    </div>
   </>;
 }
 

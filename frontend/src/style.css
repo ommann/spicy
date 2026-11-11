@@ -156,6 +156,16 @@
   padding-inline-start: 2ch;
 }
 
+.content-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2ch;
+}
+
+.content-actions:empty {
+  display: none;
+}
+
 .tool-body,
 .codemode-output {
   min-width: 0;

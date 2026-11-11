@@ -1,5 +1,5 @@
 import { For, Index, Match, Show, Switch, createMemo, useContext, type JSX } from 'solid-js';
-import { highlightTokens } from './syntax.mjs';
+import { highlightTokens, highlightHeredocTokens } from './syntax.mjs';
 import ScrollArea from './ScrollArea';
 import { createAnsiTokenizer } from './ansi.mjs';
 import { Lexer, type Tokens } from 'marked';
@@ -24,6 +24,13 @@ export function AnsiText(props: { text: string }) {
   const runs = createMemo(() => createAnsiTokenizer()(props.text));
 
   return <For each={runs()}>{run => <span style={run.style as JSX.CSSProperties}>{run.text}</span>}</For>;
+}
+
+export function ShellCommand(props: { text: string }) {
+  const tokens = createMemo(() => highlightHeredocTokens(props.text));
+  return <span class="syntax-highlighted"><Show when={!props.text.includes('\x1b')} fallback={<AnsiText text={props.text} />}>
+    <Index each={tokens()}>{token => <span class={token().className}>{token().text}</span>}</Index>
+  </Show></span>;
 }
 
 function MarkdownText(props: { text: string }) {
