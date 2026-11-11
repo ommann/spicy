@@ -184,6 +184,10 @@
   margin-right: 1ch;
 }
 
+.bash-tool {
+  padding-inline: var(--bash-padding-inline);
+}
+
 .bash-tool .tool-title {
   display: flex;
   align-items: baseline;
@@ -208,7 +212,7 @@
 .bash-tool .tool-body {
   background: var(--terminal-background);
   color: var(--terminal-text);
-  padding: 10px 12px;
+  padding: var(--chat-padding-block) var(--bash-padding-inline);
   border-radius: 0;
 }
 

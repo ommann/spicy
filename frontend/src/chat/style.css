@@ -1,5 +1,8 @@
 :root {
-  --block-padding: 1lh 1ch;
+  --chat-padding-block: 1lh;
+  --chat-padding-inline: 2ch;
+  --bash-padding-inline: 2ch;
+  --block-padding: var(--chat-padding-block) var(--chat-padding-inline);
   font-family: "Liberation Mono", "DejaVu Sans Mono", monospace;
   font-size: 14px;
   line-height: 20px;
@@ -26,7 +29,7 @@ body {
 }
 .message {
   margin: 0;
-  padding: 1lh 1ch;
+  padding: var(--block-padding);
 }
 .user {
   padding: var(--block-padding);
@@ -35,7 +38,7 @@ body {
   margin-bottom: 20px;
 }
 .thinking {
-  padding: 0 1ch;
+  padding: 0 var(--chat-padding-inline);
   color: var(--thinking);
   font-style: italic;
 }
@@ -317,7 +320,7 @@ pre {
   padding: 10px 0;
 }
 .session-summary {
-  padding: 1lh 1ch;
+  padding: var(--block-padding);
   color: var(--muted);
 }
 .session-summary summary {
