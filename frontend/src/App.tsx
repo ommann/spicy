@@ -54,6 +54,8 @@ import { filterConversationBranches } from './branch-visibility-model.mjs';
 import ChatToolbar from './ChatToolbar';
 import ImagePasteOption from './ImagePasteOption';
 import SyntaxOptions from './SyntaxOptions';
+import CursorOption from './CursorOption';
+import { chatArrowCursor } from './chat-cursor';
 import { streamingContent } from './streaming-content';
 import type { AgentHealthStatus } from './AgentHealth';
 import { codeLinewrap } from './code-linewrap';
@@ -713,7 +715,7 @@ export default function App(props: ParentProps) {
   });
 
   return (
-    <div class="app-settings" style={{
+    <div class="app-settings" classList={{ 'chat-arrow-cursor': chatArrowCursor() }} style={{
       '--code-white-space': codeLinewrap() ? 'pre-wrap' : 'pre',
       '--code-overflow-wrap': codeLinewrap() ? 'anywhere' : 'normal',
       '--code-content-width': codeLinewrap() ? '100%' : 'max-content',
@@ -822,6 +824,7 @@ export default function App(props: ParentProps) {
         <ThinkingOptions />
         <ImagePasteOption />
         <SyntaxOptions />
+        <CursorOption />
       </Dialog>
       <Dialog
         ref={chatDialog}

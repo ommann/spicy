@@ -215,6 +215,22 @@
   user-select: text;
 }
 
+.chat-arrow-cursor :is(.message, .user, .thinking, .tool, .trace-text,
+.thinking-text, .tool-arguments, .tool-body, .codemode-code,
+.codemode-output, .diff-view, .message *, .user *, .thinking *, .tool *) {
+  cursor: default;
+}
+
+.chat-arrow-cursor :is(.message, .user, .thinking, .tool)
+:is(a, button, [role='button'], a *, button *, [role='button'] *) {
+  cursor: pointer;
+}
+
+.chat-arrow-cursor .thinking [role='button'],
+.chat-arrow-cursor .thinking [role='button'] * {
+  cursor: default;
+}
+
 .diff-line {
   user-select: none;
 }
