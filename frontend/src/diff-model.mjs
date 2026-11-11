@@ -7,6 +7,8 @@ export function recordedEditDiff(details, path, edits = []) {
       const files = parsePatch(details.patch);
       if (files.some(file => file.hunks.length)) return files.map(file => ({
         name: file.newFileName === '/dev/null' ? file.oldFileName : file.newFileName || path,
+        oldLineCount: details.oldLineCount,
+        newLineCount: details.newLineCount,
         hunks: file.hunks.map(hunk => {
           let oldLine = hunk.oldStart, newLine = hunk.newStart;
           return { ...hunk, rows: hunk.lines.filter(line => /^[ +-]/.test(line)).map(line => {

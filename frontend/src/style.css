@@ -160,10 +160,25 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0 2ch;
+  transform: translateY(0.25lh);
 }
 
 .content-actions:empty {
   display: none;
+}
+
+.tool-diff-preview.diff-at-start .diff-view {
+  padding-top: var(--chat-padding-block);
+}
+
+.tool-diff-preview.diff-at-end .diff-view {
+  padding-bottom: var(--chat-padding-block);
+}
+
+.diff-omission {
+  color: var(--text-secondary);
+  font-style: italic;
+  user-select: none;
 }
 
 .tool-body,

@@ -1,4 +1,6 @@
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
+import CollapseToggle from './CollapseToggle';
+import { collapseDiffRows, previewHeight } from './collapse-policy.mjs';
 import ScrollArea from './ScrollArea';
 import { highlightTokens, supportsLanguage } from './syntax.mjs';
 import { emphasizeRows } from './diff-model.mjs';
@@ -56,15 +58,52 @@ function prepareHunk(hunk: Wire, language?: string) {
   });
 }
 
-export default function DiffView(props: { files: Wire[]; fullDocument?: boolean; language?: string; }) {
+export default function DiffView(props: { files: Wire[]; fullDocument?: boolean; language?: string; preview?: boolean; expandRequest?: { open: boolean } }) {
+  const [expanded, setExpanded] = createSignal(false);
+  const [viewport, setViewport] = createSignal(800);
+  const [lineHeight, setLineHeight] = createSignal(20);
+  let container!: HTMLDivElement;
+  createEffect(on(() => props.expandRequest, request => { if (request) setExpanded(request.open); }));
+  onMount(() => {
+    const measure = () => {
+      setViewport(window.innerHeight);
+      setLineHeight(parseFloat(getComputedStyle(container).lineHeight) || 20);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    onCleanup(() => window.removeEventListener('resize', measure));
+  });
   const files = createMemo(() => props.files.map(file => ({ ...file, name: String(file.name || ''),
     hunks: file.hunks.map((hunk: Wire) => ({ ...hunk, rows: prepareHunk(hunk,
       file.name.startsWith('tools.') ? 'json' : languageFor(file.name, props.language)) })),
   })));
 
-  return <ScrollArea class="diff-scroll-area" contentClass="diff-view" contentClassList={{ 'diff-document-view': !!props.fullDocument, 'code-diff': props.language !== 'markdown' }}
+  const compactFiles = createMemo(() => {
+    if (!props.preview) return files();
+    const total = files().reduce((sum, file) => sum + file.hunks.reduce((count: number, hunk: Wire) => count + hunk.rows.length, 0), 0);
+    const budget = Math.floor(previewHeight(total * lineHeight(), lineHeight(), viewport()) / lineHeight());
+    return files().map(file => ({ ...file, hunks: file.hunks.map((hunk: Wire) => ({ ...hunk,
+      rows: collapseDiffRows(hunk.rows, Math.max(2, Math.floor(budget * hunk.rows.length / Math.max(1, total)))),
+    })) }));
+  });
+  const collapsible = () => compactFiles().some((file, i) => file.hunks.some((hunk: Wire, j: number) => hunk.rows.length < files()[i].hunks[j].rows.length));
+  const shownFiles = () => expanded() ? files() : compactFiles();
+
+  const atStart = () => {
+    const row = shownFiles()[0]?.hunks[0]?.rows[0];
+    return row?.oldLine === 1 || row?.newLine === 1;
+  };
+  const atEnd = () => {
+    const file: Wire = shownFiles().at(-1) ?? {};
+    const row = file?.hunks.at(-1)?.rows.at(-1);
+    return !!row && row.kind !== 'omitted' && (
+      (file.oldLineCount !== undefined && row.oldLine === file.oldLineCount) ||
+      (file.newLineCount !== undefined && row.newLine === file.newLineCount));
+  };
+
+  return <div ref={container} classList={{ 'tool-diff-preview': !!props.preview, 'diff-at-start': atStart(), 'diff-at-end': atEnd() }}><ScrollArea class="diff-scroll-area" contentClass="diff-view" contentClassList={{ 'diff-document-view': !!props.fullDocument, 'code-diff': props.language !== 'markdown' }}
     events={{ 'aria-label': 'Changes', onCopy: event => copySourceRows(event, event.currentTarget) }}>
-    <For each={files()}>{file => <section class="diff-document" style={{
+    <For each={shownFiles()}>{file => <section class="diff-document" style={{
       '--line-number-width': `${file.hunks.reduce((width: number, hunk: Wire) => hunk.rows.reduce((digits: number, row: Wire) =>
         Math.max(digits, String(row.kind === 'remove' ? row.oldLine || '' : row.newLine || '').length), width), 3) + 1}ch`,
     }}>
@@ -72,12 +111,16 @@ export default function DiffView(props: { files: Wire[]; fullDocument?: boolean;
         <div class="diff-file">{file.name.replace(/^sections\./, '').replace(/^tools\./, '')}</div>
       </Show>
       <For each={file.hunks}>{hunk => <>
-        <For each={hunk.rows}>{row => <div class={`diff-line diff-${row.kind}`}>
-          <span class="diff-line-number" aria-hidden="true">{row.kind === 'meta' ? '' : row.kind === 'remove' ? row.oldLine : row.newLine}</span>
-          <code class="diff-source" data-source-row><For each={row.tokens}>{token => <span class={token.className}
-            classList={{ 'diff-word': token.emphasized }}>{token.text}</span>}</For></code>
+        <For each={hunk.rows}>{row => <div class={`diff-line diff-${row.kind === 'omitted' ? row.omittedKind : row.kind}`}>
+          <span class="diff-line-number" aria-hidden="true">{row.kind === 'meta' || row.kind === 'omitted' ? '' : row.kind === 'remove' ? row.oldLine : row.newLine}</span>
+          <Show when={row.kind !== 'omitted'} fallback={<span class="diff-omission" title={row.text} aria-label={row.text}>...</span>}><code class="diff-source" data-source-row><For each={row.tokens}>{token => <span class={token.className}
+            classList={{ 'diff-word': token.emphasized }}>{token.text}</span>}</For></code></Show>
         </div>}</For>
       </>}</For>
     </section>}</For>
-  </ScrollArea>;
+  </ScrollArea>
+    <Show when={props.preview && collapsible()}><div class="content-actions">
+      <CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
+    </div></Show>
+  </div>;
 }

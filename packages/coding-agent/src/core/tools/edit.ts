@@ -73,6 +73,8 @@ export interface EditToolDetails {
 	patch: string;
 	/** Line number of the first change in the new file (for editor navigation) */
 	firstChangedLine?: number;
+	oldLineCount?: number;
+	newLineCount?: number;
 }
 
 /**
@@ -205,7 +207,11 @@ export function createEditToolDefinition(
 							text: `Successfully replaced ${edits.length} block(s) in ${path}.`,
 						},
 					],
-					details: { diff: diffResult.diff, patch, firstChangedLine: diffResult.firstChangedLine },
+					details: {
+						diff: diffResult.diff, patch, firstChangedLine: diffResult.firstChangedLine,
+						oldLineCount: baseContent ? baseContent.replace(/\n$/, '').split('\n').length : 0,
+						newLineCount: newContent ? newContent.replace(/\n$/, '').split('\n').length : 0,
+					},
 				};
 			});
 		},

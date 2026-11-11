@@ -6,6 +6,7 @@ import { recordedEditDiff } from './diff-model.mjs';
 import { Dynamic } from 'solid-js/web';
 import SourceText, { AnsiText, ShellCommand, TerminalText } from './SourceText';
 import { canPrettifyCommand, prettifyCommand } from './prettify-command.mjs';
+import { previewHeight as adaptivePreviewHeight } from './collapse-policy.mjs';
 import { createAnsiTokenizer } from './ansi.mjs';
 import { projectChatParts } from './conversation-model.mjs';
 import type { Wire } from './types';
@@ -231,23 +232,25 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
       <Show when={args().offset}><span class="range">{`:${args().offset}${args().limit ? `-${args().offset + args().limit - 1}` : ''}`}</span></Show>
     </div>
     <Show when={!compactRead()}>
-      <ExpandableContent measureKey={[text(), editDiff()]} initialOpen={expanded()} expandRequest={props.expandRequest} previewHeight={200} bodyClass="tool-body" actions={prettifyAction()}>
-        <Show when={editDiff().length} fallback={
+      <Show when={editDiff().length} fallback={
+        <ExpandableContent measureKey={text()} initialOpen={expanded()} expandRequest={props.expandRequest} bodyClass="tool-body" actions={prettifyAction()}>
           <For each={output().filter((block: Wire) => block.type === 'text')}>{block =>
             <TerminalText text={block.text} language={props.call.name === 'read' || props.call.name === 'write' ? language() : undefined} />
           }</For>
-        }><DiffView files={editDiff()} /></Show>
-      </ExpandableContent>
+        </ExpandableContent>
+      }><DiffView files={editDiff()} preview expandRequest={props.expandRequest} /></Show>
     </Show>
     <Images blocks={props.result?.content || []} caption={args().path || ''} />
   </section>;
 }
 
-function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest; previewHeight?: number; bodyClass?: string; actions?: JSX.Element }) {
+function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest; bodyClass?: string; actions?: JSX.Element }) {
   const [expanded, setExpanded] = createSignal(!!props.initialOpen);
   const [height, setHeight] = createSignal(0);
   const [minimumSavings, setMinimumSavings] = createSignal(100);
-  const previewHeight = () => props.previewHeight ?? 440;
+  const [lineHeight, setLineHeight] = createSignal(20);
+  const [viewportHeight, setViewportHeight] = createSignal(800);
+  const previewHeight = () => adaptivePreviewHeight(height(), lineHeight(), viewportHeight());
   // Reserve one line for the toggle, then require four lines of net savings.
   const worthwhile = () => height() - previewHeight() >= minimumSavings();
   let body!: HTMLDivElement;
@@ -255,8 +258,10 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
   function measure() {
     if (!body.isConnected) return;
     const style = getComputedStyle(body);
-    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
-    setMinimumSavings(lineHeight * 5);
+    const measuredLineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+    setLineHeight(measuredLineHeight);
+    setViewportHeight(window.innerHeight);
+    setMinimumSavings(measuredLineHeight * 5);
     setHeight(body.scrollHeight);
   }
 
@@ -266,7 +271,8 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
   onMount(() => {
     const observer = new ResizeObserver(measure);
     observer.observe(body);
-    onCleanup(() => observer.disconnect());
+    window.addEventListener('resize', measure);
+    onCleanup(() => { observer.disconnect(); window.removeEventListener('resize', measure); });
   });
 
 
