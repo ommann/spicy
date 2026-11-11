@@ -59,8 +59,19 @@ function Thinking(props: { text: string }) {
 function ThinkingBlock(props: { part: Wire }) {
   const [expanded, setExpanded] = createSignal(!collapseThinkingByDefault());
   return <section ref={useContext(SectionContext)} class="thinking real-thinking" hidden={!showThinking()} data-entry-id={props.part.entryId}>
-    <CollapseToggle text="Thinking" label="Expand or collapse thinking" expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
-    <Show when={expanded()}><Thinking text={props.part.text} /></Show>
+    <Show when={!props.part.encrypted} fallback={<Thinking text={props.part.text} />}>
+      <Show when={expanded()} fallback={
+        <CollapseToggle text="Thinking" label="Expand thinking" expanded={false} onToggle={() => setExpanded(true)} />
+      }>
+        <div role="button" tabIndex={0} aria-label="Collapse thinking" aria-expanded={true}
+          onDblClick={event => { event.preventDefault(); setExpanded(false); }}
+          onKeyDown={event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            setExpanded(false);
+          }}><Thinking text={props.part.text} /></div>
+      </Show>
+    </Show>
   </section>;
 }
 
