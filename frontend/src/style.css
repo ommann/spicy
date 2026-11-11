@@ -152,6 +152,10 @@
   display: block;
 }
 
+.markdown-source .source-code {
+  padding-inline-start: 2ch;
+}
+
 .tool-body,
 .codemode-output {
   min-width: 0;
