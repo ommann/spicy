@@ -192,7 +192,8 @@
 .tree-connections path {
   fill: none;
   stroke: var(--border);
-  stroke-width: 1;
+  stroke-width: 2;
+  shape-rendering: crispEdges;
 }
 .tree-connections path.fork-connection {
   stroke: var(--branch-connection);
