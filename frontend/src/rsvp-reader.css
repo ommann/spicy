@@ -1,0 +1,49 @@
+.rsvp-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  background: var(--rsvp-overlay);
+}
+
+.rsvp-reader {
+  position: fixed;
+  z-index: 1000;
+  inset: 50% 0 auto;
+  transform: translateY(-50%);
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--rsvp-text);
+  background: var(--rsvp-background);
+  color: var(--rsvp-text);
+}
+
+.rsvp-stage {
+  position: relative;
+  display: grid;
+  align-items: center;
+  padding-block: 12px;
+  overflow: hidden;
+}
+
+.rsvp-word {
+  display: grid;
+  grid-template-columns: calc(50% - 2ch) max-content 1fr;
+  align-items: baseline;
+  font-family: monospace;
+  font-size: clamp(36px, 6vw, 72px);
+  line-height: 1.1;
+  white-space: pre;
+  transform: translateX(-0.5ch);
+}
+
+.rsvp-speed {
+  position: absolute;
+  right: 1ch;
+  bottom: 8px;
+  color: var(--rsvp-text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rsvp-before { text-align: right; }
+.rsvp-focus { color: var(--rsvp-focus); }

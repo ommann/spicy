@@ -2,6 +2,7 @@ import { For, Index, Show, batch, createEffect, createMemo, createSignal, on, on
 import { createStore, reconcile } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import Card from './Card';
+import RsvpReader, { RsvpTarget } from './RsvpReader';
 import type { ImageAttachment } from './image-attachments';
 import { createColumnInteraction } from './column-interaction';
 import { ImageContext, SectionContext } from './conversation-dom';
@@ -19,7 +20,7 @@ import type { ContextWindowUsage } from './context-window';
 import ScrollBar from './ScrollBar';
 import type { AgentHealthStatus } from './AgentHealth';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
-import { createColumnShortcuts } from './column-shortcuts';
+import { createKeyboardShortcuts } from './keyboard-shortcuts';
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
@@ -408,7 +409,7 @@ export default function Conversation(props: Props) {
       interaction.keydown(event);
     }
 
-    createColumnShortcuts({
+    createKeyboardShortcuts({
       enabled: () => props.active,
       codes: ['KeyF', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'],
       onKey: event => {
@@ -539,13 +540,14 @@ export default function Conversation(props: Props) {
   const view: ConversationView = { props, nodeIds, focused, layout, spacing, gridPlacement, workingWidth, scroll,
     inheritedVersion, versionFor, registerSection, observe, unobserve, dismissBranch };
 
+  const [readingTarget, setReadingTarget] = createSignal<(() => string)>();
   const canvas = <ImageContext.Provider value={openImage}><div class="canvas-scroll-shell" classList={{ 'no-horizontal': !layout().hasHorizontal }}>
     <main ref={viewport} id="trace-viewport" class="transcript" aria-label={mode() === 'focused' ? 'Conversation — selected branch' : 'Conversation tree — scroll vertically through time, horizontally between branches'}
       classList={{ 'pan-ready': interaction.space(), panning: interaction.dragging() }}
       {...interaction.handlers}>
       <div ref={stage} class="tree-stage" style={{ width: `${layout().width}px`, height: `${layout().height}px`,
         'grid-template-columns': tracks().columns, 'grid-template-rows': tracks().rows }}>
-        {props.children(view)}
+        <RsvpTarget.Provider value={text => setReadingTarget(() => text)}>{props.children(view)}</RsvpTarget.Provider>
       </div>
     </main>
       <ScrollBar vertical position={scroll().top} client={dimensions().height} extent={Math.max(scroll().height, layout().height)}
@@ -565,11 +567,22 @@ export default function Conversation(props: Props) {
     <div ref={composerRow} class="composer-row" style={{ height: layout().inlineComposers ? '0px' : `${composerHeights[lanes()[focused()].key] || 40}px` }} />
   </div>;
 
+  const latestReadingText = () => {
+    for (const id of [...nodeIds()].reverse()) {
+      if (layout().items.get(id)?.hidden) continue;
+      const parts = props.graph.nodes.get(id)?.parts || [];
+      for (const part of [...parts].reverse()) {
+        if (part.kind === 'message' && part.text) return part.text as string;
+      }
+    }
+    return '';
+  };
   return <div class="spicy-host" classList={{ 'route-hidden': !props.active, 'tree-mode': true, 'single-mode': mode() === 'focused', 'has-horizontal-scrollbar': layout().hasHorizontal }}
     aria-hidden={!props.active} inert={!props.active} tabIndex={-1}
     onKeyDown={keydown} onKeyUp={release} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) blur();
     }}>
+    <RsvpReader active={props.active} latest={latestReadingText} target={() => readingTarget()?.() || ''} />
     <span class="layout-spacing" ref={spacingProbe} aria-hidden="true" />
     <ChatToolbar active={props.active} mode={mode()} notification={props.notification}
       onOptions={props.onOptions} onMode={changeMode} onFork={adjacentFork} />

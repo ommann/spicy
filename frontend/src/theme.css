@@ -2,6 +2,10 @@
 :root {
   color-scheme: dark;
   --background: #181a1a;
+  --rsvp-background: #000;
+  --rsvp-text: #fff;
+  --rsvp-focus: #f00;
+  --rsvp-overlay: rgb(0 0 0 / 70%);
   --app-toolbar-height: 2lh;
   --chat-row-gap: 1lh;
   --chat-column-gap: 6ch;

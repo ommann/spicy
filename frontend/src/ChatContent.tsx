@@ -1,6 +1,7 @@
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup, onMount, useContext, type JSX } from 'solid-js';
 import { ImageContext, SectionContext } from './conversation-dom';
 import CollapseToggle from './CollapseToggle';
+import { RsvpTarget } from './RsvpReader';
 import DiffView from './DiffView';
 import { recordedEditDiff } from './diff-model.mjs';
 import { Dynamic } from 'solid-js/web';
@@ -299,6 +300,7 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
 }
 
 export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequest; onBranch?: (id: string) => void }) {
+  const rsvpTarget = useContext(RsvpTarget);
   const textBlocks = () => typeof props.part.content === 'string' ? props.part.content
     : (props.part.content || []).filter((block: Wire) => block.type === 'text');
   const responseBody = () => props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" />;
@@ -327,6 +329,7 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
     <Match when={props.part.kind === 'thinking'}><ThinkingBlock part={props.part} /></Match>
     <Match when={['message', 'summary'].includes(props.part.kind)}>
       <section ref={useContext(SectionContext)} class="message real-message"
+        onPointerEnter={() => rsvpTarget?.(() => props.part.text || '')} onPointerLeave={() => rsvpTarget?.()}
         classList={{ 'summary-content': props.part.kind === 'summary' || props.part.summary }}
         style={props.part.eos ? { color: 'var(--muted)' } : undefined} data-entry-id={props.part.entryId}>
         <Show when={props.part.kind === 'message'} fallback={

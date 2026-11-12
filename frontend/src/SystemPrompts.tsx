@@ -13,7 +13,7 @@ import CodeLinewrapOption from './CodeLinewrapOption';
 import SelectWithDialog from './SelectWithDialog';
 import ScrollArea from './ScrollArea';
 import { createColumnInteraction } from './column-interaction';
-import { createColumnShortcuts } from './column-shortcuts';
+import { createKeyboardShortcuts } from './keyboard-shortcuts';
 
 interface Props {
   versions: PromptVersion[];
@@ -77,7 +77,7 @@ export default function SystemPrompts(props: Props) {
     setMode(value);
   }
 
-  createColumnShortcuts({
+  createKeyboardShortcuts({
     codes: ['KeyF', 'ArrowLeft', 'ArrowRight'],
     onKey: event => {
       if (event.code === 'KeyF') changeMode(mode() === 'focused' ? 'side' : 'focused');
