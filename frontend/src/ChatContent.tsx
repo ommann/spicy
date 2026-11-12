@@ -6,7 +6,7 @@ import { recordedEditDiff } from './diff-model.mjs';
 import { Dynamic } from 'solid-js/web';
 import SourceText, { AnsiText, ShellCommand, TerminalText } from './SourceText';
 import { canPrettifyCommand, prettifyCommand } from './prettify-command.mjs';
-import { previewHeight as adaptivePreviewHeight } from './collapse-policy.mjs';
+import { previewHeight as adaptivePreviewHeight, wholeLinePreviewHeight } from './collapse-policy.mjs';
 import { createAnsiTokenizer } from './ansi.mjs';
 import { projectChatParts } from './conversation-model.mjs';
 import type { Wire } from './types';
@@ -250,7 +250,9 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
   const [minimumSavings, setMinimumSavings] = createSignal(100);
   const [lineHeight, setLineHeight] = createSignal(20);
   const [viewportHeight, setViewportHeight] = createSignal(800);
-  const previewHeight = () => adaptivePreviewHeight(height(), lineHeight(), viewportHeight());
+  const [insets, setInsets] = createSignal({ top: 0, bottom: 0 });
+  const previewHeight = () => wholeLinePreviewHeight(
+    adaptivePreviewHeight(height(), lineHeight(), viewportHeight()), lineHeight(), insets().top, insets().bottom);
   // Reserve one line for the toggle, then require four lines of net savings.
   const worthwhile = () => height() - previewHeight() >= minimumSavings();
   let body!: HTMLDivElement;
@@ -260,6 +262,10 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
     const style = getComputedStyle(body);
     const measuredLineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
     setLineHeight(measuredLineHeight);
+    setInsets({
+      top: (parseFloat(style.paddingTop) || 0) + (parseFloat(style.borderTopWidth) || 0),
+      bottom: (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderBottomWidth) || 0),
+    });
     setViewportHeight(window.innerHeight);
     setMinimumSavings(measuredLineHeight * 5);
     setHeight(body.scrollHeight);

@@ -160,15 +160,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0 2ch;
-  transform: translateY(0.25lh);
 }
 
 .content-actions:empty {
   display: none;
-}
-
-.tool-diff-preview .diff-view {
-  padding-inline: var(--chat-padding-inline);
 }
 
 .tool-diff-preview.diff-at-start .diff-view {

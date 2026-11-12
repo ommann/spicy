@@ -122,8 +122,8 @@
   min-height: 0;
   height: 100%;
 }
-.canvas-scroll-shell.no-horizontal .horizontal,
-.canvas-scroll-shell.no-horizontal .canvas-scroll-corner {
+.canvas-scroll-shell.no-horizontal > .horizontal,
+.canvas-scroll-shell.no-horizontal > .canvas-scroll-corner {
   display: none;
 }
 .canvas-scrollbar {

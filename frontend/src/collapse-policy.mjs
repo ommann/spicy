@@ -5,6 +5,11 @@ export function previewHeight(fullHeight, lineHeight, viewportHeight) {
   return Math.min(maximum, Math.max(minimum, Math.sqrt(fullHeight / lineHeight) * 3 * lineHeight));
 }
 
+// Include the box insets, but only admit complete text lines.
+export function wholeLinePreviewHeight(height, lineHeight, topInset = 0, bottomInset = 0) {
+  return topInset + Math.max(0, Math.floor((height - topInset - bottomInset) / lineHeight)) * lineHeight;
+}
+
 // Keep context around every change. If changes alone exceed the budget, share
 // space between change regions rather than dropping the later regions entirely.
 export function collapseDiffRows(rows, budget, context = 2) {

@@ -1,6 +1,12 @@
 .message-composer {
   position: relative;
   margin: 0 1ch;
+  padding-inline: 0.25ch;
+}
+.message-composer .editor textarea,
+.message-composer .editor .composer-measure {
+  padding-inline: 1.5ch;
+  padding-left: calc(1.5ch + 1px);
 }
 .composer-row > .message-composer {
   position: absolute;
@@ -9,12 +15,12 @@
 }
 .editor:has(.composer-context) textarea,
 .editor:has(.composer-context) .composer-measure {
-  padding-right: calc(var(--input-padding-inline) + var(--context-width, 0ch));
+  padding-right: calc(1.5ch + var(--context-width, 0ch));
 }
 .composer-context {
   position: absolute;
   top: var(--input-padding-block);
-  right: var(--input-padding-inline);
+  right: 1.5ch;
   color: var(--muted);
   pointer-events: none;
   user-select: none;

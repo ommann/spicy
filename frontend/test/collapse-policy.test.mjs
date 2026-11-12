@@ -1,8 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { previewHeight, collapseDiffRows } from '../src/collapse-policy.mjs';
+import { previewHeight, collapseDiffRows, wholeLinePreviewHeight } from '../src/collapse-policy.mjs';
 
 const row = (kind, n) => ({ kind, text: String(n) });
+
+test('pixel previews end at a complete line, accounting for box insets', () => {
+  assert.equal(wholeLinePreviewHeight(553, 20), 540);
+  assert.equal(wholeLinePreviewHeight(553, 20, 13, 7), 533);
+  assert.equal((wholeLinePreviewHeight(553, 19.5, 13, 7) - 13) % 19.5, 0);
+});
 
 test('preview grows with content and respects viewport space', () => {
   assert.ok(previewHeight(1000, 20, 1000) > previewHeight(400, 20, 1000));
