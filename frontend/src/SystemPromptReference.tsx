@@ -1,3 +1,4 @@
+import { A } from '@solidjs/router';
 import { promptLabel } from './prompt-numbers';
 import AgentHealth, { type AgentHealthStatus } from './AgentHealth';
 
@@ -7,23 +8,15 @@ interface Props {
   number: number;
   title?: string;
   health: AgentHealthStatus;
-  onOpen: (id: string) => void;
+  href: string;
 }
 
 export default function SystemPromptReference(props: Props) {
   return (
-    <section class="message system-message system-prompt-reference"
-      data-entry-id={props.entryId} data-system-prompt={props.number}
-      role="button" tabIndex={0}
-      onClick={() => props.onOpen(props.promptId)}
-      onKeyDown={event => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        event.stopPropagation();
-        props.onOpen(props.promptId);
-      }}>
+    <A href={props.href} class="message system-message system-prompt-reference"
+      data-entry-id={props.entryId} data-system-prompt={props.number}>
       <span>{promptLabel(props.number, props.title)}</span>
       <AgentHealth status={props.health} />
-    </section>
+    </A>
   );
 }

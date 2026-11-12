@@ -265,7 +265,8 @@
   text-decoration: none;
 }
 
-.tree-toolbar .state-toggle[aria-pressed="true"] {
+.tree-toolbar .state-toggle[aria-pressed="true"],
+.tree-toolbar .state-toggle[aria-current="page"] {
   background: var(--toggle-state-fill);
   color: var(--toggle-state-on);
 }
@@ -780,6 +781,8 @@
 }
 
 .system-prompt-reference {
+  color: inherit;
+  text-decoration: none;
   padding-right: 2ch;
   display: flex;
   align-items: center;

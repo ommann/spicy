@@ -61,7 +61,7 @@ const flush = async () => {
   await new Promise(resolve => window.requestAnimationFrame(resolve));
   await Promise.resolve();
 };
-const button = (parent, text) => [...parent.querySelectorAll('button')].find(element => element.textContent.trim() === text);
+const button = (parent, text) => [...parent.querySelectorAll('button, a')].find(element => element.textContent.trim() === text);
 
 test('streaming cards preserve historical DOM across fresh snapshots and update changed text', async () => {
   const initial = { entry: { type: 'message' }, parts: [
@@ -536,6 +536,13 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(root.querySelector('#image-preview'), null);
     const reference = root.querySelector('[data-system-prompt="2"]');
     assert.ok(reference, `Chat contains numbered prompt references: ${root.textContent}`);
+    assert.equal(reference.tagName, 'A');
+    assert.equal(reference.getAttribute('href'), '/k7m3xqa9/system-prompts/system2');
+    for (const label of ['Sessions', 'Chat', 'System prompts', 'Editor', 'Single', 'Tree']) {
+      const link = button(root, label);
+      assert.equal(link?.tagName, 'A', `${label} is a native navigation link`);
+      assert.ok(link.getAttribute('href'));
+    }
     assert.doesNotMatch(root.querySelector('.spicy-host').textContent, /Original instructions|New tools/);
     const input = root.querySelector('.editor textarea');
     input.value = 'Keep this draft';
@@ -693,7 +700,8 @@ test('Sessions composer keeps failed drafts, opens focused chat on success and o
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(created, 1, 'Retry uses the same new session');
     assert.equal(dispose.history.get(), '/k7m3xqa9/single');
-    assert.equal(button(root, 'Single').getAttribute('aria-pressed'), 'true');
+    assert.equal(button(root, 'Single').tagName, 'A');
+    assert.equal(button(root, 'Single').getAttribute('aria-current'), 'page');
     button(root, 'Sessions').click();
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(dispose.history.get(), '/');

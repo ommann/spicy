@@ -41,6 +41,7 @@ export interface ConversationController {
 interface Props {
   mode: ConversationMode;
   onMode: (mode: ConversationMode) => void;
+  modeHref: (mode: ConversationMode) => string;
   viewState: ConversationViewState;
   layout: (graph: Wire, options: {
     mode: ConversationMode; width: number; viewportWidth: number; viewportHeight: number; lane: number;
@@ -66,7 +67,7 @@ interface Props {
   prompts: PromptVersion[];
   onSelectBranchPrompt: (id: string, key?: string) => void;
   pendingPromptKey?: (id: string) => string | undefined;
-  onOpenSystemPrompt: (id: string) => void;
+  systemPromptHref: (id: string) => string;
   onImage: (image: PreviewImage) => void;
   onAbort: (leafId: string) => void;
   onOptions: () => void;
@@ -329,13 +330,13 @@ export default function Conversation(props: Props) {
     setSelectedLane(next);
   }
 
-  function changeMode(value: 'focused' | 'side') {
+  function changeMode(value: 'focused' | 'side', navigate = true) {
     if (value === mode()) return;
     readingAnchor = captureAnchor();
     interaction.resetPointer();
     centerAfterLayout = true;
     setViewMode(value);
-    props.onMode(value);
+    if (navigate) props.onMode(value);
   }
 
   function focus(id: string, bottom = false, smooth = true) {
@@ -577,7 +578,8 @@ export default function Conversation(props: Props) {
     <RsvpReader active={props.active} latest={latestReadingText} target={() => readingTarget()?.() || ''} />
     <span class="layout-spacing" ref={spacingProbe} aria-hidden="true" />
     <ChatToolbar active={props.active} mode={mode()} notification={props.notification}
-      onOptions={props.onOptions} onMode={changeMode} />
+      onOptions={props.onOptions} onMode={changeMode}
+      modeHref={props.modeHref} onModeLink={mode => changeMode(mode, false)} />
     {canvas}
     {bottom}
     <For each={laneKeys()}>{key => {

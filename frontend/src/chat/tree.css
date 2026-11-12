@@ -68,6 +68,7 @@
   margin-right: auto;
 }
 .tree-toolbar button,
+.tree-toolbar a,
 .text-action,
 .branch-heading {
   background: transparent;
@@ -85,12 +86,14 @@
   cursor: default;
 }
 .tree-toolbar button:hover,
+.tree-toolbar a:hover,
 .text-action:enabled:hover,
 .branch-heading:hover {
   color: var(--control-active-text);
   background: var(--control-active-background);
 }
 .tree-toolbar button:focus-visible,
+.tree-toolbar a:focus-visible,
 .text-action:focus-visible,
 .branch-heading:focus-visible {
   outline: 1px solid var(--focus-border);
@@ -346,7 +349,8 @@
   visibility: hidden;
   pointer-events: none;
 }
-.view-mode[aria-pressed="true"] {
+.view-mode[aria-pressed="true"],
+.view-mode[aria-current="page"] {
   color: var(--control-active-text);
   text-decoration: underline;
   text-underline-offset: 5px;

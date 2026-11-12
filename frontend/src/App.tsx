@@ -20,7 +20,7 @@ import {
   onMount,
   type ParentProps,
 } from "solid-js";
-import { useLocation, useNavigate } from '@solidjs/router';
+import { A, useLocation, useNavigate } from '@solidjs/router';
 import { createStore } from 'solid-js/store';
 import Dialog from './Dialog';
 import SelectWithDialog from './SelectWithDialog';
@@ -93,7 +93,8 @@ export default function App(props: ParentProps) {
   const navigate = useNavigate();
   const routeSessionId = createMemo(() => sessionUrlIdFromPath(location.pathname));
   const viewPath = () => sessionViewPath(location.pathname);
-  const navigateView = (path: string) => navigate(sessionPath(path, snapshot().state?.sessionUrlId || routeSessionId()));
+  const viewHref = (path: string) => sessionPath(path, snapshot().state?.sessionUrlId || routeSessionId());
+  const navigateView = (path: string) => navigate(viewHref(path));
   const openSystemPrompt = (id: string) => navigateView(`/system-prompts/${encodeURIComponent(id)}`);
 
   let saved: { agents?: string[]; selected?: string } = {};
@@ -723,10 +724,10 @@ export default function App(props: ParentProps) {
       <NavigationLinksContext.Provider value={() => <>
         <button class="tree-title" onClick={openChat}>{sessionCwd()}</button>
         <div class="view-switch" role="group" aria-label="Views">
-          <button class="state-toggle" aria-pressed={location.pathname === '/'} onClick={() => navigate('/')}>Sessions</button>
-          <button class="state-toggle" aria-pressed={location.pathname !== '/' && ['/', '/chat', '/single', '/tree'].includes(viewPath())} onClick={openFocusedChat}>Chat</button>
-          <button class="state-toggle" aria-pressed={viewPath().startsWith('/system-prompts')} onClick={() => navigateView('/system-prompts')}>System prompts</button>
-          <button class="state-toggle" aria-pressed={viewPath() === '/system-prompt-creator'} onClick={() => navigateView('/system-prompt-creator')}>Editor</button>
+          <A class="state-toggle" href="/" end aria-current={location.pathname === '/' ? 'page' : undefined}>Sessions</A>
+          <A class="state-toggle" href={sessionPath(chatViewPath(), selectedSessionUrlId())} aria-current={location.pathname !== '/' && ['/', '/chat', '/single', '/tree'].includes(viewPath()) ? 'page' : undefined}>Chat</A>
+          <A class="state-toggle" href={viewHref('/system-prompts')} aria-current={viewPath().startsWith('/system-prompts') ? 'page' : undefined}>System prompts</A>
+          <A class="state-toggle" href={viewHref('/system-prompt-creator')} aria-current={viewPath() === '/system-prompt-creator' ? 'page' : undefined}>Editor</A>
         </div>
         <Login ready={bridgeReady} options={rpcOptions} />
       </>}>
@@ -780,17 +781,19 @@ export default function App(props: ParentProps) {
           <Show when={selectedSessionUrlId() && (!routeSessionId() || selectedSessionUrlId() === routeSessionId()) && shownLanes().length} fallback={
             <div class="spicy-host" classList={{ 'single-mode': route.mode === 'focused' }}>
               <ChatToolbar active mode={route.mode} notification={notification()} onOptions={openOptions}
-                onMode={mode => { setViewMode(mode); navigateView(chatViewPath(mode)); }} />
+                modeHref={mode => viewHref(chatViewPath(mode))}
+                onModeLink={setViewMode} onMode={mode => { setViewMode(mode); navigateView(chatViewPath(mode)); }} />
             </div>
           }>
           <Dynamic component={route.mode === 'focused' ? SingleConversation : TreeConversation}
             graph={shownGraph()} active lanes={shownLanes()} viewState={composerState().view}
+            modeHref={mode => viewHref(chatViewPath(mode))}
             onMode={mode => navigateView(chatViewPath(mode))}
             drafts={composerState().drafts} onDraftChange={composerState().setDraft}
             running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt} pendingPromptKey={id => pendingPrompts()[id]?.key}
-            onOpenSystemPrompt={openSystemPrompt} onImage={openImage} onAbort={abort}
+            systemPromptHref={id => viewHref(`/system-prompts/${encodeURIComponent(id)}`)} onImage={openImage} onAbort={abort}
             onOptions={openOptions} />
           </Show>
         )}</Show>;

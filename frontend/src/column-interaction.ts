@@ -44,6 +44,7 @@ export function createColumnInteraction(options: Options) {
     onPointerDown: (event: PointerEvent) => {
       setJumping(false);
       if (!space() && event.button !== 1) return;
+      if (event.button === 1 && (event.target as Element).closest('a[href]')) return;
       event.preventDefault();
       const viewport = options.viewport();
       drag = { x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };

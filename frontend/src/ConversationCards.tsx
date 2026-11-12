@@ -15,7 +15,7 @@ export function ConversationPrompt(value: { view: ConversationView; index: numbe
       <Card><Show when={isUnstartedCompaction(props.graph, leaf().id)} fallback={
         <SystemPromptReference entryId={leaf().id} promptId={versionFor(leaf().id)?.full?.id || ''}
           title={versionFor(leaf().id)?.title} number={versionFor(leaf().id)?.number || 1}
-          health={props.health(leaf().id)} onOpen={props.onOpenSystemPrompt} />
+          health={props.health(leaf().id)} href={props.systemPromptHref(versionFor(leaf().id)?.full?.id || '')} />
       }>
         <SystemPromptPlaceholder
           number={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf().id)) ?? versionFor(leaf().id))?.number}
