@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { getCodexUsage } from './codex-usage.mjs';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 
 // Pi owns OAuth, callback navigation, refresh locking and credential persistence.
@@ -31,6 +32,10 @@ export class LoginBridge {
       return [{ id: provider.id, name: provider.name, methods,
         configured: credentials.some(credential => credential.providerId === provider.id) }];
     });
+  }
+
+  async codexUsage(signal) {
+    return getCodexUsage(await this.runtime(), { signal });
   }
 
   state() {

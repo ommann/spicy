@@ -22,7 +22,7 @@
   top: var(--input-padding-block);
   right: 1.5ch;
   color: var(--muted);
-  pointer-events: none;
+  pointer-events: auto;
   user-select: none;
 }
 .composer-attachments {

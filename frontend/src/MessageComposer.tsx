@@ -60,6 +60,22 @@ export default function MessageComposer(props: Props) {
     if (props.onImagesChange) props.onImagesChange(next);
     else updateLocalImages(next);
   }
+  const [limitHint, setLimitHint] = createSignal('');
+  const [limitsHovered, setLimitsHovered] = createSignal(false);
+  let limitsFetchedAt = 0;
+  let limitsPending = false;
+  async function loadLimits() {
+    if (limitsPending || Date.now() - limitsFetchedAt < 60000) return;
+    limitsPending = true;
+    try {
+      const usage = await api.auth.codexUsage({});
+      const primary = usage?.rate_limit?.primary_window?.used_percent;
+      const secondary = usage?.rate_limit?.secondary_window?.used_percent;
+      setLimitHint(typeof primary === 'number' && typeof secondary === 'number' ? `${100 - primary}% / ${100 - secondary}w` : '');
+      limitsFetchedAt = Date.now();
+    } catch { setLimitHint(''); }
+    finally { limitsPending = false; }
+  }
   const [pasting, setPasting] = createSignal(false);
   const [attachmentError, setAttachmentError] = createSignal('');
   async function submit() {
@@ -147,7 +163,9 @@ export default function MessageComposer(props: Props) {
         if (event.key === 'Escape') { event.preventDefault(); props.onAbort?.(); }
       }} />
     <Show when={formatContextWindow(props.contextUsage)}>{status =>
-      <span class="composer-context" aria-label={`Context window: ${status()}`}>{status()}</span>
+      <span class="composer-context" aria-label={`Context window: ${status()}`}
+        onMouseEnter={() => { setLimitsHovered(true); void loadLimits(); }}
+        onMouseLeave={() => setLimitsHovered(false)}>{limitsHovered() && limitHint() ? limitHint() : status()}</span>
     }</Show>
     <div ref={measure} class="composer-measure" aria-hidden="true">{props.value + '\u200b'}</div>
     </div>
