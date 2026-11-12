@@ -18,7 +18,6 @@ import { createKeyboardShortcuts } from './keyboard-shortcuts';
 interface Props {
   versions: PromptVersion[];
   selected: string;
-  onSelect?: (key: string) => void;
   ignored?: (key: string) => boolean;
   onIgnore?: (key: string, ignored: boolean) => void;
 }
@@ -49,19 +48,6 @@ export default function SystemPrompts(props: Props) {
   const navigation = () => navigationOverride() ?? props.selected;
   createEffect(() => { setSelection(props.selected); setNavigation(props.selected); });
 
-  function select(key: string) {
-    interaction.resetPointer();
-    setSelection(key);
-    setNavigation(key);
-    props.onSelect?.(key);
-  }
-
-  function adjacent(direction: number) {
-    const index = props.versions.findIndex(version => version.key === selected()?.key);
-    const version = props.versions[index + direction];
-    if (version) select(version.key);
-  }
-
   createEffect(on([navigation, mode, () => props.versions, widths], ([key]) => {
     const section = sections.get(key);
     section?.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -78,11 +64,8 @@ export default function SystemPrompts(props: Props) {
   }
 
   createKeyboardShortcuts({
-    codes: ['KeyF', 'ArrowLeft', 'ArrowRight'],
-    onKey: event => {
-      if (event.code === 'KeyF') changeMode(mode() === 'focused' ? 'side' : 'focused');
-      else adjacent(event.code === 'ArrowLeft' ? -1 : 1);
-    },
+    codes: ['KeyF'],
+    onKey: () => changeMode(mode() === 'focused' ? 'side' : 'focused'),
   });
 
   return (
@@ -92,8 +75,7 @@ export default function SystemPrompts(props: Props) {
       }}
       onKeyDown={interaction.keydown}>
       <ColumnToolbar label="System prompt navigation" hasContent={props.versions.length > 0} mode={mode()}
-        onMode={changeMode} onNavigate={adjacent} previousLabel="Previous system prompt" nextLabel="Next system prompt"
-        previousDisabled={selected() === props.versions[0]} nextDisabled={selected() === props.versions.at(-1)}
+        onMode={changeMode}
         actions={<CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />}
         onOptions={() => optionsDialog.showModal()}>
         {null}

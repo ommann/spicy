@@ -342,14 +342,6 @@ export default function Conversation(props: Props) {
     setScrollRequest({ id, bottom, smooth });
   }
 
-  function adjacentFork(direction: number) {
-    const next = Math.max(0, Math.min(lanes().length - 1, focused() + direction));
-    if (next === focused()) return;
-    interaction.resetPointer();
-    centerAfterLayout = true;
-    selectLane(next);
-  }
-
   function dismissBranch(id: string) {
     const lane = lanes().find(item => item.leafId === id);
     if (lane) setDrafts(lane.key, '');
@@ -411,15 +403,10 @@ export default function Conversation(props: Props) {
 
     createKeyboardShortcuts({
       enabled: () => props.active,
-      codes: ['KeyF', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'],
+      codes: ['KeyF', 'ArrowUp', 'ArrowDown'],
       onKey: event => {
       interaction.resetPointer();
       if (event.code === 'KeyF') { changeMode(mode() === 'focused' ? 'side' : 'focused'); return; }
-      if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
-        centerAfterLayout = true;
-        selectLane(focused() + (event.code === 'ArrowRight' ? 1 : -1));
-        return;
-      }
       const tops = [...sections].filter(([, id]) => !layout().items.get(id)?.hidden)
         .map(([section]) => section.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop).sort((a, b) => a - b);
       const target = event.code === 'ArrowDown' ? tops.find(top => top > viewport.scrollTop + 16) : tops.reverse().find(top => top < viewport.scrollTop + 8);
@@ -585,7 +572,7 @@ export default function Conversation(props: Props) {
     <RsvpReader active={props.active} latest={latestReadingText} target={() => readingTarget()?.() || ''} />
     <span class="layout-spacing" ref={spacingProbe} aria-hidden="true" />
     <ChatToolbar active={props.active} mode={mode()} notification={props.notification}
-      onOptions={props.onOptions} onMode={changeMode} onFork={adjacentFork} />
+      onOptions={props.onOptions} onMode={changeMode} />
     {canvas}
     {bottom}
     <For each={laneKeys()}>{key => {

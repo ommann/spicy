@@ -374,9 +374,9 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
     assert.equal(cards[0].querySelector('.diff-remove'), null);
     assert.equal(cards[1].querySelector('.system-delta'), null);
     assert.match(cards[1].textContent, /Original instructions/);
-    dialog.querySelector('[aria-label="Previous system prompt"]').click();
+    document.body.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'ArrowLeft', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await flush();
-    assert.equal(cards[0].dataset.activeColumn, 'true');
+    assert.equal(cards[1].dataset.activeColumn, 'true', 'Removed shortcut does not change columns');
     assert.equal(cards[1].querySelector('.system-delta'), null);
     assert.match(cards[1].textContent, /Original instructions/);
     assert.match(cards[1].textContent, /New tools/);
@@ -387,7 +387,7 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
     assert.equal(cards[1].querySelector('.diff-condensed'), null);
     assert.equal(cards[1].querySelector('.diff-hunk'), null);
     assert.doesNotMatch(cards[1].textContent, /--- content|\+\+\+ content|@@/);
-    dialog.querySelector('[aria-label="Next system prompt"]').click();
+    document.body.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'ArrowRight', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await flush();
     assert.equal(cards[1].querySelector('.system-delta'), null);
     const toggleMode = () => {
@@ -509,13 +509,13 @@ test('chat references open the Solid view without creating a model request or mo
     button(options, 'Close').click();
     const viewport = root.querySelector('#trace-viewport');
     const left = viewport.scrollLeft;
-    root.querySelector('[aria-label="Next column"]').click();
+    assert.equal(root.querySelector('.fork-nav'), null);
+    document.body.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'ArrowRight', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await flush();
-    assert.ok(viewport.scrollLeft > left, 'Next arrow centers the next column');
-    const nextLeft = viewport.scrollLeft;
-    root.querySelector('[aria-label="Previous column"]').click();
+    assert.equal(viewport.scrollLeft, left, 'Removed shortcut does not move columns');
+    document.body.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'ArrowLeft', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
     await flush();
-    assert.equal(nextLeft - viewport.scrollLeft, 1088, 'Previous arrow moves back exactly one column (1040px + 48px gap)');
+    assert.equal(viewport.scrollLeft, left, 'Removed shortcut does not move columns');
     const image = root.querySelector('.trace-image');
     assert.ok(image);
     image.click();
@@ -718,7 +718,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
   const makeAgent = id => ({ agentId: id, entries: [...common,
     { id: `${id}-user`, parentId: 'base-answer', type: 'message', message: { role: 'user', content: `${id} request` } },
     { id: `${id}-answer`, parentId: `${id}-user`, type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: `${id} answer` }] } },
-  ], leafId: `${id}-answer`, state: { sessionId: id }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
+  ], leafId: `${id}-answer`, state: { sessionId: id, sessionUrlId: 'testchat' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
   const snapshots = { left: makeAgent('left'), right: makeAgent('right') };
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
   const requests = [];
@@ -841,7 +841,7 @@ test('Single routes mount only one branch and composer while preserving shared s
   const makeAgent = (id, timestamp) => ({ agentId: id, entries: [...common,
     { id: `${id}-answer`, parentId: user.id, type: 'message', message: { role: 'assistant',
       content: [{ type: 'text', text: `${id} answer` }], timestamp } },
-  ], leafId: `${id}-answer`, state: { sessionId: id }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
+  ], leafId: `${id}-answer`, state: { sessionId: id, sessionUrlId: 'testchat' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
   const snapshots = { left: makeAgent('left', 10), right: makeAgent('right', 20) };
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
   rpc = createRpcFixture({
@@ -851,12 +851,11 @@ test('Single routes mount only one branch and composer while preserving shared s
   const dispose = components.mountApp(root, '/single');
   try {
     for (let i = 0; i < 8; i++) await flush();
-    assert.equal(dispose.history.get(), '/single');
+    assert.equal(dispose.history.get(), '/testchat/single');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     assert.ok(root.querySelector('.tree-node[data-entry-id="right-answer"]'));
     assert.equal(root.querySelector('.tree-node[data-entry-id="left-answer"]'), null);
     assert.equal(root.querySelector('.tree-connections'), null);
-    const shared = root.querySelector('.tree-node[data-entry-id="user1"]');
     button(root, 'Options').click();
     const options = root.querySelector('[aria-label="Options"]');
     const streaming = [...options.querySelectorAll('label')].find(label => label.textContent.includes('Show streaming content')).querySelector('input');
@@ -873,11 +872,15 @@ test('Single routes mount only one branch and composer while preserving shared s
     await new Promise(resolve => setTimeout(resolve, 30));
     await flush();
     assert.ok(root.querySelector('.composer-attachments img'));
-    root.querySelector('[aria-label="Previous column"]').click();
+    button(root, 'Tree').click();
+    await flush();
+    root.querySelector('.editor[data-leaf-id="left-answer"] textarea').focus();
+    await flush();
+    button(root, 'Single').click();
     await flush();
     assert.ok(root.querySelector('.tree-node[data-entry-id="left-answer"]'));
     assert.equal(root.querySelector('.tree-node[data-entry-id="right-answer"]'), null);
-    assert.equal(root.querySelector('.tree-node[data-entry-id="user1"]'), shared, 'Shared ancestor DOM survives branch switches');
+    assert.ok(root.querySelector('.tree-node[data-entry-id="user1"]'), 'Shared ancestor remains visible after switching views');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     input = root.querySelector('.editor textarea');
     assert.equal(input.value, '');
@@ -891,7 +894,7 @@ test('Single routes mount only one branch and composer while preserving shared s
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     button(root, 'Tree').click();
     await flush();
-    assert.equal(dispose.history.get(), '/tree');
+    assert.equal(dispose.history.get(), '/testchat/tree');
     assert.ok(root.querySelector('.tree-connections'));
     assert.equal(root.querySelectorAll('.message-composer').length, 2);
     assert.match(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
@@ -899,19 +902,23 @@ test('Single routes mount only one branch and composer while preserving shared s
     assert.ok(root.querySelector('.message-composer:has(.editor[data-leaf-id="stream-right-0"]) .composer-attachments img'));
     button(root, 'Single').click();
     await flush();
-    assert.equal(dispose.history.get(), '/single');
+    assert.equal(dispose.history.get(), '/testchat/single');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep left draft');
     assert.equal(root.querySelector('.tree-node[data-entry-id="stream-right-0"]'), null);
     dispose.history.back();
     await flush();
-    assert.equal(dispose.history.get(), '/tree');
+    assert.equal(dispose.history.get(), '/testchat/tree');
     assert.equal(root.querySelectorAll('.message-composer').length, 2);
     dispose.history.forward();
     await flush();
-    assert.equal(dispose.history.get(), '/single');
+    assert.equal(dispose.history.get(), '/testchat/single');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
-    root.querySelector('[aria-label="Next column"]').click();
+    button(root, 'Tree').click();
+    await flush();
+    root.querySelector('.editor[data-leaf-id="stream-right-0"] textarea').focus();
+    await flush();
+    button(root, 'Single').click();
     await flush();
     assert.match(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep right draft');
@@ -925,7 +932,7 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
   const makeAgent = (id, timestamp) => ({ agentId: id, entries: [original, user,
     { id: `${id}-answer`, parentId: user.id, type: 'message', message: { role: 'assistant',
       content: [{ type: 'text', text: `${id} answer` }], timestamp } },
-  ], leafId: `${id}-answer`, state: { sessionId: scope }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
+  ], leafId: `${id}-answer`, state: { sessionId: scope, sessionUrlId: 'testchat' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
   const snapshots = { left: makeAgent('left', 10), right: makeAgent('right', 20) };
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
   rpc = createRpcFixture({
@@ -955,6 +962,12 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
   };
   try {
     for (let i = 0; i < 8; i++) await flush();
+    button(root, 'Options').click();
+    const options = root.querySelector('[aria-label="Options"]');
+    const streaming = [...options.querySelectorAll('label')].find(label => label.textContent.includes('Show streaming content')).querySelector('input');
+    if (!streaming.checked) streaming.click();
+    button(options, 'Close').click();
+    await flush();
     const shared = root.querySelector('.tree-node[data-entry-id="user1"]');
     const initialWidth = parseFloat(root.querySelector('.tree-stage').style.width);
     assert.equal(root.querySelectorAll('.message-composer').length, 2);

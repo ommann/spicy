@@ -1,5 +1,5 @@
 import { createContext, Show, useContext, type Accessor } from 'solid-js';
-import { A, useLocation, useNavigate, useParams } from '@solidjs/router';
+import { A, useLocation, useParams } from '@solidjs/router';
 import { sessionPath, sessionUrlIdFromPath } from './session-urls';
 import Navigation from './Navigation';
 import SystemPrompts from './SystemPrompts';
@@ -28,7 +28,6 @@ export default function SystemPromptRoute() {
   const versions = useContext(SystemPromptContext);
   const policy = useContext(SystemPromptPolicyContext);
   const params = useParams();
-  const navigate = useNavigate();
   const location = useLocation();
   const path = (view: string) => sessionPath(view, sessionUrlIdFromPath(location.pathname));
 
@@ -39,9 +38,5 @@ export default function SystemPromptRoute() {
     <p>System prompt not found. <A href={path('/system-prompts')}>View system prompts</A></p>
   </>}><SystemPrompts versions={versions()}
     selected={selected()?.key || ''}
-    onSelect={key => {
-      const version = versions().find(version => version.key === key);
-      if (version?.full) navigate(path(`/system-prompts/${encodeURIComponent(version.full.id)}`), { replace: true });
-    }}
     ignored={policy.ignored} onIgnore={policy.setIgnored} /></Show>;
 }

@@ -1,5 +1,4 @@
 import { Show, type JSX } from 'solid-js';
-import Arrow from './NavigationArrow';
 import Navigation from './Navigation';
 
 interface Props {
@@ -11,11 +10,6 @@ interface Props {
   hasContent: boolean;
   mode: 'focused' | 'side';
   onMode: (mode: 'focused' | 'side') => void;
-  onNavigate: (direction: number) => void;
-  previousLabel: string;
-  nextLabel: string;
-  previousDisabled?: boolean;
-  nextDisabled?: boolean;
 }
 
 export default function ColumnToolbar(props: Props) {
@@ -32,9 +26,5 @@ export default function ColumnToolbar(props: Props) {
       </div>
     </Show>
     {props.actions}
-    <Show when={props.hasContent}>
-      <button class="fork-nav" disabled={props.previousDisabled} aria-label={props.previousLabel} onClick={() => props.onNavigate(-1)}><Arrow direction={-1} /></button>
-      <button class="fork-nav" disabled={props.nextDisabled} aria-label={props.nextLabel} onClick={() => props.onNavigate(1)}><Arrow direction={1} /></button>
-    </Show>
   </nav></Navigation>;
 }
