@@ -275,7 +275,7 @@ export function layoutConversation(graph, { width, viewportWidth, viewportHeight
 
     const previous = items.get(parent.id);
     paths.push({ id: node.id, fork: parent.children.length > 1 || parent.promptFork,
-      d: `M ${inset + starts[previous.column] + rowGap} ${previous.top + previous.height} V ${position.top - rowGap / 2} H ${inset + starts[position.column] + rowGap} V ${position.top}` });
+      d: `M ${inset + starts[previous.column] + width / 2} ${previous.top + previous.height} V ${position.top - rowGap / 2} H ${inset + starts[position.column] + width / 2} V ${position.top}` });
   }
 
   return { items, composers, inlineComposers, paths, inset, starts, width: totalWidth, height, lane: focused,
