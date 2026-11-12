@@ -203,7 +203,10 @@ export default function Conversation(props: Props) {
     return (key ? props.prompts.find(prompt => prompt.key === key) : undefined) ?? inheritedVersion(id);
   }
   const focused = () => Math.max(0, Math.min(selectedLane(), lanes().length - 1));
-  createEffect(on(() => lanes()[focused()]?.leafId, id => { if (id) props.onFocusLeaf(id); }));
+  // Tree hover only chooses where shared history is drawn. Selecting its agent
+  // also changes the session URL, so only the explicit single view commits it.
+  createEffect(on(() => props.active && mode() === 'focused' ? lanes()[focused()]?.leafId : undefined,
+    id => { if (id) props.onFocusLeaf(id); }));
   const maxWidth = () => Math.max(480, dimensions().width - spacing().edge * 2);
   const workingWidth = () => mode() === 'focused' && focusedFitsWindow() ? maxWidth() : widths[mode()];
   const layout = createMemo(() => props.layout(props.graph, {
@@ -320,7 +323,9 @@ export default function Conversation(props: Props) {
   function selectLane(lane: number, preserveReading = true) {
     const next = Math.max(0, Math.min(lanes().length - 1, lane));
     if (next === focused()) return;
-    if (preserveReading) readingAnchor = captureAnchor(mode() === 'focused' ? focused() : next);
+    // Tree lanes share vertical geometry; hover must not restore a reading
+    // anchor (and feed a programmatic scroll back into pointer selection).
+    if (preserveReading && mode() === 'focused') readingAnchor = captureAnchor();
     setSelectedLane(next);
   }
 
