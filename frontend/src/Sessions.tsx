@@ -5,6 +5,7 @@ import Input from './Input';
 import AgentHealth from './AgentHealth';
 import ScrollArea from './ScrollArea';
 import type { Wire } from './types';
+import { activityTime, createActivityClock } from './session-activity';
 import './sessions.css';
 
 export const SessionsRouteContext = createContext<Component>();
@@ -27,6 +28,7 @@ export default function Sessions(props: {
   busy: boolean;
   notification: { message: string; isError: boolean };
 }) {
+  const now = createActivityClock();
   const [sessions, setSessions] = createSignal<Wire[]>([]);
   const [error, setError] = createSignal('');
   onMount(() => {
@@ -49,12 +51,7 @@ export default function Sessions(props: {
   });
   function activity(session: Wire) {
     if (session.running) return 'running';
-    const minutes = Math.max(0, Math.floor((Date.now() - session.modified) / 60000));
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes} min ago`;
-    if (minutes < 1440) return `${Math.floor(minutes / 60)} hr ago`;
-    if (minutes < 2880) return 'yesterday';
-    return `${Math.floor(minutes / 1440)} days ago`;
+    return activityTime(session.modified, now());
   }
   return <div class="sessions-view">
     <Navigation />

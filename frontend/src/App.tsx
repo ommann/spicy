@@ -677,10 +677,6 @@ export default function App(props: ParentProps) {
     onCleanup(() => { cancelled = true; });
     void openSessionUrl(urlId, () => cancelled);
   }));
-  createEffect(on([sessionRoutingReady, selectedSessionUrlId], ([ready, urlId]) => {
-    if (!ready || !urlId || location.pathname === '/' || routeSessionId() === urlId) return;
-    navigate(sessionPath(viewPath() === '/chat' ? '/' : location.pathname, urlId, treeId()) + location.search, { replace: !routeSessionId() });
-  }));
 
   createEffect(() => {
     const urlId = selectedSessionUrlId();
