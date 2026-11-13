@@ -24,7 +24,7 @@ import { createKeyboardShortcuts } from './keyboard-shortcuts';
 import type { Wire } from './types';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
-import { systemPromptText } from './system-prompts.js';
+import { systemPromptText } from './system-prompts.ts';
 
 export interface ViewOptions {
   widths: { focused: number; side: number };

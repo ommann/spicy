@@ -1,9 +1,9 @@
 import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
 import CollapseToggle from './CollapseToggle';
-import { collapseDiffRows, previewHeight } from './collapse-policy.mjs';
+import { collapseDiffRows, previewHeight } from './collapse-policy.ts';
 import ScrollArea from './ScrollArea';
-import { highlightTokens, supportsLanguage } from './syntax.mjs';
-import { emphasizeRows } from './diff-model.mjs';
+import { highlightTokens, supportsLanguage } from './syntax.ts';
+import { emphasizeRows } from './diff-model.ts';
 import type { Wire } from './types';
 import { copySourceRows } from './source-selection';
 

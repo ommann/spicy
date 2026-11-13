@@ -2,8 +2,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { McpClient, StdioTransport } from "../src/index.ts";
 
-const fixture = fileURLToPath(new URL("./fixtures/stdio-server.mjs", import.meta.url));
-const stubborn = fileURLToPath(new URL("./fixtures/stubborn-server.mjs", import.meta.url));
+const fixture = fileURLToPath(new URL("./fixtures/stdio-server.ts", import.meta.url));
+const stubborn = fileURLToPath(new URL("./fixtures/stubborn-server.ts", import.meta.url));
 
 describe("StdioTransport", () => {
 	it("connects to a newline-delimited MCP server and captures stderr", async () => {

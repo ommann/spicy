@@ -1,5 +1,5 @@
 import { getDiscussionTitle } from '../../packages/coding-agent/src/core/discussion-title';
-import { branchEntries } from './session-entries.mjs';
+import { branchEntries } from './session-entries.ts';
 
 const key = 'spicy-discussion-titles';
 function read(): Record<string, { title: string; headId: string }> {

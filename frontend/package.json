@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
-    "test": "node --import ../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.mjs",
-    "test:browser": "node test/visual.mjs",
+    "test": "node --import ../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.ts",
+    "test:browser": "node test/visual.ts",
     "check": "tsc --noEmit && stylelint 'src/**/*.css'"
   },
   "dependencies": {

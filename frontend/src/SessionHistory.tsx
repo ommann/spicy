@@ -8,7 +8,7 @@ import { createPrefixResolver } from './chat/prefix-state';
 import { activityTime, createActivityClock } from './session-activity';
 import { latestHistoryMessage } from './latest-history-message';
 import { getDiscussionTitle } from '../../packages/coding-agent/src/core/discussion-title';
-import { branchEntries } from './session-entries.mjs';
+import { branchEntries } from './session-entries.ts';
 
 type Row = { id: string; text: string; prompt?: number; associatedPrompt?: number; title?: boolean; user?: boolean; priority?: boolean; endsLane?: boolean; compactionStart?: boolean; compactionRoot?: string; annotation?: string; label?: BranchLabel; href?: string; children: Row[] };
 

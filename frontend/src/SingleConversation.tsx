@@ -1,6 +1,6 @@
 import Conversation, { type ConversationRouteProps } from './Conversation';
 import { ConversationNodes, ConversationPrompt } from './ConversationCards';
-import { layoutSingleConversation } from './single-conversation-model.mjs';
+import { layoutSingleConversation } from './single-conversation-model.ts';
 import './single-conversation.css';
 
 export default function SingleConversation(props: ConversationRouteProps) {

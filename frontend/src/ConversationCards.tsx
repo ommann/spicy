@@ -3,7 +3,7 @@ import Card from './Card';
 import { ConversationCard, type ConversationView } from './Conversation';
 import SystemPromptReference from './SystemPromptReference';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
-import { isUnstartedCompaction } from './conversation-model.mjs';
+import { isUnstartedCompaction } from './conversation-model.ts';
 import { promptLabel } from './prompt-numbers';
 
 export function ConversationPrompt(value: { view: ConversationView; index: number }) {

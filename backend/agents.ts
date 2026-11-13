@@ -4,7 +4,7 @@ import path from 'node:path';
 import { parseSessionEntries, SessionManager } from '@earendil-works/pi-coding-agent';
 import type { RpcRecord, History, HistoryEntry, SessionState, SelectedSession, AgentSource, AgentClient, RegistryOptions } from './types.ts';
 import { PiRpc } from './rpc.ts';
-import { applyRecord } from '../frontend/src/stream.mjs';
+import { applyRecord } from '../frontend/src/stream.ts';
 
 export class AgentConnection {
   rpc = new PiRpc();

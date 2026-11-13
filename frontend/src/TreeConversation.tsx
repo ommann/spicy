@@ -1,7 +1,7 @@
 import { For } from 'solid-js';
 import Conversation, { type ConversationRouteProps } from './Conversation';
 import { ConversationNodes, ConversationPrompt } from './ConversationCards';
-import { layoutConversation } from './conversation-model.mjs';
+import { layoutConversation } from './conversation-model.ts';
 
 export default function TreeConversation(props: ConversationRouteProps) {
   return <Conversation {...props} mode="side" layout={layoutConversation}>{view => <>

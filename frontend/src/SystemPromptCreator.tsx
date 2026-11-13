@@ -11,7 +11,7 @@ import Dialog from './Dialog';
 import CodeLinewrapOption from './CodeLinewrapOption';
 import SelectWithDialog from './SelectWithDialog';
 import Navigation from './Navigation';
-import { promptDocument } from './system-prompts.js';
+import { promptDocument } from './system-prompts.ts';
 
 function PartEditor(props: {
   part: SystemPromptPart;

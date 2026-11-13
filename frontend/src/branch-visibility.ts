@@ -1,5 +1,5 @@
 import { createMemo, createSignal, untrack } from 'solid-js';
-import { followHiddenLeaves } from './branch-visibility-model.mjs';
+import { followHiddenLeaves } from './branch-visibility-model.ts';
 import type { Wire } from './types';
 
 const storageKey = 'spicy.hidden-branches';

@@ -1,7 +1,7 @@
 import { For, Index, Match, Show, Switch, createMemo, useContext, type JSX } from 'solid-js';
-import { highlightTokens, highlightHeredocTokens } from './syntax.mjs';
+import { highlightTokens, highlightHeredocTokens } from './syntax.ts';
 import ScrollArea from './ScrollArea';
-import { createAnsiTokenizer } from './ansi.mjs';
+import { createAnsiTokenizer } from './ansi.ts';
 import { Lexer, type Tokens } from 'marked';
 import './markdown-table.css';
 import { FileLinkCwdContext, fileLink } from './file-link';

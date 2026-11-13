@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runMcpCommand } from "../src/extensions/mcp/cli.ts";
 
-const FIXTURE = resolve(import.meta.dirname, "../../mcp/test/fixtures/stdio-server.mjs");
+const FIXTURE = resolve(import.meta.dirname, "../../mcp/test/fixtures/stdio-server.ts");
 
 describe("pi mcp", () => {
 	const dirs: string[] = [];

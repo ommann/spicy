@@ -3,16 +3,16 @@ import { ImageContext, SectionContext } from './conversation-dom';
 import CollapseToggle from './CollapseToggle';
 import { RsvpTarget } from './RsvpReader';
 import DiffView from './DiffView';
-import { recordedEditDiff } from './diff-model.mjs';
+import { recordedEditDiff } from './diff-model.ts';
 import { Dynamic } from 'solid-js/web';
 import SourceText, { AnsiText, ShellCommand, TerminalText } from './SourceText';
-import { canPrettifyCommand, prettifyCommand } from './prettify-command.mjs';
-import { previewHeight as adaptivePreviewHeight, wholeLinePreviewHeight } from './collapse-policy.mjs';
-import { createAnsiTokenizer } from './ansi.mjs';
-import { projectChatParts } from './conversation-model.mjs';
+import { canPrettifyCommand, prettifyCommand } from './prettify-command.ts';
+import { previewHeight as adaptivePreviewHeight, wholeLinePreviewHeight } from './collapse-policy.ts';
+import { createAnsiTokenizer } from './ansi.ts';
+import { projectChatParts } from './conversation-model.ts';
 import type { Wire } from './types';
 import { selectSource } from './source-selection';
-import { partialCommand } from './partial-command.mjs';
+import { partialCommand } from './partial-command.ts';
 import { showThinking, collapseThinkingByDefault } from './thinking-content';
 
 function Images(props: { blocks: Wire[]; caption?: string }) {
