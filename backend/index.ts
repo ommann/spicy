@@ -9,12 +9,16 @@ import { createServer } from 'vite';
 import { AgentRegistry } from './agents.ts';
 import { LoginBridge } from './auth.ts';
 import { createRouter } from './router.ts';
+import { importLegacyHistories } from '../packages/coding-agent/src/core/history-migration.ts';
 
 const root = fileURLToPath(new URL('../frontend', import.meta.url));
 const repository = fileURLToPath(new URL('..', import.meta.url));
 const cwd = path.resolve(process.env.PI_CWD || repository);
 const port = Number(process.env.PORT || 5174);
 const managed = process.env.PI_SESSION_DIR ? path.resolve(process.env.PI_SESSION_DIR) : fileURLToPath(new URL('./.sessions', import.meta.url));
+// The web server and every child agent share one history database.
+process.env.SPICY_HISTORY_DB ||= path.join(managed, 'history.sqlite');
+await importLegacyHistories([managed]);
 const token = randomUUID();
 const login = new LoginBridge();
 const agents = new AgentRegistry({

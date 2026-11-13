@@ -12,27 +12,22 @@ import {
 } from "@earendil-works/pi-ai";
 import { randomUUID } from "crypto";
 import {
-	appendFileSync,
 	closeSync,
 	createReadStream,
 	existsSync,
 	mkdirSync,
 	openSync,
 	readdirSync,
-	readFileSync,
 	readSync,
-	renameSync,
 	type Stats,
 	statSync,
-	unlinkSync,
-	utimesSync,
-	writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
 import { basename, join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
-import { hydrateSessionEntry, serializeSessionEntry } from "./session-attachments.ts";
+import { hydrateSessionEntry } from "./session-attachments.ts";
+import { appendStoredEntry, listStoredHistories, readStoredHeader, readStoredHistory, readStoredSessionInfo, writeStoredHistory } from "./session-storage.ts";
 import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import {
@@ -618,6 +613,16 @@ export function getDefaultSessionDir(cwd: string, agentDir: string = getDefaultA
 	return sessionDir;
 }
 
+function historyExists(path: string): boolean {
+	return !!readStoredHeader(path) || existsSync(path);
+}
+
+function historyPaths(directory: string): string[] {
+	const stored = listStoredHistories(directory).map(row => row.path);
+	const legacy = existsSync(directory) ? readdirSync(directory).filter(file => file.endsWith(".jsonl")).map(file => join(directory, file)) : [];
+	return [...new Set([...stored, ...legacy])];
+}
+
 const SESSION_READ_BUFFER_SIZE = 1024 * 1024;
 const SESSION_HEADER_READ_BUFFER_SIZE = 4096;
 /** Bound synchronous header discovery while allowing large cwd and custom metadata fields. */
@@ -643,6 +648,8 @@ function parseSessionEntryLine(line: string): FileEntry | null {
 /** Exported for testing */
 export function loadEntriesFromFile(filePath: string): FileEntry[] {
 	const resolvedFilePath = normalizePath(filePath);
+	const stored = readStoredHistory(resolvedFilePath);
+	if (stored) return stored;
 	if (!existsSync(resolvedFilePath)) return [];
 
 	const entries: FileEntry[] = [];
@@ -682,7 +689,6 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
 		return [];
 	}
 
-	if (pending) appendFileSync(resolvedFilePath, "\n");
 	return entries.map((entry) => hydrateSessionEntry(entry, resolvedFilePath));
 }
 
@@ -700,6 +706,8 @@ function parseSessionHeaderCandidate(line: string): SessionHeader | null | undef
 }
 
 function readSessionHeader(filePath: string): SessionHeader | null {
+	const stored = readStoredHeader(filePath);
+	if (stored) return stored;
 	const fd = openSync(filePath, "r");
 	try {
 		const decoder = new StringDecoder("utf8");
@@ -766,9 +774,8 @@ function allocateSessionUrlId(sessionDir?: string): string {
 		}
 		for (const directory of directories) {
 			if (!existsSync(directory)) continue;
-			for (const file of readdirSync(directory)) {
-				if (!file.endsWith(".jsonl")) continue;
-				const header = readSessionHeaderForDiscovery(join(directory, file));
+			for (const file of historyPaths(directory)) {
+				const header = readSessionHeaderForDiscovery(file);
 				if (header?.urlId) reservedSessionUrlIds.add(header.urlId);
 			}
 		}
@@ -792,10 +799,9 @@ export function findMostRecentSession(sessionDir: string, cwd?: string): string 
 	const resolvedSessionDir = normalizePath(sessionDir);
 	const resolvedCwd = cwd ? resolvePath(cwd) : undefined;
 	try {
-		const files = readdirSync(resolvedSessionDir)
-			.filter((file) => file.endsWith(".jsonl"))
-			.map((file) => join(resolvedSessionDir, file))
-			.map((path) => ({ path, mtime: statSync(path).mtimeMs }))
+		const updated = new Map(listStoredHistories(resolvedSessionDir).map(row => [row.path, row.updatedAt]));
+		const files = historyPaths(resolvedSessionDir)
+			.map((path) => ({ path, mtime: updated.get(path) ?? statSync(path).mtimeMs }))
 			.sort((a, b) => b.mtime - a.mtime);
 
 		for (const { path } of files) {
@@ -844,7 +850,9 @@ async function buildSessionInfo(
 	fileStats?: Stats,
 ): Promise<SessionInfo | null> {
 	try {
-		const stats = fileStats ?? (await stat(filePath));
+		const storedInfo = readStoredSessionInfo(filePath);
+		if (storedInfo) return storedInfo;
+		const stats = fileStats ?? await stat(filePath);
 		let header: SessionHeader | null = null;
 		let messageCount = 0;
 		let firstMessage = "";
@@ -852,13 +860,12 @@ async function buildSessionInfo(
 		let name: string | undefined;
 		let lastActivityTime: number | undefined;
 
-		const rl = createInterface({
-			input: createReadStream(filePath, { encoding: "utf8", signal }),
-			crlfDelay: Infinity,
-		});
+		const records: AsyncIterable<FileEntry | null> = (async function* () {
+			const rl = createInterface({ input: createReadStream(filePath, { encoding: "utf8", signal }), crlfDelay: Infinity });
+			for await (const line of rl) yield parseSessionEntryLine(line);
+		})();
 
-		for await (const line of rl) {
-			const entry = parseSessionEntryLine(line);
+		for await (const entry of records) {
 			if (!entry) continue;
 
 			if (!header) {
@@ -903,7 +910,7 @@ async function buildSessionInfo(
 				? new Date(lastActivityTime)
 				: !Number.isNaN(headerTime)
 					? new Date(headerTime)
-					: stats.mtime;
+					: stats?.mtime ?? new Date(header.timestamp);
 
 		return {
 			path: filePath,
@@ -990,11 +997,7 @@ async function listSessionsFromDir(
 	if (!existsSync(dir)) return [];
 
 	try {
-		const dirEntries = await readdir(dir);
-		const files = dirEntries
-			.filter((file) => file.endsWith(".jsonl"))
-			.sort((a, b) => b.localeCompare(a))
-			.map((file) => ({ path: join(dir, file) }));
+		const files = historyPaths(dir).sort((a, b) => b.localeCompare(a)).map(path => ({ path }));
 		const total = files.length;
 		const partialSessions: SessionInfo[] = [];
 		let loaded = 0;
@@ -1017,7 +1020,7 @@ async function listSessionsFromDir(
 }
 
 /**
- * Manages conversation sessions as append-only trees stored in JSONL files.
+ * Manages conversation sessions as append-only trees stored in a shared SQLite database.
  *
  * Each session entry has an id and parentId forming a tree structure. The "leaf"
  * pointer tracks the current position. Appending creates a child of the current leaf.
@@ -1071,7 +1074,7 @@ export class SessionManager {
 
 	private _setSessionFile(sessionFile: string, preloadedFileEntries?: FileEntry[]): void {
 		this.sessionFile = resolvePath(sessionFile);
-		if (existsSync(this.sessionFile)) {
+		if (historyExists(this.sessionFile)) {
 			const entries = preloadedFileEntries ?? loadEntriesFromFile(this.sessionFile);
 
 			// If file was empty, initialize it with a valid session header. If it was
@@ -1089,6 +1092,7 @@ export class SessionManager {
 			}
 
 			this._loadEntries(entries);
+			if (!readStoredHeader(this.sessionFile)) this._rewriteFile();
 			this.flushed = true;
 		} else {
 			const explicitPath = this.sessionFile;
@@ -1121,7 +1125,7 @@ export class SessionManager {
 
 		if (this.persist) {
 			const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-			this.sessionFile = join(this.getSessionDir(), `${fileTimestamp}_${this.sessionId}.jsonl`);
+			this.sessionFile = join(this.getSessionDir(), `${fileTimestamp}_${this.sessionId}.session`);
 		}
 		return this.sessionFile;
 	}
@@ -1136,27 +1140,7 @@ export class SessionManager {
 			const migrated = migrateToCurrentVersion(this.fileEntries);
 			if (!header.urlId) {
 				header.urlId = allocateSessionUrlId(this.persist ? this.sessionDir : undefined);
-				if (this.persist && this.sessionFile && !migrated) {
-					// Preserve transcript bytes and modification time when adding metadata.
-					const original = readFileSync(this.sessionFile);
-					const newline = original.indexOf(10);
-					const stats = statSync(this.sessionFile);
-					const temporary = `${this.sessionFile}.${randomUUID()}.tmp`;
-					try {
-						writeFileSync(
-							temporary,
-							Buffer.concat([
-								Buffer.from(`${JSON.stringify(header)}\n`),
-								newline < 0 ? Buffer.alloc(0) : original.subarray(newline + 1),
-							]),
-							{ flag: "wx", mode: stats.mode & 0o777 },
-						);
-						utimesSync(temporary, stats.atime, stats.mtime);
-						renameSync(temporary, this.sessionFile);
-					} finally {
-						if (existsSync(temporary)) unlinkSync(temporary);
-					}
-				}
+				if (this.persist && this.sessionFile && !migrated) this._rewriteFile();
 			}
 			reservedSessionUrlIds.add(header.urlId);
 			if (migrated) this._rewriteFile();
@@ -1191,14 +1175,7 @@ export class SessionManager {
 
 	private _rewriteFile(): void {
 		if (!this.persist || !this.sessionFile) return;
-		const fd = openSync(this.sessionFile, "w");
-		try {
-			for (const entry of this.fileEntries) {
-				writeFileSync(fd, `${serializeSessionEntry(entry, this.sessionFile)}\n`);
-			}
-		} finally {
-			closeSync(fd);
-		}
+		writeStoredHistory(this.sessionFile, this.fileEntries);
 	}
 
 	isPersisted(): boolean {
@@ -1244,17 +1221,10 @@ export class SessionManager {
 
 		if (!this.flushed) {
 			if (!this._hasDurableContent()) return;
-			const fd = openSync(this.sessionFile, "wx");
-			try {
-				for (const e of this.fileEntries) {
-					writeFileSync(fd, `${serializeSessionEntry(e, this.sessionFile)}\n`);
-				}
-			} finally {
-				closeSync(fd);
-			}
+			writeStoredHistory(this.sessionFile, this.fileEntries, true);
 			this.flushed = true;
 		} else {
-			appendFileSync(this.sessionFile, `${serializeSessionEntry(entry, this.sessionFile)}\n`);
+			appendStoredEntry(this.sessionFile, entry);
 		}
 	}
 
@@ -1770,7 +1740,7 @@ export class SessionManager {
 		const newSessionId = createSessionId();
 		const timestamp = new Date().toISOString();
 		const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-		const newSessionFile = join(this.getSessionDir(), `${fileTimestamp}_${newSessionId}.jsonl`);
+		const newSessionFile = join(this.getSessionDir(), `${fileTimestamp}_${newSessionId}.session`);
 
 		const header: SessionHeader = {
 			type: "session",
@@ -1868,7 +1838,7 @@ export class SessionManager {
 		const resolvedPath = resolvePath(path);
 		let header: SessionHeader | null = null;
 		let preloadedFileEntries: FileEntry[] | undefined;
-		if (cwdOverride === undefined && existsSync(resolvedPath)) {
+		if (cwdOverride === undefined && historyExists(resolvedPath)) {
 			try {
 				header = readSessionHeader(resolvedPath);
 			} catch (error) {
@@ -1943,7 +1913,7 @@ export class SessionManager {
 		const newSessionId = options?.id ?? createSessionId();
 		const timestamp = new Date().toISOString();
 		const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-		const newSessionFile = join(dir, `${fileTimestamp}_${newSessionId}.jsonl`);
+		const newSessionFile = join(dir, `${fileTimestamp}_${newSessionId}.session`);
 
 		// Write new header pointing to source as parent, with updated cwd
 		const newHeader: SessionHeader = {
@@ -1955,14 +1925,7 @@ export class SessionManager {
 			cwd: resolvedTargetCwd,
 			parentSession: resolvedSourcePath,
 		};
-		writeFileSync(newSessionFile, `${JSON.stringify(newHeader)}\n`, { flag: "wx" });
-
-		// Copy all non-header entries from source
-		for (const entry of sourceEntries) {
-			if (entry.type !== "session") {
-				appendFileSync(newSessionFile, `${serializeSessionEntry(entry, newSessionFile)}\n`);
-			}
-		}
+		writeStoredHistory(newSessionFile, [newHeader, ...sourceEntries.filter(entry => entry.type !== "session")], true);
 
 		return new SessionManager(resolvedTargetCwd, dir, newSessionFile, true);
 	}
@@ -1979,9 +1942,7 @@ export class SessionManager {
 		const resolvedCwd = resolvePath(cwd);
 
 		try {
-			for (const file of readdirSync(dir)) {
-				if (!file.endsWith(".jsonl")) continue;
-				const path = join(dir, file);
+			for (const path of historyPaths(dir)) {
 				const header = readSessionHeaderForDiscovery(path);
 				if (header?.id !== id) continue;
 				if (filterCwd && !sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd)) continue;
@@ -2049,10 +2010,10 @@ export class SessionManager {
 		}
 
 		const sessionsDir = getSessionsDir();
+		const storedPaths = listStoredHistories(sessionsDir, true).map(row => row.path);
 
 		try {
-			if (!existsSync(sessionsDir)) return [];
-			const entries = await readdir(sessionsDir, { withFileTypes: true });
+			const entries = existsSync(sessionsDir) ? await readdir(sessionsDir, { withFileTypes: true }) : [];
 			const dirs = entries
 				.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
 				.map((entry) => join(sessionsDir, entry.name));
@@ -2062,20 +2023,20 @@ export class SessionManager {
 				MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
 				async (dir) => {
 					try {
-						return (await readdir(dir)).filter((file) => file.endsWith(".jsonl")).map((file) => join(dir, file));
+						return historyPaths(dir);
 					} catch {
 						return [];
 					}
 				},
 				abortSignal,
 			);
-			const allFiles = dirFiles.flat();
+			const allFiles = [...new Set([...storedPaths, ...dirFiles.flat()])];
 			const candidates = await mapWithConcurrency(
 				allFiles,
 				MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
 				async (path): Promise<SessionFileCandidate> => {
 					try {
-						return { path, stats: await stat(path) };
+						return { path, stats: readStoredHeader(path) ? undefined : await stat(path) };
 					} catch {
 						return { path };
 					}

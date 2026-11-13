@@ -235,7 +235,7 @@ function findLocalSessionByExactId(
 
 async function resolveSessionPath(sessionArg: string, cwd: string, sessionDir?: string): Promise<ResolvedSession> {
 	// If it looks like a file path, resolve it before handing it to the session manager.
-	if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl")) {
+	if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl") || sessionArg.endsWith(".session")) {
 		return { type: "path", path: resolvePath(sessionArg, cwd) };
 	}
 

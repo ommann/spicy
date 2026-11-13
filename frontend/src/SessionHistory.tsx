@@ -6,9 +6,6 @@ import type { Entry, Wire } from './types';
 import { createSystemPromptCatalog } from './system-prompts';
 import { createPrefixResolver } from './chat/prefix-state';
 import { activityTime, createActivityClock } from './session-activity';
-import { latestHistoryMessage } from './latest-history-message';
-import { getDiscussionTitle } from '../../packages/coding-agent/src/core/discussion-title';
-import { branchEntries } from './session-entries.ts';
 
 type Row = { id: string; text: string; prompt?: number; associatedPrompt?: number; title?: boolean; user?: boolean; priority?: boolean; endsLane?: boolean; compactionStart?: boolean; compactionRoot?: string; annotation?: string; label?: BranchLabel; href?: string; children: Row[] };
 
@@ -118,44 +115,18 @@ function Rows(props: { rows: Row[]; depth?: number }) {
 
 export default function SessionHistory(props: { projectQuery: string }) {
   const now = createActivityClock();
-  const [histories, setHistories] = createSignal<{ id: string; path: string; name: string; modified: number; rows: Row[]; latest?: { text: string; user: boolean; href: string; title?: string } }[]>([]);
+  const [histories, setHistories] = createSignal<{ id: string; path: string; modified: number; rows: Row[]; latest?: { text: string; user: boolean; href: string; title?: string } }[]>([]);
   const [error, setError] = createSignal('');
   onMount(async () => {
     try {
-      const info = await api.info({});
-      const sessions = await api.sessions({ scope: 'all' });
-      const seen = new Set<string>();
-      for (const session of sessions) {
-        if (seen.has(session.id)) continue;
+      const cards = await api.histories({});
+      for (const value of cards) {
         try {
-          const value = await api.agents.create({ openSessionId: session.id }, { context: { token: info.token } });
-          const agents = [value, ...(value.relatedAgents || [])];
-          const order: (string | undefined)[] = value.familyOrder || [];
-          agents.sort((a, b) => order.indexOf(a.state?.sessionFile) - order.indexOf(b.state?.sessionFile));
-          let modified = session.modified;
-          for (const agent of agents) {
-            for (const candidate of sessions) {
-              if (candidate.urlId && candidate.urlId === agent.state?.sessionUrlId) {
-                seen.add(candidate.id);
-                modified = Math.max(modified, candidate.modified);
-              }
-            }
-          }
-          seen.add(session.id);
+          const agents = value.members;
           const entries = new Map<string, Entry>();
           for (const agent of agents) for (const entry of agent.entries) entries.set(entry.id, entry);
           const rows = historyRows([...entries.values()]);
-          const latestMessage = latestHistoryMessage([...entries.values()]);
-          const latestAgent = latestMessage && agents.find(agent => agent.state?.sessionUrlId
-            && agent.entries.some((entry: Entry) => entry.id === latestMessage.id));
-          const activeBranch = latestAgent ? branchEntries(latestAgent.entries, latestAgent.leafId) : [];
-          const titleBranch = latestMessage && activeBranch.some((entry: Entry) => entry.id === latestMessage.id)
-            ? activeBranch : latestMessage ? branchEntries([...entries.values()], latestMessage.id) : [];
-          const latest = latestMessage && latestAgent ? {
-            title: getDiscussionTitle(titleBranch),
-            text: latestMessage.text.replace(/\s+/g, ' '), user: latestMessage.user,
-            href: `/b/${latestAgent.state!.sessionUrlId}`,
-          } : undefined;
+          const latest = value.latest;
           function linkRows(items: Row[]) {
             for (const row of items) {
               const branch = agents.find(agent => agent.state?.sessionUrlId && agent.entries.some((entry: Entry) => entry.id === row.id));
@@ -189,12 +160,11 @@ export default function SessionHistory(props: { projectQuery: string }) {
               }
             }
           }
-          const cwd = value.state?.cwd || value.cwd || '';
+          const cwd = value.path;
           setHistories(previous => [...previous, {
-            id: value.treeId || session.id,
+            id: value.id,
             path: cwd.replace(/^\/home\/[^/]+(?=\/|$)|^\/Users\/[^/]+(?=\/|$)/, '~'),
-            name: session.name,
-            modified,
+            modified: value.modified,
             rows,
             latest,
           }]);

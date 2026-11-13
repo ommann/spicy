@@ -1,12 +1,14 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { historyCards } from './history.ts';
 import type { z } from 'zod';
 import type { AgentRegistry, AgentConnection } from './agents.ts';
 import type { HistoryEntry } from './types.ts';
 import type * as inputs from './inputs.ts';
 import { SessionManager, type SessionInfo } from '@earendil-works/pi-coding-agent';
+import { loadEntriesFromFile } from '../packages/coding-agent/src/core/session-manager.ts';
 
 export class OperationError extends Error {
   declare reason: string;
@@ -128,6 +130,7 @@ export function createOperations({ agents, cwd, managed }: { agents: AgentRegist
   }
   return {
     info: (input: z.output<typeof inputs.agentInput>) => getAgent(input).payload(),
+    histories: () => historyCards(managed),
     sessions: async (input: z.output<typeof inputs.sessionsInput>) => {
       const agent = getAgent(input);
       const available: { id: string; urlId?: string; cwd: string; name: string; modified: number; file?: string }[] = input.scope === 'all' ? (await allSessions()).map(session => ({
@@ -139,7 +142,7 @@ export function createOperations({ agents, cwd, managed }: { agents: AgentRegist
     session: async (input: z.output<typeof inputs.sessionInput>) => {
       const entry = (await catalog(getAgent(input).cwd)).find(entry => entry.id === input.id);
       if (!entry) fail('Session not found', 'not-found');
-      return readFile(entry.file, 'utf8');
+      return loadEntriesFromFile(entry.file).map(record => JSON.stringify(record)).join('\n') + '\n';
     },
     listAgents: () => [...agents.agents.values()].map(agent => {
       const { agentId, cwd, connected, running, state, source } = agent.payload();

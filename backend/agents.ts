@@ -1,8 +1,10 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { parseSessionEntries, SessionManager } from '@earendil-works/pi-coding-agent';
+import { SessionManager } from '@earendil-works/pi-coding-agent';
+import { loadEntriesFromFile } from '../packages/coding-agent/src/core/session-manager.ts';
 import type { RpcRecord, History, HistoryEntry, SessionState, SelectedSession, AgentSource, AgentClient, RegistryOptions } from './types.ts';
+import { writeStoredHistory } from '../packages/coding-agent/src/core/session-storage.ts';
 import { PiRpc } from './rpc.ts';
 import { applyRecord } from '../frontend/src/stream.ts';
 
@@ -103,7 +105,7 @@ export class AgentConnection {
 export class AgentRegistry {
   agents = new Map<string, AgentConnection>();
   // Reserve session files before awaiting startup/switching: never give two
-  // processes independent in-memory indexes over the same writable JSONL.
+  // processes independent in-memory indexes over the same writable history.
   owners = new Map<string, string>();
   opening = new Map<string, Promise<AgentConnection>>();
   declare cwd: string;
@@ -226,7 +228,7 @@ export class AgentRegistry {
         sourceCwd = source.cwd;
       } else {
         // Migrate in memory only: forking must not rewrite the source file.
-        const session = SessionManager.inMemory(selected!.cwd, undefined, parseSessionEntries(await readFile(selected!.file, 'utf8'), selected!.file));
+        const session = SessionManager.inMemory(selected!.cwd, undefined, loadEntriesFromFile(selected!.file));
         entries = session.getEntries();
         leafId = session.getLeafId();
         const model = session.buildSessionContext().model;
@@ -252,7 +254,7 @@ export class AgentRegistry {
       await mkdir(this.managed, { recursive: true });
       const session = SessionManager.create(agent.cwd, this.managed);
       const file = session.getSessionFile()!;
-      await writeFile(file, [JSON.stringify({ ...session.getHeader(), parentSession }), ...history.map(entry => JSON.stringify(entry))].join('\n') + '\n', { flag: 'wx', mode: 0o600 });
+      writeStoredHistory(file, [{ ...session.getHeader()!, parentSession }, ...history], true);
       branch = { file, cwd: agent.cwd };
       agent.source = { agentId: source?.id ?? null, sessionId: selected?.id ?? (parentSession ? Buffer.from(parentSession).toString('base64url') : null), entryId: target };
     } else if (entryId !== undefined) throw new Error('entryId requires a source agent or session');

@@ -26,6 +26,7 @@ export function createRouter({ agents, login, cwd, managed, token, signal: shutd
   });
   return {
     info: procedure.input(agentInput).handler(({ input }) => ({ token, ...operations.info(input) })),
+    histories: procedure.input(emptyInput).handler(() => operations.histories()),
     sessions: procedure.input(sessionsInput).handler(({ input }) => operations.sessions(input)),
     session: procedure.input(sessionInput).handler(({ input }) => operations.session(input)),
     agents: {
