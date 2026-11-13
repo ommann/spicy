@@ -282,7 +282,7 @@ describe("AgentSession MCP integration", () => {
 		await second.harness.session.navigateTree(firstAssistant.id);
 
 		// The transcript's loadout is restored without the MCP tools it declared.
-		expect(second.harness.session.getActiveToolNames()).toEqual([]);
+		expect(second.harness.session.getActiveToolNames()).toEqual(["mcp__docs__search", "mcp__docs__fail", "mcp__docs__shot"]);
 		expect(second.harness.session.getAllTools().map((tool) => tool.name)).toContain("mcp__docs__search");
 	});
 
@@ -461,7 +461,7 @@ describe("AgentSession MCP integration", () => {
 	});
 
 	it.each(["direct", "codemode"] as const)(
-		"withdraws and restores %s MCP tools the server changes",
+		"preserves declared tools while refreshing callable %s MCP tools",
 		async (exposure) => {
 			let tools = SERVER_TOOLS;
 			const { harness, servers } = await setup(exposure, () => tools);
@@ -478,7 +478,8 @@ describe("AgentSession MCP integration", () => {
 
 			tools = SERVER_TOOLS.filter((tool) => tool.name !== "fail");
 			await listChanged();
-			expect(reachable()).not.toContain("mcp__docs__fail");
+			if (exposure === "direct") expect(reachable()).toContain("mcp__docs__fail");
+			else expect(reachable()).not.toContain("mcp__docs__fail");
 			expect(reachable()).toContain("mcp__docs__search");
 			const codemode = harness.session.agent.state.tools.find((tool) => tool.name === "codemode");
 			expect(codemode?.description ?? "").not.toContain("mcp__docs__fail");
@@ -787,7 +788,7 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
 		expect(description()).toBe(before);
 	});
 
-	it("lists a server before it connects and appends its summary with the next prompt", async () => {
+	it("freezes the initial server summary even after the server connects", async () => {
 		const { harness } = await setupSlow({ instructions: "Slow docs.\nMore." }, 30);
 		harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
@@ -798,17 +799,9 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
 		const systemMessages = harness.session.messages.filter(
 			(message): message is SystemMessage => message.role === "system",
 		);
-		// The first request lists the server by name; the next snapshot adds its summary
-		// while preserving every other prompt section.
-		expect(systemMessages).toHaveLength(2);
+		expect(systemMessages).toHaveLength(1);
 		expect(systemMessages[0].sections?.[MCP_SERVERS_SECTION]).toContain("- mcp__slow (codemode)\n");
-		expect(systemMessages[1].sections).toEqual({
-			...systemMessages[0].sections,
-			[MCP_SERVERS_SECTION]: expect.stringContaining("- mcp__slow (codemode): Slow docs."),
-		});
-		expect(harness.session.messages.indexOf(systemMessages[1])).toBeGreaterThan(
-			harness.session.messages.findIndex((message) => message.role === "assistant"),
-		);
+		expect(systemMessages[0].sections?.[MCP_SERVERS_SECTION]).not.toContain("Slow docs.");
 	});
 
 	it("waits for servers with direct tools before listing the servers", async () => {
@@ -1010,6 +1003,9 @@ return [...new Set(await Promise.all(names.map(async (name) => (await describeNa
 		// Loads are recorded in the transcript: navigating back before the load drops the tool,
 		// navigating to a later entry restores it.
 		const branch = harness.sessionManager.getBranch();
+		const systemEntries = branch.filter((entry) => entry.type === "message" && entry.message.role === "system");
+		expect(systemEntries).toHaveLength(2);
+		expect(systemEntries[1]).toMatchObject({ predecessorId: systemEntries[0].id });
 		const firstUser = branch.find((entry) => entry.type === "message" && entry.message.role === "user");
 		const last = branch.at(-1);
 		if (!firstUser || !last) throw new Error("Missing entries");

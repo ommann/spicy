@@ -158,7 +158,7 @@ import {
 	systemPromptDocumentFromState,
 	systemPromptOutputMatches,
 } from "./system-prompt-document.ts";
-import { isDiscoveryOnlyChange, promptCandidateKey, type SystemPromptPolicy } from "./system-prompt-policy.ts";
+import { isDiscoveryOnlyChange, type SystemPromptPolicy } from "./system-prompt-policy.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
@@ -499,6 +499,8 @@ export class AgentSession {
 	/** Prompt options after before_agent_start mutations for the active run. */
 	private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions;
 	private _webPromptSections?: Record<string, string>;
+	/** Tools loaded by this chat's tool_search call, awaiting their declaration. */
+	private _priorityLoadedTools = new Set<string>();
 
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
@@ -703,6 +705,14 @@ export class AgentSession {
 		{ toolCall, args, result, isError }: AfterToolCallContext,
 		parentToolCallId?: string,
 	): Promise<AfterToolCallResult | undefined> {
+		if (toolCall.name === "tool_search" && !isError) {
+			const loaded = (result.details as { loaded?: unknown } | undefined)?.loaded;
+			if (Array.isArray(loaded)) {
+				for (const name of loaded) {
+					if (typeof name === "string") this._priorityLoadedTools.add(name);
+				}
+			}
+		}
 		const runner = this._extensionRunner;
 		const hookResult = runner.hasHandlers("tool_result")
 			? await runner.emitToolResult({
@@ -1179,17 +1189,18 @@ export class AgentSession {
 				event.message.role === "assistant" ||
 				event.message.role === "toolResult"
 			) {
-				// Tool-definition changes force a new prompt. Explicit editor choices are
-				// freestyle compositions, not revisions of the previously active prompt.
+				// Only tools loaded by this chat's tool_search call force a priority revision.
+				// Ordinary loadout changes and explicit editor choices do not.
 				const priorityPrompt = event.message.role === "system" &&
 					!("systemPromptKey" in event.message) &&
-					(!!event.message.toolsAdded?.length || !!event.message.toolsRemoved?.length);
+					!!event.message.toolsAdded?.some((tool) => this._priorityLoadedTools.has(tool.name));
 				const predecessorId = priorityPrompt
 					? this.sessionManager.getBranch().findLast((entry) =>
 						entry.type === "message" && entry.message.role === "system",
 					)?.id ?? null
 					: undefined;
 				entryId = this.sessionManager.appendMessage(event.message, predecessorId);
+				if (event.message.role === "system") this._priorityLoadedTools.clear();
 			}
 			if (entryId) this._entryIdsByMessage.set(event.message, entryId);
 			// Other message types (bashExecution, compactionSummary, branchSummary) are persisted elsewhere
@@ -1747,6 +1758,25 @@ export class AgentSession {
 				return description === undefined ? tool : { ...tool, description };
 			});
 		}
+		// Recorded declarations belong to this history, not the current registry.
+		const recorded = new Map(getCurrentTools(this.agent.state.messages).map((tool) => [tool.name, tool]));
+		declared = declared.map((tool) => {
+			const saved = recorded.get(tool.name);
+			return saved ? { ...tool, ...saved } as AgentTool : tool;
+		});
+		for (const name of new Set(toolNames)) {
+			const saved = recorded.get(name);
+			if (saved && !declared.some((tool) => tool.name === name)) {
+				declared.push({
+					...saved,
+					label: name,
+					execute: async () => { throw new Error(`Tool ${name} is unavailable in the current runtime`); },
+				} as AgentTool);
+			}
+		}
+		if (recorded.size > 0) {
+			for (const name of recorded.keys()) hidden.delete(name);
+		}
 		return { declared, hidden };
 	}
 
@@ -1882,10 +1912,16 @@ export class AgentSession {
 		options.selectedTools = this._applyToolLoadout(options.selectedTools).map((tool) => tool.name);
 		// The tool list and rules must match the declarations the request carries.
 		options.hiddenTools = [...this._hiddenDeclarations];
+		// Resuming a chat must not upgrade its recorded prompt to today's builder output.
+		// Only an explicit selection or tools discovered in this run may revise it.
+		if (!selected && this._priorityLoadedTools.size === 0 && getCurrentSystemMessage(messages)) {
+			return undefined;
+		}
 		const proposed = buildSystemPromptSections(options);
 		const toolChanges = getToolStateChanges(getCurrentTools(messages), this.agent.state.tools.map(toToolDeclaration));
 		if (
 			!selected &&
+			this._priorityLoadedTools.size > 0 &&
 			this._webPromptSections &&
 			isDiscoveryOnlyChange(
 				this._webPromptSections,
@@ -1983,21 +2019,10 @@ export class AgentSession {
 			.flatMap((entry) => (entry.type === "message" && entry.message.role === "system" ? [entry.message] : []));
 		// No recorded loadout: keep the current tools.
 		if (systemMessages.length === 0) return;
-		// Tools the branch ever added or removed. Removed tools stay inactive.
-		const mentioned = new Set(
-			systemMessages
-				.flatMap((message) => [...(message.toolsAdded ?? []), ...(message.toolsRemoved ?? [])])
-				.map((tool) => tool.name),
-		);
-		// Extension tools the branch never mentioned were registered after it recorded its loadout, so
-		// they are activated like newly registered tools. Built-in tools follow `defaultTools` instead.
-		const newTools = [...this._toolRegistry.keys()].filter(
-			(name) =>
-				!mentioned.has(name) && !this._baseToolDefinitions.has(name) && this._isActivatedOnRegistration(name),
-		);
-		// The recorded loadout plus the new tools, with `--tools +name`/`-name` applied.
+		// Restore only this history's tools. Global defaults and newly registered tools
+		// apply when history starts, never when it is resumed.
 		const names = applyToolModifiers(
-			[...getCurrentTools(systemMessages).map((tool) => tool.name), ...newTools],
+			getCurrentTools(systemMessages).map((tool) => tool.name),
 			modifiers,
 		);
 		// Recorded tools that are not registered yet, such as MCP tools of servers still connecting, are
@@ -2070,6 +2095,7 @@ export class AgentSession {
 			this._failedResponse = undefined;
 			this._runSystemPromptOptions = undefined;
 			this._webPromptSections = undefined;
+			this._priorityLoadedTools.clear();
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
 			await this._emitAgentSettled();
@@ -2118,32 +2144,7 @@ export class AgentSession {
 			);
 			// Legacy free-form system text is retained separately by transcript replay.
 			const current = recorded ? accepted : proposed;
-			const toolChanges = getToolStateChanges(
-				getCurrentTools(this.agent.state.messages),
-				preview.declared.map(toToolDeclaration),
-			);
-			const discoveryOnly = isDiscoveryOnlyChange(
-				current,
-				proposed,
-				buildSystemPromptSections({
-					...options,
-					selectedTools: getCurrentTools(this.agent.state.messages).map((tool) => tool.name),
-					hiddenTools: [...preview.hidden],
-				}).rules,
-				toolChanges.toolsAdded.length > 0 || toolChanges.toolsRemoved.length > 0,
-			);
-			const changed = JSON.stringify(current) !== JSON.stringify(proposed);
-			const decision =
-				recorded && changed && !discoveryOnly
-					? policy.decide({
-							key: promptCandidateKey(proposed),
-							sections: proposed,
-							currentSections: current,
-							parentId: this.sessionManager.getLeafId(),
-						})
-					: "accept";
-			if (decision === "cancel") return undefined;
-			this._webPromptSections = decision === "current" ? current : proposed;
+			this._webPromptSections = current;
 			// Forced-prompt projection remains the original extension mechanism; do not
 			// convert its opaque text into synthetic structured prompt sections.
 		}
@@ -3908,7 +3909,12 @@ export class AgentSession {
 			options?.activeToolNames ? [...options.activeToolNames] : [...previousActiveToolNames]
 		).filter((name) => this._isAllowedTool(name));
 
-		if (allowedTools) {
+		const recordedPrompt = getCurrentSystemMessage(this.agent.state.messages);
+		if (recordedPrompt) {
+			// Registration/reconnection is not a user-requested loadout change.
+			const recordedNames = getCurrentTools(this.agent.state.messages).map((tool) => tool.name);
+			nextActiveToolNames.splice(0, nextActiveToolNames.length, ...recordedNames);
+		} else if (allowedTools) {
 			for (const toolName of this._toolRegistry.keys()) {
 				// Naming or matching a tool activates it even when it is not active by default. MCP tools
 				// kept registered without being named stay inactive.

@@ -160,28 +160,23 @@ describe("AgentSession codemode tool", () => {
 		expect(requestTools[0]).toEqual(expect.arrayContaining(["read", "echo", "codemode"]));
 		expect(requestPrompts[0]).toContain("\n- read: ");
 
-		// only: codemode lists echo, which stays active but is left out of requests.
+		// Global mode changes cannot rewrite declarations in an existing history.
 		harness.settingsManager.applyOverrides({ codemode: { mode: "only" } });
 		harness.session.setActiveToolsByName(["read", "echo", "codemode"]);
-		expect(description("echo")).not.toContain("Codemode: `tools.echo");
-		expect(description("codemode")).toContain("### `echo`");
+		expect(description("echo")).toContain("Codemode: `tools.echo");
+		expect(description("codemode")).not.toContain("### `echo`");
 		expect(description("codemode")).not.toContain("### `stats`");
 		harness.setResponses([record]);
 		await harness.session.prompt("only");
 		expect(requestTools[1]).toContain("codemode");
-		expect(requestTools[1]).not.toContain("echo");
-		expect(requestTools[1]).not.toContain("read");
-		// The prompt's tool list matches the declarations: hidden tools are not listed (#10192).
-		expect(requestPrompts[1]).not.toContain("\n- read: ");
-		expect(requestPrompts[1]).toContain("\n- codemode: ");
-		expect(harness.session.systemPrompt).not.toContain("\n- read: ");
-		// Hidden tools' guidelines move from the rules to their codemode sections (#10343).
-		expect(requestPrompts[1]).not.toContain("Use read to examine files");
-		expect(description("codemode")).toContain("- Use read to examine files instead of cat or sed.");
+		expect(requestTools[1]).toContain("echo");
+		expect(requestTools[1]).toContain("read");
+		expect(requestPrompts[1]).toBe(requestPrompts[0]);
+		expect(harness.session.systemPrompt).toBe(requestPrompts[0]);
 
-		// Without codemode, tools keep their plain descriptions.
+		// Even an explicit loadout change retains the saved definition of a tool.
 		harness.session.setActiveToolsByName(["echo"]);
-		expect(description("echo")).toBe("Echo text back.\n\nSecond paragraph.");
+		expect(description("echo")).toContain("Codemode: `tools.echo");
 	});
 
 	// #10343

@@ -54,7 +54,7 @@ describe("system prompt updates", () => {
 			harness.cleanup();
 		}
 	});
-	test("web candidates can be cancelled, retained for one submission, and explicitly adopted", async () => {
+	test("global instruction changes are ignored until an explicit prompt is selected", async () => {
 		let instruction = "Accepted instructions.";
 		const extension: ExtensionFactory = (pi) => {
 			pi.on("before_agent_start", (event) => {
@@ -76,28 +76,30 @@ describe("system prompt updates", () => {
 				fauxAssistantMessage("two"),
 				fauxAssistantMessage("three"),
 				fauxAssistantMessage("four"),
+				fauxAssistantMessage("five"),
 			]);
 			await harness.session.prompt("one", { systemPromptPolicy: policy });
 			expect(candidate).toBeUndefined();
 			const entries = [...harness.sessionManager.getEntries()];
-			const messages = [...harness.session.messages];
-			const tools = harness.session.agent.state.tools;
+			const original = getCurrentSystemPrompt(harness.session.messages);
 			instruction = "Candidate instructions.";
 			await harness.session.prompt("cancel me", { systemPromptPolicy: policy });
-			expect(harness.sessionManager.getEntries()).toEqual(entries);
-			expect(harness.session.messages).toEqual(messages);
-			expect(harness.session.agent.state.tools).toBe(tools);
-			expect(candidate?.sections.project).toContain("Candidate instructions.");
-			const key = candidate!.key;
+			expect(candidate).toBeUndefined();
+			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(original);
+			expect(harness.sessionManager.getEntries().filter(e => e.type === "message" && e.message.role === "system")).toEqual(entries.filter(e => e.type === "message" && e.message.role === "system"));
 			decision = "current";
 			await harness.session.prompt("two", { systemPromptPolicy: policy });
 			expect(getCurrentSystemPrompt(harness.session.messages)).toContain("Accepted instructions.");
 			expect(getCurrentSystemPrompt(harness.session.messages)).not.toContain("Candidate instructions.");
 			candidate = undefined;
 			await harness.session.prompt("three", { systemPromptPolicy: policy });
-			expect((candidate as SystemPromptCandidate | undefined)?.key).toBe(key); // Use-current does not ignore or accept the revision.
+			expect(candidate).toBeUndefined();
 			decision = "accept";
-			await harness.session.prompt("four", { systemPromptPolicy: policy });
+			const current = getCurrentSystemMessage(harness.session.messages)!;
+			await harness.session.prompt("four", { systemPromptPolicy: {
+				...policy,
+				selected: { key: "explicit", content: "", sections: { ...current.sections, project: instruction } },
+			} });
 			expect(getCurrentSystemPrompt(harness.session.messages)).toContain("Candidate instructions.");
 		} finally {
 			harness.cleanup();
@@ -125,7 +127,7 @@ describe("system prompt updates", () => {
 		} finally { harness.cleanup(); }
 	});
 
-	test("web tool activation is priority, without adopting unrelated instructions", async () => {
+	test("ordinary web tool activation is not priority and preserves accepted instructions", async () => {
 		let instruction = "Accepted instructions.";
 		const extension: ExtensionFactory = (pi) => {
 			for (const name of ["first", "second"])
@@ -159,11 +161,10 @@ describe("system prompt updates", () => {
 			]);
 			await harness.session.prompt("one", { systemPromptPolicy: policy });
 			const promptEntries = () => harness.sessionManager.getBranch().filter(entry => entry.type === "message" && entry.message.role === "system");
-			const firstPrompt = promptEntries().at(-1)!;
 			harness.session.setActiveToolsByName(["first", "second"]);
 			await harness.session.prompt("two", { systemPromptPolicy: policy });
 			const secondPrompt = promptEntries().at(-1)!;
-			expect(secondPrompt).toMatchObject({ predecessorId: firstPrompt.id });
+			expect(secondPrompt).not.toHaveProperty("predecessorId");
 			expect(calls).toBe(0);
 			expect(getCurrentSystemMessage(harness.session.messages)?.toolsAdded?.map((tool) => tool.name)).toContain(
 				"second",
@@ -172,11 +173,12 @@ describe("system prompt updates", () => {
 			harness.session.setActiveToolsByName(["second"]);
 			instruction = "Unapproved instructions.";
 			await harness.session.prompt("three", { systemPromptPolicy: policy });
-			expect(promptEntries().at(-1)).toMatchObject({ predecessorId: secondPrompt.id });
-			expect(calls).toBe(1);
+			expect(promptEntries().at(-1)).not.toHaveProperty("predecessorId");
+			expect(calls).toBe(0);
 			const current = getCurrentSystemPrompt(harness.session.messages);
 			expect(current).toBe(accepted); // Retain the complete accepted revision, not a synthetic hybrid.
-			expect(current).toContain("second snippet");
+			expect(current).toContain("first snippet");
+			expect(current).not.toContain("second snippet");
 			expect(current).not.toContain("Unapproved instructions.");
 		} finally {
 			harness.cleanup();
@@ -222,7 +224,7 @@ describe("system prompt updates", () => {
 		}
 	});
 
-	test("a passive MCP description is a complete candidate, not a priority tool-definition change", async () => {
+	test("passive MCP descriptions never revise existing history", async () => {
 		let description = "";
 		let expected: Record<string, string> = {};
 		const harness = await createHarness({
@@ -248,18 +250,16 @@ describe("system prompt updates", () => {
 			harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 			await harness.session.prompt("one", { systemPromptPolicy: policy });
 			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(expected);
-			const entries = [...harness.sessionManager.getEntries()];
 			const accepted = getCurrentSystemPrompt(harness.session.messages);
 			description = ": REA provides reverse-engineering tools.";
 			await harness.session.prompt("two", { systemPromptPolicy: policy });
-			expect(approvals).toBe(1);
-			expect(candidate?.sections).toEqual(expected);
-			expect(harness.sessionManager.getEntries()).toEqual(entries);
+			expect(approvals).toBe(0);
+			expect(candidate).toBeUndefined();
 			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(accepted);
-			await harness.session.prompt("two", { systemPromptPolicy: { decide: () => "accept" } });
-			expect(getCurrentSystemMessage(harness.session.messages)?.sections).toEqual(expected);
-			expect(getCurrentSystemPrompt(harness.session.messages)).toContain("<mcp_servers>\n");
-			expect(getCurrentSystemPrompt(harness.session.messages)).toContain(description);
+			harness.setResponses([fauxAssistantMessage("three")]);
+			await harness.session.prompt("three", { systemPromptPolicy: { decide: () => "accept" } });
+			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(accepted);
+			expect(getCurrentSystemPrompt(harness.session.messages)).not.toContain(description);
 		} finally {
 			harness.cleanup();
 		}
@@ -291,6 +291,29 @@ describe("system prompt updates", () => {
 		} finally {
 			harness.cleanup();
 		}
+	});
+
+	test("late registration and definition changes cannot alter a started history", async () => {
+		let register!: (name: string, description: string) => void;
+		const harness = await createHarness({ extensionFactories: [(pi) => {
+			register = (name, description) => pi.registerTool({
+				name, label: name, description, parameters: Type.Object({}),
+				execute: async () => ({ content: [{ type: "text", text: name }], details: {} }),
+			});
+			register("original", "Original definition");
+		}] });
+		try {
+			harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+			await harness.session.prompt("one");
+			const head = structuredClone(getCurrentSystemMessage(harness.session.messages));
+			register("original", "Silently replaced definition");
+			register("late", "Must not be injected");
+			await harness.session.prompt("two");
+			expect(getCurrentSystemMessage(harness.session.messages)).toEqual(head);
+			expect(harness.session.messages.filter(m => m.role === "system")).toHaveLength(1);
+			expect(harness.session.getActiveToolNames()).not.toContain("late");
+			expect(harness.session.agent.state.tools.find(t => t.name === "original")?.description).toBe("Original definition");
+		} finally { harness.cleanup(); }
 	});
 
 	test("opens a transcript without a system message and declares the prompt on the first request", async () => {
@@ -386,18 +409,14 @@ describe("system prompt updates", () => {
 			const recorded = harness.session.messages.flatMap((message) =>
 				message.role === "system" ? [message.sections] : [],
 			);
-			expect(recorded).toEqual([
-				systemMessages[0]?.[0]?.sections,
-				{ ...systemMessages[0]?.[0]?.sections, plan_mode: "<plan_mode>\nPlan only.\n</plan_mode>" },
-				systemMessages[0]?.[0]?.sections,
-			]);
+			expect(recorded).toEqual([systemMessages[0]?.[0]?.sections]);
 			expect(getCurrentSystemPrompt(harness.session.messages)).toBe(harness.session.systemPrompt);
 		} finally {
 			harness.cleanup();
 		}
 	});
 
-	test("setActiveTools emits prompt sections and tool changes before the next request", async () => {
+	test("explicit tool activation declares changes without rewriting prompt sections", async () => {
 		const extension: ExtensionFactory = (pi) => {
 			for (const name of ["first", "second"]) {
 				pi.registerTool({
@@ -444,18 +463,11 @@ describe("system prompt updates", () => {
 			expect(update).toEqual({
 				role: "system",
 				content: "",
-				sections: {
-					...initial.sections,
-					tools: expect.stringContaining("second prompt snippet"),
-					rules: expect.stringContaining("Use second carefully."),
-				},
-				toolsAdded: initial.toolsAdded?.filter((tool) => tool.name === "second"),
+				toolsRemoved: [{ name: "first" }],
 				timestamp: expect.any(Number),
 			});
-			expect(requests[1]?.messages.filter((message) => message.role === "system")).toEqual([update]);
-			expect(requests[1]?.messages[0]).toEqual(update);
-			expect(update?.sections?.tools).not.toContain("first prompt snippet");
-			expect(update?.sections?.rules).not.toContain("Use first carefully.");
+			expect(update?.sections).toBeUndefined();
+			expect(getCurrentSystemPrompt(requests[1]!.messages)).toBe(getCurrentSystemPrompt(requests[0]!.messages));
 
 			const result = requests[2]?.messages.filter((message) => message.role === "toolResult").at(-1);
 			expect(result).toMatchObject({ role: "toolResult", toolName: "first", isError: true });

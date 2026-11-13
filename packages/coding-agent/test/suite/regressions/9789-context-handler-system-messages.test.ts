@@ -108,12 +108,9 @@ describe("context handlers and system messages", () => {
 		const systemMessages = getRequest().messages.filter((message) => message.role === "system");
 		expect(systemMessages).toHaveLength(1);
 		expect(getRequest().messages[0]).toEqual(systemMessages[0]);
-		expect(systemMessages[0]?.sections).toEqual({
-			...initialSystem?.sections,
-			plan_mode: "<plan_mode>\nPlan only.\n</plan_mode>",
-		});
+		expect(systemMessages[0]?.sections).toEqual(initialSystem?.sections);
 		expect(toolNames(getRequest())).toEqual(harness.session.getActiveToolNames());
-		expect(harness.session.messages.filter((message) => message.role === "system")).toHaveLength(2);
+		expect(harness.session.messages.filter((message) => message.role === "system")).toHaveLength(1);
 	});
 
 	it("applies in-place edits to event.messages without a return value", async () => {
