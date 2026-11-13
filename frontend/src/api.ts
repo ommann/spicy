@@ -1,7 +1,7 @@
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { RouterClient } from '@orpc/server';
-import type { createRouter } from '../../backend/router.mjs';
+import type { createRouter } from '../../backend/router.ts';
 
 export const api: RouterClient<ReturnType<typeof createRouter>, { token?: string }> = createORPCClient(new RPCLink({
   url: () => new URL('/rpc', window.location.origin).href,

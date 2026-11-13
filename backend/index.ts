@@ -47,17 +47,17 @@ app.use('/rpc/*', async (c, next) => {
 app.notFound(c => c.json({ error: 'Not found' }, 404));
 const listener = getRequestListener(app.fetch);
 const server = http.createServer((req, res) => {
-  const pathname = new URL(req.url, `http://127.0.0.1:${port}`).pathname;
+  const pathname = new URL(req.url!, `http://127.0.0.1:${port}`).pathname;
   if (/^\/(rpc|api|utw)(\/|$)/.test(pathname)) return listener(req, res);
   return vite.middlewares(req, res, () => { res.writeHead(404); res.end(); });
 });
 const vite = await createServer({ root, server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
 server.listen(port, '127.0.0.1', () => console.log(`Spicy: http://localhost:${port}\nWorking directory: ${cwd}\nAgent starts only when requested in the UI.`));
-let shutdownTask;
+let shutdownTask: Promise<void> | undefined;
 function shutdown() {
   return shutdownTask ??= (async () => {
     lifetime.abort();
-    const closed = new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    const closed = new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     const results = await Promise.allSettled([login.cancel(), agents.shutdown(), vite.close(), closed]);
     for (const result of results) {
       if (result.status === 'rejected') {

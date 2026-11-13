@@ -2,23 +2,28 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { SessionManager } from '@earendil-works/pi-coding-agent';
+import type { z } from 'zod';
+import type { AgentRegistry, AgentConnection } from './agents.ts';
+import type { HistoryEntry } from './types.ts';
+import type * as inputs from './inputs.ts';
+import { SessionManager, type SessionInfo } from '@earendil-works/pi-coding-agent';
 
 export class OperationError extends Error {
-  constructor(message, reason = 'invalid') {
+  declare reason: string;
+  constructor(message: string, reason = 'invalid') {
     super(message);
     this.reason = reason;
   }
 }
-const fail = (message, reason) => { throw new OperationError(message, reason); };
+function fail(message: string, reason?: string): never { throw new OperationError(message, reason); }
 
-export function createOperations({ agents, cwd, managed }) {
-  const getAgent = input => agents.get(input.agentId);
+export function createOperations({ agents, cwd, managed }: { agents: AgentRegistry; cwd: string; managed: string }) {
+  const getAgent = (input: { agentId?: string }) => agents.get(input.agentId);
   async function allSessions() {
     return [...new Map([...await SessionManager.listAll(), ...await SessionManager.listAll(managed)]
       .map(session => [path.resolve(session.path), session])).values()];
   }
-  async function openSessionView(session, sessions) {
+  async function openSessionView(session: Pick<SessionInfo, 'path' | 'cwd'>, sessions: SessionInfo[]) {
     const selectedPath = path.resolve(session.path);
     const family = new Set([selectedPath]);
     let changed = true;
@@ -35,7 +40,7 @@ export function createOperations({ agents, cwd, managed }) {
     }
     const members = sessions.filter(candidate => family.has(path.resolve(candidate.path)));
     const byPath = new Map(members.map(candidate => [path.resolve(candidate.path), candidate]));
-    const depth = candidate => {
+    const depth = (candidate: SessionInfo | undefined) => {
       const seen = new Set();
       while (candidate?.parentSessionPath && !seen.has(candidate.path)) {
         seen.add(candidate.path);
@@ -82,7 +87,7 @@ export function createOperations({ agents, cwd, managed }) {
     }
     return found.sort((a, b) => b.modified - a.modified);
   }
-  async function createAgent(command) {
+  async function createAgent(command: { agentId?: string; openSessionId?: string; sessionUrlId?: string; sourceAgentId?: string; cwd?: string; sessionId?: string; entryId?: string }): Promise<ReturnType<AgentConnection['payload']> & { relatedAgents?: ReturnType<AgentConnection['payload']>[]; treeId?: string; familyOrder?: string[] }> {
     if (command.openSessionId !== undefined) {
       const sessions = await allSessions();
       const session = sessions.find(session => Buffer.from(session.path).toString('base64url') === command.openSessionId);
@@ -94,9 +99,9 @@ export function createOperations({ agents, cwd, managed }) {
       const active = [...agents.agents.values()].filter(agent => agent.snapshot.state?.sessionUrlId === command.sessionUrlId);
       const sessions = await allSessions();
       const matches = [...new Map(sessions.filter(session => session.urlId === command.sessionUrlId).map(session => [path.resolve(session.path), session])).values()];
-      const files = new Set([...matches.map(session => path.resolve(session.path)), ...active.map(agent => path.resolve(agent.snapshot.state.sessionFile))]);
+      const files = new Set([...matches.map(session => path.resolve(session.path)), ...active.map(agent => path.resolve(agent.snapshot.state!.sessionFile!))]);
       if (files.size > 1) fail('Session URL ID is ambiguous', 'conflict');
-      if (active.length) return openSessionView({ path: active[0].snapshot.state.sessionFile, cwd: active[0].cwd }, sessions);
+      if (active.length) return openSessionView({ path: active[0].snapshot.state!.sessionFile!, cwd: active[0].cwd }, sessions);
       if (!matches.length) fail('Session not found', 'not-found');
       return openSessionView(matches[0], sessions);
     }
@@ -106,7 +111,7 @@ export function createOperations({ agents, cwd, managed }) {
     if (command.sessionId && !selected) fail('Session not found', 'not-found');
     return (await agents.create(command, selected)).payload();
   }
-  async function navigate(input, continuation) {
+  async function navigate(input: z.output<typeof inputs.branchInput>, continuation: boolean) {
     const { agentId: _agentId, ...command } = input;
     const agent = getAgent(input);
     const { rpc } = agent;
@@ -114,7 +119,7 @@ export function createOperations({ agents, cwd, managed }) {
     agent.mutating = true;
     try {
       const before = await rpc.command({ type: 'get_entries' });
-      const source = before.entries.find(entry => entry.id === command.entryId && (continuation || entry.message?.role === 'user'));
+      const source = (before.entries as HistoryEntry[]).find(entry => entry.id === command.entryId && (continuation || entry.message?.role === 'user'));
       if (!source) fail('Branch entry not found');
       if (typeof command.message !== 'string' || (!command.message.trim() && !command.images?.length)) fail('Message is empty');
       await agents.navigate(agent, source.id);
@@ -122,16 +127,16 @@ export function createOperations({ agents, cwd, managed }) {
     } finally { agent.mutating = false; }
   }
   return {
-    info: input => getAgent(input).payload(),
-    sessions: async input => {
+    info: (input: z.output<typeof inputs.agentInput>) => getAgent(input).payload(),
+    sessions: async (input: z.output<typeof inputs.sessionsInput>) => {
       const agent = getAgent(input);
-      const available = input.scope === 'all' ? (await allSessions()).map(session => ({
+      const available: { id: string; urlId?: string; cwd: string; name: string; modified: number; file?: string }[] = input.scope === 'all' ? (await allSessions()).map(session => ({
         id: Buffer.from(session.path).toString('base64url'), urlId: session.urlId,
         cwd: session.cwd, name: session.name || session.firstMessage || 'Empty chat', modified: session.modified.getTime(),
       })).sort((a, b) => b.modified - a.modified) : await catalog(agent.cwd);
       return available.filter(entry => input.scope !== 'cwd' || entry.cwd === agent.cwd).map(({ file: _file, ...entry }) => entry);
     },
-    session: async input => {
+    session: async (input: z.output<typeof inputs.sessionInput>) => {
       const entry = (await catalog(getAgent(input).cwd)).find(entry => entry.id === input.id);
       if (!entry) fail('Session not found', 'not-found');
       return readFile(entry.file, 'utf8');
@@ -141,9 +146,9 @@ export function createOperations({ agents, cwd, managed }) {
       return { agentId, cwd, connected, running, state, source };
     }),
     createAgent,
-    eventAgents: ids => ids.some(id => !agents.agents.has(id)) ? null : ids.map(id => agents.get(id)),
-    attachments: async input => {
-      const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+    eventAgents: (ids: string[]) => ids.some(id => !agents.agents.has(id)) ? null : ids.map(id => agents.get(id)),
+    attachments: async (input: z.output<typeof inputs.attachmentsInput>) => {
+      const extensions: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
       if (!Array.isArray(input.images) || !input.images.length) fail('No images supplied');
       const images = input.images.map(image => {
         const extension = extensions[image?.mimeType];
@@ -160,23 +165,23 @@ export function createOperations({ agents, cwd, managed }) {
       }
       return { paths };
     },
-    ui: async input => {
+    ui: async (input: { agentId?: string; id: string; value?: string; confirmed?: boolean; cancelled?: boolean }) => {
       const agent = getAgent(input);
       if (!agent.dialogs.has(input.id)) fail('Dialog expired');
       await agent.rpc.write({ type: 'extension_ui_response', id: input.id, value: input.value, confirmed: input.confirmed, cancelled: input.cancelled });
       agent.dialogs.delete(input.id);
       return {};
     },
-    stop: async input => { await agents.stop(getAgent(input)); return {}; },
-    start: async input => {
+    stop: async (input: z.output<typeof inputs.agentInput>) => { await agents.stop(getAgent(input)); return {}; },
+    start: async (input: z.output<typeof inputs.startInput>) => {
       const agent = getAgent(input);
       const selected = input.sessionId ? (await catalog(agent.cwd)).find(entry => entry.id === input.sessionId) : null;
       if (input.sessionId && !selected) fail('Session not found', 'not-found');
       return agents.start(agent, selected);
     },
-    branch: input => navigate(input, false),
-    continue: input => navigate(input, true),
-    command: async input => {
+    branch: (input: z.output<typeof inputs.branchInput>) => navigate(input, false),
+    continue: (input: z.output<typeof inputs.branchInput>) => navigate(input, true),
+    command: async (input: z.output<typeof inputs.commandInput>) => {
       const { agentId: _agentId, ...command } = input;
       const agent = getAgent(input);
       const { rpc } = agent;
@@ -189,8 +194,8 @@ export function createOperations({ agents, cwd, managed }) {
       try {
         if (reload) {
           const available = await rpc.command({ type: 'get_commands' });
-          if (!available.commands.some(entry => entry.name === 'spicy-reload')) fail('Reconnect Pi to enable /reload');
-          command.message = '/spicy-reload';
+          if (!(available.commands as { name: string }[]).some(entry => entry.name === 'spicy-reload')) fail('Reconnect Pi to enable /reload');
+          (command as Extract<typeof command, { type: 'prompt' }>).message = '/spicy-reload';
         }
         const result = await rpc.command(command);
         if (changesBranch) {

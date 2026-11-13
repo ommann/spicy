@@ -6,6 +6,7 @@ test('web reload command reloads resources without sending a model prompt', asyn
   const commands = new Map();
   const events = new Map();
   register({
+    registerTool: () => {},
     registerCommand: (name, command) => commands.set(name, command),
     on: (name, handler) => events.set(name, handler),
   });

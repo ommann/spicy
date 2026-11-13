@@ -1,10 +1,11 @@
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from '@earendil-works/pi-ai';
 import { getDiscussionTitle } from '../packages/coding-agent/src/core/discussion-title.ts';
 import { observeProviderConnection } from './provider-connection.ts';
 
 // RPC exposes fork (a new file), but not same-session /tree navigation.
 // This private command uses Pi's existing tree navigation implementation.
-export default function treeNavigation(pi) {
+export default function treeNavigation(pi: ExtensionAPI) {
   pi.registerTool({
     name: 'set_title', label: 'Set title',
     description: 'Set the discussion title for the current branch.',

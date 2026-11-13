@@ -1,18 +1,20 @@
+import type { AgentRegistry } from './agents.ts';
+import type { LoginBridge } from './auth.ts';
 import { timingSafeEqual } from 'node:crypto';
 import { os as rpc, ORPCError } from '@orpc/server';
 import { agentEvents } from './agent-events.ts';
 import { createOperations, OperationError } from './operations.ts';
 import { agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
 
-export function createRouter({ agents, login, cwd, managed, token, signal: shutdownSignal }) {
+export function createRouter({ agents, login, cwd, managed, token, signal: shutdownSignal }: { agents: AgentRegistry; login: LoginBridge; cwd: string; managed: string; token: string; signal?: AbortSignal }) {
   const operations = createOperations({ agents, cwd, managed });
-  const procedure = rpc.use(async ({ next }) => {
+  const procedure = rpc.$context<{ headers: Headers }>().use(async ({ next }) => {
     try { return await next(); }
     catch (error) {
       if (error instanceof ORPCError) throw error;
       const code = error instanceof OperationError && error.reason === 'not-found' ? 'NOT_FOUND'
         : error instanceof OperationError && error.reason === 'conflict' ? 'CONFLICT' : 'BAD_REQUEST';
-      throw new ORPCError(code, { message: error.message, cause: error });
+      throw new ORPCError(code, { message: error instanceof Error ? error.message : String(error), cause: error });
     }
   });
   const mutation = procedure.use(async ({ context, next }) => {

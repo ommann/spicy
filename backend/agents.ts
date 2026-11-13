@@ -2,24 +2,28 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { parseSessionEntries, SessionManager } from '@earendil-works/pi-coding-agent';
+import type { RpcRecord, History, HistoryEntry, SessionState, SelectedSession, AgentSource, AgentClient, RegistryOptions } from './types.ts';
 import { PiRpc } from './rpc.ts';
 import { applyRecord } from '../frontend/src/stream.mjs';
 
 export class AgentConnection {
   rpc = new PiRpc();
-  clients = new Set();
-  snapshot = { entries: [], leafId: null, state: null };
-  live = [];
-  dialogs = new Map();
+  clients = new Set<AgentClient>();
+  snapshot: History & { state: SessionState | null } = { entries: [], leafId: null, state: null };
+  live: RpcRecord[] = [];
+  dialogs = new Map<string, RpcRecord>();
   mutating = false;
   diagnostic = '';
-  source = null;
-  historySnapshot = null;
+  source: AgentSource | null = null;
+  historySnapshot: Promise<[History, SessionState]> | null = null;
   connectionError = '';
-  providerConnection = 'ready';
+  providerConnection: 'ready' | 'error' | 'socket-lost' = 'ready';
   stopping = false;
 
-  constructor(id, cwd) {
+  declare id: string;
+  declare cwd: string;
+
+  constructor(id: string, cwd: string) {
     this.id = id;
     this.cwd = cwd;
     this.rpc.on('record', record => {
@@ -53,12 +57,12 @@ export class AgentConnection {
     return { agentId: this.id, ...this.snapshot, live: this.live, dialogs: [...this.dialogs.values()], connected: !!this.rpc.child, running: this.rpc.running, generating: this.rpc.generating, compacting: this.rpc.compacting, cwd: this.cwd, diagnostic: this.diagnostic, source: this.source, connectionError: this.connectionError, providerConnection: this.providerConnection };
   }
 
-  broadcast(type, data) {
-    if (type === 'record') data = { ...data, spicySentAt: Date.now() };
+  broadcast(type: string, data: RpcRecord | string) {
+    if (type === 'record') data = { ...(data as RpcRecord), spicySentAt: Date.now() };
     for (const client of this.clients) client.send(type, data);
   }
 
-  async loadSession(selected) {
+  async loadSession(selected: SelectedSession) {
     const session = SessionManager.open(selected.file, undefined, selected.cwd);
     const context = session.buildSessionContext();
     this.live = [];
@@ -74,15 +78,15 @@ export class AgentConnection {
     };
   }
 
-  async captureHistory() {
+  async captureHistory(): Promise<[History, SessionState]> {
     if (this.historySnapshot) return this.historySnapshot;
     if (this.mutating) throw new Error('Source agent is not ready');
     if (!this.rpc.child) {
-      await this.loadSession({ file: this.snapshot.state.sessionFile, cwd: this.cwd });
-      return [{ entries: this.snapshot.entries, leafId: this.snapshot.leafId }, this.snapshot.state];
+      await this.loadSession({ file: this.snapshot.state!.sessionFile!, cwd: this.cwd });
+      return [{ entries: this.snapshot.entries, leafId: this.snapshot.leafId }, this.snapshot.state!];
     }
     this.mutating = true;
-    this.historySnapshot = Promise.all([this.rpc.command({ type: 'get_entries' }), this.rpc.command({ type: 'get_state' })]);
+    this.historySnapshot = Promise.all([this.rpc.command({ type: 'get_entries' }), this.rpc.command({ type: 'get_state' })]) as Promise<[History, SessionState]>;
     try { return await this.historySnapshot; }
     finally { this.historySnapshot = null; this.mutating = false; }
   }
@@ -90,20 +94,27 @@ export class AgentConnection {
   async refresh() {
     const [entries, state] = await Promise.all([this.rpc.command({ type: 'get_entries' }), this.rpc.command({ type: 'get_state' })]);
     if (this.snapshot.state && this.snapshot.state.sessionFile !== state.sessionFile) this.source = null;
-    this.snapshot = { ...entries, state };
+    this.snapshot = { ...(entries as History), state };
     if (!this.rpc.running) this.live = [];
     this.broadcast('snapshot', this.payload());
   }
 }
 
 export class AgentRegistry {
-  agents = new Map();
+  agents = new Map<string, AgentConnection>();
   // Reserve session files before awaiting startup/switching: never give two
   // processes independent in-memory indexes over the same writable JSONL.
-  owners = new Map();
-  opening = new Map();
+  owners = new Map<string, string>();
+  opening = new Map<string, Promise<AgentConnection>>();
+  declare cwd: string;
+  declare managed: string;
+  declare cli: string;
+  declare resolver: string;
+  declare extension: string;
+  declare fixture?: string;
+  declare extraExtension?: string;
 
-  constructor({ cwd, managed, cli, resolver, extension, fixture, extraExtension }) {
+  constructor({ cwd, managed, cli, resolver, extension, fixture, extraExtension }: RegistryOptions) {
     Object.assign(this, { cwd, managed, cli, resolver, extension, fixture, extraExtension });
     const agent = new AgentConnection('default', cwd);
     agent.rpc.on('exit', () => this.release(agent));
@@ -112,14 +123,14 @@ export class AgentRegistry {
 
   get(id = 'default') {
     if (typeof id !== 'string' || !this.agents.has(id)) throw new Error('Agent not found');
-    return this.agents.get(id);
+    return this.agents.get(id)!;
   }
 
-  release(agent) {
+  release(agent: AgentConnection) {
     for (const [file, owner] of this.owners) if (owner === agent.id) this.owners.delete(file);
   }
 
-  claim(agent, file) {
+  claim(agent: AgentConnection, file?: string) {
     if (!file) return;
     const key = path.resolve(file);
     const owner = this.owners.get(key);
@@ -127,7 +138,7 @@ export class AgentRegistry {
     this.owners.set(key, agent.id);
   }
 
-  async start(agent, selected) {
+  async start(agent: AgentConnection, selected?: SelectedSession | null) {
     if (agent.mutating || agent.rpc.running) throw new Error('Agent is busy');
     agent.mutating = true;
     const previousFile = agent.snapshot.state?.sessionFile;
@@ -160,13 +171,13 @@ export class AgentRegistry {
       if (starting || switching) await agent.rpc.stop();
       this.release(agent);
       if (agent.rpc.child) this.claim(agent, previousFile);
-      agent.connectionError = error.message;
+      agent.connectionError = error instanceof Error ? error.message : String(error);
       agent.broadcast('snapshot', agent.payload());
       throw error;
     } finally { agent.mutating = false; }
   }
 
-  async openSession(selected) {
+  async openSession(selected: SelectedSession) {
     const file = path.resolve(selected.file);
     const pending = this.opening.get(file);
     if (pending) return pending;
@@ -191,7 +202,7 @@ export class AgentRegistry {
     finally { this.opening.delete(file); }
   }
 
-  async create(options, selected) {
+  async create(options: { cwd?: string; sourceAgentId?: string; entryId?: string }, selected?: SelectedSession | null) {
     const { cwd = this.cwd, sourceAgentId, entryId } = options;
     if (typeof cwd !== 'string' || !path.isAbsolute(cwd)) throw new Error('cwd must be an absolute path');
     if (sourceAgentId !== undefined && selected) throw new Error('Choose sourceAgentId or sessionId, not both');
@@ -201,7 +212,7 @@ export class AgentRegistry {
     let branch;
     let sourceModel;
     if (sourceAgentId !== undefined || selected) {
-      let entries, parentSession, sourceCwd, leafId;
+      let entries: HistoryEntry[], parentSession: string | undefined, sourceCwd: string, leafId: string | null;
       const owner = selected && this.owners.get(path.resolve(selected.file));
       const source = sourceAgentId !== undefined ? this.get(sourceAgentId) : owner ? this.get(owner) : null;
       if (source) {
@@ -215,13 +226,13 @@ export class AgentRegistry {
         sourceCwd = source.cwd;
       } else {
         // Migrate in memory only: forking must not rewrite the source file.
-        const session = SessionManager.inMemory(selected.cwd, undefined, parseSessionEntries(await readFile(selected.file, 'utf8'), selected.file));
+        const session = SessionManager.inMemory(selected!.cwd, undefined, parseSessionEntries(await readFile(selected!.file, 'utf8'), selected!.file));
         entries = session.getEntries();
         leafId = session.getLeafId();
         const model = session.buildSessionContext().model;
         if (model) sourceModel = { provider: model.provider, id: model.modelId };
-        parentSession = selected.file;
-        sourceCwd = selected.cwd;
+        parentSession = selected!.file;
+        sourceCwd = selected!.cwd;
       }
       if (!Object.hasOwn(options, 'cwd')) agent.cwd = sourceCwd;
       const byId = new Map(entries.map(entry => [entry.id, entry]));
@@ -240,7 +251,7 @@ export class AgentRegistry {
       history.reverse();
       await mkdir(this.managed, { recursive: true });
       const session = SessionManager.create(agent.cwd, this.managed);
-      const file = session.getSessionFile();
+      const file = session.getSessionFile()!;
       await writeFile(file, [JSON.stringify({ ...session.getHeader(), parentSession }), ...history.map(entry => JSON.stringify(entry))].join('\n') + '\n', { flag: 'wx', mode: 0o600 });
       branch = { file, cwd: agent.cwd };
       agent.source = { agentId: source?.id ?? null, sessionId: selected?.id ?? (parentSession ? Buffer.from(parentSession).toString('base64url') : null), entryId: target };
@@ -266,15 +277,15 @@ export class AgentRegistry {
     }
   }
 
-  async navigate(agent, entryId) {
+  async navigate(agent: AgentConnection, entryId: string) {
     if (agent.rpc.running) throw new Error('Stop the agent before changing the branch');
     const before = await agent.rpc.command({ type: 'get_entries' });
-    const source = before.entries.find(entry => entry.id === entryId);
+    const source = (before.entries as HistoryEntry[]).find(entry => entry.id === entryId);
     if (!source) throw new Error('Branch entry not found');
     const commands = await agent.rpc.command({ type: 'get_commands' });
-    if (!commands.commands.some(entry => entry.name === 'spicy-tree')) throw new Error('Reconnect Pi to enable tree navigation');
+    if (!(commands.commands as { name: string }[]).some(entry => entry.name === 'spicy-tree')) throw new Error('Reconnect Pi to enable tree navigation');
     let navigationError;
-    const observe = record => {
+    const observe = (record: RpcRecord) => {
       if (record.type === 'extension_error' && record.extensionPath === 'command:spicy-tree') navigationError = record.error;
     };
     agent.rpc.on('record', observe);
@@ -287,7 +298,7 @@ export class AgentRegistry {
     await agent.refresh();
   }
 
-  async stop(agent) {
+  async stop(agent: AgentConnection) {
     if (agent.mutating) throw new Error('Agent is busy');
     agent.mutating = true;
     agent.stopping = true;

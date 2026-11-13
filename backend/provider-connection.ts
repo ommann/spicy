@@ -1,21 +1,22 @@
+import type { ChannelListener } from 'node:diagnostics_channel';
 import { channel } from 'node:diagnostics_channel';
 
 // Observe the provider transport. Never open, retry, or keep a connection alive.
-export function observeProviderConnection(send) {
-  let baseUrl;
-  let socket;
+export function observeProviderConnection(send: (state: string) => void) {
+  let baseUrl: URL | undefined;
+  let socket: WebSocket | undefined;
   let socketAttempted = false;
   let socketOpened = false;
   let state = 'ready';
-  const subscriptions = [];
+  const subscriptions: (() => void)[] = [];
 
-  function update(next) {
+  function update(next: string) {
     if (state === next) return;
     state = next;
     send(next);
   }
 
-  function matches(address, origin) {
+  function matches(address: string, origin?: string) {
     if (!baseUrl) return false;
     try {
       const url = new URL(address, origin);
@@ -25,14 +26,14 @@ export function observeProviderConnection(send) {
     } catch { return false; }
   }
 
-  function providerRequest(request) {
+  function providerRequest(request: { path: string; origin: string } | undefined) {
     return request && matches(request.path, request.origin);
   }
 
-  function subscribe(name, listener) {
+  function subscribe(name: string, listener: (message: { request: { path: string; origin: string; upgrade?: string }; response: { statusCode: number }; error?: { name?: string; code?: string }; websocket?: WebSocket }) => void) {
     const subscription = channel(name);
-    subscription.subscribe(listener);
-    subscriptions.push(() => subscription.unsubscribe(listener));
+    subscription.subscribe(listener as ChannelListener);
+    subscriptions.push(() => subscription.unsubscribe(listener as ChannelListener));
   }
 
   const socketError = () => update('socket-lost');
@@ -51,7 +52,7 @@ export function observeProviderConnection(send) {
     if (providerRequest(request) && response.statusCode >= 400) update('error');
   });
   subscribe('undici:request:error', ({ request, error }) => {
-    if (!providerRequest(request) || error?.name === 'AbortError' || ['UND_ERR_ABORTED', 'ABORT_ERR'].includes(error?.code)) return;
+    if (!providerRequest(request) || error?.name === 'AbortError' || ['UND_ERR_ABORTED', 'ABORT_ERR'].includes(error?.code ?? '')) return;
     update(request.upgrade && socketOpened ? 'socket-lost' : 'error');
   });
   subscribe('undici:websocket:open', ({ websocket }) => {
@@ -70,7 +71,7 @@ export function observeProviderConnection(send) {
   });
 
   return {
-    setModel(model) {
+    setModel(model?: { baseUrl?: string }) {
       forgetSocket();
       baseUrl = model?.baseUrl ? new URL(model.baseUrl) : undefined;
       socketAttempted = false;
@@ -78,7 +79,7 @@ export function observeProviderConnection(send) {
       state = 'ready';
       send(state);
     },
-    response(status) {
+    response(status: number) {
       if (status >= 400) update('error');
       else if (status >= 200 && status < 300) {
         update(socketAttempted && socket?.readyState !== 1 ? 'socket-lost' : 'ready');

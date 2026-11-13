@@ -130,7 +130,7 @@ export default function SessionHistory(props: { projectQuery: string }) {
         try {
           const value = await api.agents.create({ openSessionId: session.id }, { context: { token: info.token } });
           const agents = [value, ...(value.relatedAgents || [])];
-          const order: string[] = value.familyOrder || [];
+          const order: (string | undefined)[] = value.familyOrder || [];
           agents.sort((a, b) => order.indexOf(a.state?.sessionFile) - order.indexOf(b.state?.sessionFile));
           let modified = session.modified;
           for (const agent of agents) {
@@ -154,12 +154,12 @@ export default function SessionHistory(props: { projectQuery: string }) {
           const latest = latestMessage && latestAgent ? {
             title: getDiscussionTitle(titleBranch),
             text: latestMessage.text.replace(/\s+/g, ' '), user: latestMessage.user,
-            href: `/b/${latestAgent.state.sessionUrlId}`,
+            href: `/b/${latestAgent.state!.sessionUrlId}`,
           } : undefined;
           function linkRows(items: Row[]) {
             for (const row of items) {
               const branch = agents.find(agent => agent.state?.sessionUrlId && agent.entries.some((entry: Entry) => entry.id === row.id));
-              if (branch) row.href = `/b/${branch.state.sessionUrlId}`;
+              if (branch) row.href = `/b/${branch.state!.sessionUrlId}`;
               linkRows(row.children);
             }
           }

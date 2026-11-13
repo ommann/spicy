@@ -1,6 +1,8 @@
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
+
 // Mirrors Codex's passive ChatGPT usage request (no Reserve opt-in):
 // https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client/rate_limit_resets.rs
-export async function getCodexUsage(runtime, { fetch: request = globalThis.fetch, signal } = {}) {
+export async function getCodexUsage(runtime: ModelRuntime, { fetch: request = globalThis.fetch, signal }: { fetch?: typeof globalThis.fetch; signal?: AbortSignal } = {}) {
   const provider = 'openai-codex';
   const check = await runtime.checkAuth(provider);
   if (check?.type !== 'oauth') return null;

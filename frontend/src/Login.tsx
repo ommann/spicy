@@ -13,9 +13,9 @@ type LoginEvent = {
   url?: string;
   userCode?: string;
   verificationUri?: string;
-  links?: { url: string; label?: string }[];
+  links?: readonly { url: string; label?: string }[];
 };
-type Prompt = { id: string; type: string; message: string; placeholder?: string; options?: { id: string; label: string }[] };
+type Prompt = { id: string; type: string; message: string; placeholder?: string; options?: readonly { id: string; label: string }[] };
 type LoginState = { id?: string; status: string; events: LoginEvent[]; prompt?: Prompt; error?: string };
 type Props = { ready: Promise<void>; options: NonNullable<Parameters<typeof api.auth.login>[1]> };
 

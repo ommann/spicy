@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { z } from 'zod';
-import type { SystemPromptPart } from '../packages/coding-agent/src/core/system-prompt-document';
+import type { SystemPromptPart } from '../packages/coding-agent/src/core/system-prompt-document.ts';
 
 const id = z.string().min(1);
 const agent = { agentId: id.optional() };

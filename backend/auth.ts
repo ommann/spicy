@@ -2,9 +2,26 @@ import { randomUUID } from 'node:crypto';
 import { getCodexUsage } from './codex-usage.ts';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 
+type Interaction = Parameters<ModelRuntime['login']>[2];
+type AuthPrompt = Parameters<Interaction['prompt']>[0];
+type AuthEvent = Parameters<Interaction['notify']>[0];
+type VisiblePrompt = AuthPrompt & { id: string };
+interface LoginFlow {
+  controller: AbortController;
+  view: { id: string; providerId: string; status: string; events: AuthEvent[]; prompt?: VisiblePrompt; error?: string };
+  done?: Promise<void>;
+  pending?: { resolve(value: string): void; reject(error: Error): void };
+}
+
 // Pi owns OAuth, callback navigation, refresh locking and credential persistence.
 // This bridge only carries its interaction messages between Pi and the browser.
 export class LoginBridge {
+  declare loadRuntime: () => Promise<ModelRuntime>;
+  declare loadSettings: () => SettingsManager;
+  declare runtimePromise: Promise<ModelRuntime> | undefined;
+  declare settings: SettingsManager | undefined;
+  declare flow: LoginFlow | undefined;
+
   constructor(
     loadRuntime = () => ModelRuntime.create({ refreshOnCreate: false, allowModelNetwork: false }),
     loadSettings = () => SettingsManager.create(process.env.PI_CWD || process.cwd()),
@@ -34,22 +51,22 @@ export class LoginBridge {
     });
   }
 
-  async codexUsage(signal) {
+  async codexUsage(signal?: AbortSignal) {
     return getCodexUsage(await this.runtime(), { signal });
   }
 
-  state() {
+  state(): Omit<LoginFlow['view'], 'id' | 'providerId'> & Partial<Pick<LoginFlow['view'], 'id' | 'providerId'>> {
     return this.flow?.view || { status: 'idle', events: [] };
   }
 
-  async start(providerId, type) {
+  async start(providerId: string, type: Parameters<ModelRuntime['login']>[1]) {
     const runtime = await this.runtime();
     const provider = runtime.getProvider(providerId);
     const method = type === 'oauth' ? provider?.auth?.oauth : type === 'api_key' ? provider?.auth?.apiKey : undefined;
     if (!method?.login) throw new Error('Unknown provider or unsupported login method');
     if (this.flow?.view.status === 'pending') throw new Error('A login is already in progress');
 
-    const flow = {
+    const flow: LoginFlow = {
       controller: new AbortController(),
       view: { id: randomUUID(), providerId, status: 'pending', events: [] },
     };
@@ -77,11 +94,11 @@ export class LoginBridge {
     return this.state();
   }
 
-  prompt(flow, prompt) {
-    return new Promise((resolve, reject) => {
+  prompt(flow: LoginFlow, prompt: AuthPrompt): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
       const id = randomUUID();
       const cancel = () => finish(undefined, new Error('Login prompt cancelled'));
-      const finish = (value, error) => {
+      const finish = (value?: string, error?: Error) => {
         flow.controller.signal.removeEventListener('abort', cancel);
         prompt.signal?.removeEventListener('abort', cancel);
         if (flow.view.prompt?.id === id) {
@@ -89,7 +106,7 @@ export class LoginBridge {
           delete flow.pending;
         }
         if (error) reject(error);
-        else resolve(value);
+        else resolve(value!);
       };
       const { signal, ...visible } = prompt;
       flow.view.prompt = { ...visible, id };
@@ -100,7 +117,7 @@ export class LoginBridge {
     });
   }
 
-  reply(id, promptId, value) {
+  reply(id: string, promptId: string, value: string) {
     const flow = this.flow;
     if (flow?.view.id !== id || !flow.pending || flow.view.prompt?.id !== promptId) {
       throw new Error('This login prompt is no longer active');
@@ -113,7 +130,7 @@ export class LoginBridge {
     return this.state();
   }
 
-  async cancel(id) {
+  async cancel(id?: string) {
     if (id !== undefined && this.flow?.view.id !== id) throw new Error('This login is no longer active');
     this.flow?.controller.abort();
     await this.flow?.done;
