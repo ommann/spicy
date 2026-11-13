@@ -1,5 +1,5 @@
 .single-mode {
-  --chat-edge-gap: 2.5ch;
+  --chat-edge-gap: 2ch;
 }
 .single-mode .canvas-scroll-shell {
   position: relative;

@@ -420,7 +420,7 @@
 .empty-placeholder {
   display: flex;
   align-items: center;
-  padding-inline: 1ch;
+  padding-inline: var(--chat-padding-inline);
   background: transparent;
   color: inherit;
   font: inherit;

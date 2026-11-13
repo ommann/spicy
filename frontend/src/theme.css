@@ -8,8 +8,8 @@
   --rsvp-overlay: rgb(0 0 0 / 70%);
   --app-toolbar-height: 2lh;
   --chat-row-gap: 1lh;
-  --chat-column-gap: 6ch;
-  --chat-edge-gap: 3ch;
+  --chat-column-gap: 4ch;
+  --chat-edge-gap: 2ch;
   --chat-placeholder-height: 3lh;
   --chat-scrollbar-width: 14px;
   --input-padding-block: calc(0.5lh - 1px);
