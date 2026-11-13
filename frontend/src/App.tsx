@@ -93,7 +93,8 @@ export default function App(props: ParentProps) {
   const navigate = useNavigate();
   const routeSessionId = createMemo(() => sessionUrlIdFromPath(location.pathname));
   const viewPath = () => sessionViewPath(location.pathname);
-  const viewHref = (path: string) => sessionPath(path, snapshot().state?.sessionUrlId || routeSessionId());
+  const [treeId, setTreeId] = createSignal<string>();
+  const viewHref = (path: string) => sessionPath(path, snapshot().state?.sessionUrlId || routeSessionId(), treeId());
   const navigateView = (path: string) => navigate(viewHref(path));
   const openSystemPrompt = (id: string) => navigateView(`/system-prompts/${encodeURIComponent(id)}`);
 
@@ -132,7 +133,7 @@ export default function App(props: ParentProps) {
   const [projectQuery, setProjectQuery] = createSignal('');
   const [sessionNameQuery, setSessionNameQuery] = createSignal('');
   let homeAgent: Snapshot | undefined;
-  const openFocusedChat = () => navigate(sessionPath(chatViewPath(), selectedSessionUrlId()));
+  const openFocusedChat = () => navigate(sessionPath(chatViewPath(), selectedSessionUrlId(), treeId()));
 
   let chatDialog!: HTMLDialogElement;
   let optionsDialog!: HTMLDialogElement;
@@ -354,8 +355,11 @@ export default function App(props: ParentProps) {
     });
   }
 
-  function showAgent(value: Snapshot & { relatedAgents?: Snapshot[] }, replace: boolean) {
-    const views = [value, ...(value.relatedAgents || [])];
+  function showAgent(value: Snapshot & { relatedAgents?: Snapshot[]; treeId?: string; familyOrder?: string[] }, replace: boolean) {
+    if (value.treeId || replace) setTreeId(value.treeId || value.state?.sessionUrlId);
+    const order = value.familyOrder || [];
+    const views = [value, ...(value.relatedAgents || [])].sort((a, b) =>
+      order.indexOf(a.state?.sessionFile || '') - order.indexOf(b.state?.sessionFile || ''));
     const ids = views.map(agent => agent.agentId!);
     batch(() => {
       for (const agent of views) accept(agent);
@@ -675,8 +679,17 @@ export default function App(props: ParentProps) {
   }));
   createEffect(on([sessionRoutingReady, selectedSessionUrlId], ([ready, urlId]) => {
     if (!ready || !urlId || location.pathname === '/' || routeSessionId() === urlId) return;
-    navigate(sessionPath(viewPath() === '/chat' ? '/' : location.pathname, urlId) + location.search, { replace: !routeSessionId() });
+    navigate(sessionPath(viewPath() === '/chat' ? '/' : location.pathname, urlId, treeId()) + location.search, { replace: !routeSessionId() });
   }));
+
+  createEffect(() => {
+    const urlId = selectedSessionUrlId();
+    const rootId = treeId();
+    if (!sessionRoutingReady() || !rootId || !urlId || routeSessionId() !== urlId) return;
+    if (viewPath() !== '/tree') return;
+    const canonical = sessionPath('/tree', urlId, rootId);
+    if (location.pathname !== canonical) navigate(canonical + location.search, { replace: true });
+  });
 
   async function restoreBridge() {
     setBusy(true);
@@ -725,7 +738,7 @@ export default function App(props: ParentProps) {
         <button class="tree-title" onClick={openChat}>{sessionCwd()}</button>
         <div class="view-switch" role="group" aria-label="Views">
           <A class="state-toggle" href="/" end aria-current={location.pathname === '/' ? 'page' : undefined}>Sessions</A>
-          <A class="state-toggle" href={sessionPath(chatViewPath(), selectedSessionUrlId())} aria-current={location.pathname !== '/' && ['/', '/chat', '/single', '/tree'].includes(viewPath()) ? 'page' : undefined}>Chat</A>
+          <A class="state-toggle" href={sessionPath(chatViewPath(), selectedSessionUrlId(), treeId())} aria-current={location.pathname !== '/' && ['/', '/chat', '/single', '/tree'].includes(viewPath()) ? 'page' : undefined}>Chat</A>
           <A class="state-toggle" href={viewHref('/system-prompts')} aria-current={viewPath().startsWith('/system-prompts') ? 'page' : undefined}>System prompts</A>
           <A class="state-toggle" href={viewHref('/system-prompt-creator')} aria-current={viewPath() === '/system-prompt-creator' ? 'page' : undefined}>Editor</A>
         </div>

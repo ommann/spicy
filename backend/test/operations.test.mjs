@@ -119,6 +119,14 @@ test('opening a session keeps its related family and rejects ambiguous URLs', as
   agents.agents.set('active', { snapshot: { state: { sessionUrlId: 'zhhupqw3', sessionFile: '/tmp/other.jsonl' } } });
   await assert.rejects(operations.createAgent({ sessionUrlId: 'zhhupqw3' }), error => error instanceof OperationError && error.reason === 'conflict');
   assert.equal(opened.length, 3);
+  // Neither the selected branch nor catalog enumeration owns the tree order.
+  const expectedOrder = ['/tmp/root.jsonl', '/tmp/child.jsonl', '/tmp/grandchild.jsonl'];
+  sessions.reverse();
+  for (const file of expectedOrder) {
+    const view = await operations.createAgent({ openSessionId: Buffer.from(file).toString('base64url') });
+    assert.equal(view.treeId, 'zhhupqw3');
+    assert.deepEqual(view.familyOrder, expectedOrder);
+  }
 });
 
 test('router translates operation errors into the existing response codes', async () => {

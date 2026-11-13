@@ -33,15 +33,33 @@ export function createOperations({ agents, cwd, managed }) {
         family.add(file); family.add(parent);
       }
     }
+    const members = sessions.filter(candidate => family.has(path.resolve(candidate.path)));
+    const byPath = new Map(members.map(candidate => [path.resolve(candidate.path), candidate]));
+    const depth = candidate => {
+      const seen = new Set();
+      while (candidate?.parentSessionPath && !seen.has(candidate.path)) {
+        seen.add(candidate.path);
+        candidate = byPath.get(path.resolve(candidate.parentSessionPath));
+      }
+      return seen.size;
+    };
+    members.sort((a, b) => depth(a) - depth(b)
+      || new Date(a.created).getTime() - new Date(b.created).getTime()
+      || a.path.localeCompare(b.path));
     const opened = await agents.openSession({ file: session.path, cwd: session.cwd });
     const relatedAgents = [];
-    for (const candidate of sessions) {
+    for (const candidate of members) {
       const file = path.resolve(candidate.path);
       if (file === selectedPath || !family.has(file)) continue;
       const related = await agents.openSession({ file: candidate.path, cwd: candidate.cwd });
       relatedAgents.push(related.payload());
     }
-    return { ...opened.payload(), relatedAgents };
+    const payload = opened.payload();
+    const ordered = members.map(candidate => path.resolve(candidate.path));
+    return { ...payload, relatedAgents,
+      treeId: members[0]?.urlId || payload.state?.sessionUrlId,
+      familyOrder: ordered,
+    };
   }
   async function catalog(projectCwd = cwd) {
     const directories = [{
