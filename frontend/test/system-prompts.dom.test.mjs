@@ -613,20 +613,24 @@ test('session URLs override tab selection, preserve deep links and restore on br
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
-test('default Sessions view groups and filters real sessions and opens without branching', async () => {
+test('Sessions shows history cards, filters projects and links to saved chats without branching', async () => {
   window.sessionStorage.removeItem('pi-agent-view');
   const empty = { entries: [], leafId: null, state: null, live: [], dialogs: [], connected: false, running: false, cwd: '/work/spicy', token: 'test' };
   const saved = [
     { id: 'first-file', urlId: 'k7m3xqa9', cwd: '/work/spicy', name: 'Prompt history', modified: Date.now() },
-    { id: 'second-file', cwd: '/work/spicy', name: 'Branch tests', modified: Date.now() },
-    { id: 'third-file', cwd: '/work/extensions', name: 'Prompt loading', modified: Date.now() },
+    { id: 'second-file', urlId: 'v8n4zrc2', cwd: '/work/spicy', name: 'Branch tests', modified: Date.now() },
+    { id: 'third-file', urlId: 'zhhupqw3', cwd: '/work/extensions', name: 'Prompt loading', modified: Date.now() },
   ];
   rpc = createRpcFixture({
     info: os.handler(() => empty),
     sessions: os.handler(() => saved),
     agents: {
       list: os.handler(() => []),
-      create: os.handler(() => ({ ...empty, agentId: 'opened', connected: true, entries, leafId: 'user2', state: { sessionId: 'uuid', sessionUrlId: 'k7m3xqa9' } })),
+      create: os.handler(({ input }) => {
+        const session = saved.find(session => session.id === input.openSessionId || session.urlId === input.sessionUrlId) || saved[0];
+        return { ...empty, agentId: session.id, treeId: session.urlId, entries, leafId: 'user2', cwd: session.cwd,
+          state: { sessionId: session.id, sessionUrlId: session.urlId, cwd: session.cwd } };
+      }),
     },
   });
   const requests = rpc.requests;
@@ -634,25 +638,28 @@ test('default Sessions view groups and filters real sessions and opens without b
   try {
     for (let i = 0; i < 8; i++) await flush();
     assert.equal(dispose.history.get(), '/');
-    assert.equal(root.querySelectorAll('.startup-project').length, 2);
-    assert.equal(root.querySelectorAll('.startup-session').length, 3);
+    assert.equal(root.querySelectorAll('.history-card').length, 3);
+    assert.equal(root.querySelectorAll('.history-latest-message:not(.history-latest-title)').length, 3);
+    assert.equal(root.querySelectorAll('.history-tree-id').length, 3);
     assert.equal(root.querySelectorAll('.startup-empty-chat .branch-draft').length, 2);
     assert.ok(root.querySelector('.startup-empty-chat .editor textarea'));
-    assert.ok(requests.every(request => ['info', 'agents/list', 'sessions', 'events'].includes(request.path)), 'Listing does not start agents or send prompts');
+    assert.deepEqual(requests.filter(request => request.path === 'agents/create').map(request => request.input),
+      saved.map(session => ({ openSessionId: session.id })));
+    assert.ok(!requests.some(request => request.path === 'command' || request.path === 'start'), 'Listing does not send prompts');
     const path = root.querySelector('[aria-label="Search project paths"]');
     path.value = 'spicy';
     path.dispatchEvent(new window.Event('input', { bubbles: true }));
     const name = root.querySelector('[aria-label="Search session names"]');
-    name.value = 'prompt';
-    name.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(name.disabled, true);
     await flush();
-    assert.equal(root.querySelectorAll('.startup-project').length, 1);
-    assert.equal(root.querySelectorAll('.startup-session').length, 1);
-    root.querySelector('.startup-session').click();
+    assert.equal(root.querySelectorAll('.history-card').length, 2);
+    const card = root.querySelector('.history-card');
+    assert.equal(card.querySelector('.history-tree-id').getAttribute('href'), '/t/k7m3xqa9');
+    assert.equal(card.querySelector('.history-latest-message:not(.history-latest-title) a').getAttribute('href'), '/b/k7m3xqa9');
+    card.querySelector('.history-latest-message:not(.history-latest-title) a').click();
     for (let i = 0; i < 6; i++) await flush();
-    assert.equal(dispose.history.get(), '/k7m3xqa9/single');
+    assert.equal(dispose.history.get(), '/b/k7m3xqa9');
     assert.ok(root.querySelector('.spicy-host'));
-    assert.deepEqual(requests.filter(request => request.path === 'agents/create').map(request => request.input), [{ openSessionId: 'first-file' }]);
     assert.ok(!requests.some(request => request.path === 'command' || request.path === 'start'));
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
@@ -699,7 +706,7 @@ test('Sessions composer keeps failed drafts, opens focused chat on success and o
     input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(created, 1, 'Retry uses the same new session');
-    assert.equal(dispose.history.get(), '/k7m3xqa9/single');
+    assert.equal(dispose.history.get(), '/b/k7m3xqa9');
     assert.equal(button(root, 'Single').tagName, 'A');
     assert.equal(button(root, 'Single').getAttribute('aria-current'), 'page');
     button(root, 'Sessions').click();
@@ -711,7 +718,7 @@ test('Sessions composer keeps failed drafts, opens focused chat on success and o
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
     root.querySelector('[aria-label="Edit system prompt"]').click();
     for (let i = 0; i < 8; i++) await flush();
-    assert.equal(dispose.history.get(), '/v8n4zrc2/system-prompt-creator');
+    assert.equal(dispose.history.get(), '/b/v8n4zrc2/system-prompt-creator');
     assert.ok(root.querySelector('.system-prompt-creator'));
     assert.equal(requests.filter(request => request.input?.type === 'prompt').length, 2);
     button(root, 'Sessions').click();

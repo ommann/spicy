@@ -89,7 +89,7 @@ function excerpt(text: string) {
   return line;
 }
 
-function Rows(props: { rows: Row[]; depth?: number; left: boolean }) {
+function Rows(props: { rows: Row[]; depth?: number }) {
   return <For each={props.rows}>{row => {
     let end = row;
     const labels: BranchLabel[] = row.label ? [row.label] : [];
@@ -111,12 +111,12 @@ function Rows(props: { rows: Row[]; depth?: number; left: boolean }) {
         <Show when={labels.length}><span class="history-data-labels"><For each={labels}>{label => <span style={{ color: 'var(--status-error)' }}>{label.text}</span>}</For></span></Show>
         <Show when={end.annotation}><span class="history-data-title">{excerpt(end.annotation!)}</span></Show>
       </div>
-      <Rows rows={end.children} depth={(props.depth || 0) + 1} left={props.left} />
+      <Rows rows={end.children} depth={(props.depth || 0) + 1} />
     </>;
   }}</For>;
 }
 
-export default function HistoryConcept(props: { projectQuery: string; nameQuery: string }) {
+export default function SessionHistory(props: { projectQuery: string }) {
   const now = createActivityClock();
   const [histories, setHistories] = createSignal<{ id: string; path: string; name: string; modified: number; rows: Row[]; latest?: { text: string; user: boolean; href: string; title?: string } }[]>([]);
   const [error, setError] = createSignal('');
@@ -202,8 +202,7 @@ export default function HistoryConcept(props: { projectQuery: string; nameQuery:
       }
     } catch (failure) { setError(String(failure)); }
   });
-  const filtered = () => histories().filter(history => history.path.toLowerCase().includes(props.projectQuery.toLowerCase())
-    && history.name.toLowerCase().includes(props.nameQuery.toLowerCase()));
+  const filtered = () => histories().filter(history => history.path.toLowerCase().includes(props.projectQuery.toLowerCase()));
   const day = (modified: number) => new Date(modified).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   return <>
     <Show when={error()}><p role="alert">{error()}</p></Show>
@@ -211,7 +210,7 @@ export default function HistoryConcept(props: { projectQuery: string; nameQuery:
       <Show when={index() === 0 || day(filtered()[index() - 1].modified) !== day(history.modified)}>
         <h2 class="history-date-divider">{day(history.modified)}</h2>
       </Show>
-      <For each={[false, true]}>{left => <article class="history-example history-data" classList={{ 'history-data-left': left }}>
+      <article class="history-card history-data">
         <Show when={history.latest}>{latest => <>
           <div class="history-latest-message history-latest-title">
             <div class="history-heading-text"><A href={latest().href}>{latest().title || 'Untitled'}</A>{' in '}{history.path}{' '}<A class="history-tree-id" href={`/t/${history.id}`}>{history.id}</A></div>
@@ -221,8 +220,8 @@ export default function HistoryConcept(props: { projectQuery: string; nameQuery:
             <A classList={{ 'history-data-user': latest().user }} href={latest().href}>{latest().text}</A>
           </div>
         </>}</Show>
-        <div class="history-data-grid"><Rows rows={history.rows} left={left} /></div>
-      </article>}</For>
+        <div class="history-data-grid"><Rows rows={history.rows} /></div>
+      </article>
     </>}</For>
   </>;
 }

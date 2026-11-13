@@ -3,7 +3,6 @@ import { Route, Router } from '@solidjs/router';
 import App from './App';
 import ChatRoute, { SingleChatRoute, TreeChatRoute } from './ChatRoute';
 import { SessionsRoute } from './Sessions';
-import SessionsConcept from './SessionsConcept';
 import SystemPromptRoute from './SystemPromptRoute';
 import SystemPromptCreator from './SystemPromptCreator';
 import './style.css';
@@ -11,7 +10,6 @@ import './style.css';
 render(() => (
   <Router root={App}>
     <Route path="/" component={SessionsRoute} />
-    <Route path="/sessions-concept" component={SessionsConcept} />
     <Route path="/chat" component={ChatRoute} />
     <Route path="/single" component={SingleChatRoute} />
     <Route path="/tree" component={TreeChatRoute} />

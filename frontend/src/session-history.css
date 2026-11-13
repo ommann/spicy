@@ -1,4 +1,4 @@
-.history-example {
+.history-card {
   border: 1px solid var(--border);
   padding: 1lh 2ch;
   width: 100%;
@@ -63,13 +63,6 @@
   border-top: 1px solid var(--border);
 }
 
-.history-project-path {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  margin-bottom: 1lh;
-}
-
 .history-activity {
   flex-shrink: 0;
   white-space: nowrap;
@@ -84,7 +77,7 @@
 
 .history-data-grid {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) fit-content(62ch);
+  grid-template-columns: 2ch minmax(0, 1fr) fit-content(62ch);
   column-gap: 2ch;
   grid-auto-rows: minmax(1lh, auto);
   align-items: baseline;
@@ -97,15 +90,6 @@
   text-overflow: ellipsis;
   color: inherit;
   text-decoration: none;
-}
-
-.history-data-left .history-data-grid {
-  grid-template-columns: 2ch minmax(0, 1fr) fit-content(62ch);
-}
-
-.history-open-tree {
-  margin-left: 2ch;
-  color: inherit;
 }
 
 .history-data-text:hover {

@@ -38,7 +38,7 @@ import { promptLabel } from './prompt-numbers';
 import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.mjs';
-import { cachedDiscussionTitle, cacheDiscussionTitle } from './discussion-titles';
+import { cacheDiscussionTitle } from './discussion-titles';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import ToolApps from './ToolApps';
 import { api, type UiReply } from './api';
@@ -131,7 +131,6 @@ export default function App(props: ParentProps) {
   const [homeDraft, setHomeDraft] = createSignal('');
   const [pendingPrompts, setPendingPrompts] = createSignal<Record<string, DraftBranch['prompt']>>({});
   const [projectQuery, setProjectQuery] = createSignal('');
-  const [sessionNameQuery, setSessionNameQuery] = createSignal('');
   let homeAgent: Snapshot | undefined;
   const openFocusedChat = () => navigate(sessionPath(chatViewPath(), selectedSessionUrlId(), treeId()));
 
@@ -434,18 +433,6 @@ export default function App(props: ParentProps) {
     }
   });
 
-  async function loadHomeSessions() {
-    await bridgeReady;
-    const [sessions, agents] = await Promise.all([
-      api.sessions({ scope: 'all' }, { signal: appLifecycle.signal }),
-      api.agents.list({}, { signal: appLifecycle.signal }),
-    ]);
-    return sessions.map(session => ({ ...session,
-      name: (session.urlId && cachedDiscussionTitle(session.urlId)) || session.name,
-      running: agents.some(agent =>
-      agent.running && session.urlId && agent.state?.sessionUrlId === session.urlId) }));
-  }
-
   async function prepareHomeChat() {
     await bridgeReady;
     if (!homeAgent) homeAgent = await api.agents.create({ cwd: sessionCwd() || bridgeCwd() }, rpcOptions);
@@ -477,18 +464,6 @@ export default function App(props: ParentProps) {
       const agent = await prepareHomeChat();
       showAgent(agent, true);
       navigateView('/system-prompt-creator');
-    } catch (failure) { reportFailure(failure); }
-    finally { setBusy(false); }
-  }
-
-  async function openHomeSession(session: Wire) {
-    if (busy()) return;
-    setBusy(true);
-    try {
-      const agent = await api.agents.create({ openSessionId: session.id }, rpcOptions);
-      showAgent(agent, true);
-      setViewMode('focused');
-      openFocusedChat();
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
@@ -780,10 +755,10 @@ export default function App(props: ParentProps) {
       <FileLinkCwdContext.Provider value={sessionCwd}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <ToolApps sessionKey={branchKey()}>
-        <SessionsRouteContext.Provider value={() => <Sessions load={loadHomeSessions}
+        <SessionsRouteContext.Provider value={() => <Sessions
           draft={homeDraft()} onDraft={setHomeDraft} projectQuery={projectQuery()} onProjectQuery={setProjectQuery}
-          nameQuery={sessionNameQuery()} onNameQuery={setSessionNameQuery} onSubmit={sendHomeChat}
-          onEditPrompt={editHomePrompt} onOpen={openHomeSession} busy={busy()} notification={notification()} />}>
+          onSubmit={sendHomeChat}
+          onEditPrompt={editHomePrompt} busy={busy()} notification={notification()} />}>
         <ChatRouteContext.Provider value={route => {
           onCleanup(() => { conversation = undefined; });
           return <Show when={composerScope()} keyed>{_sessionKey => (
