@@ -363,7 +363,7 @@
 }
 
 .spicy-host:not(:has(.inline-composer)) > .bottom {
-  padding-bottom: 1lh;
+  padding-block: 1lh;
 }
 
 .spicy-host:has(.inline-composer) > .bottom {

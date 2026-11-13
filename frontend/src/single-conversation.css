@@ -1,16 +1,6 @@
 .single-mode {
   --chat-edge-gap: 2.5ch;
 }
-.spicy-host.single-mode,
-.spicy-host.single-mode.has-horizontal-scrollbar {
-  padding-block: var(--chat-edge-gap);
-}
-.spicy-host.single-mode:not(:has(.inline-composer)) > .bottom {
-  padding-bottom: 0;
-}
-.single-mode .app-toolbar {
-  padding-inline: var(--chat-edge-gap);
-}
 .single-mode .canvas-scroll-shell {
   position: relative;
   grid-template-columns: minmax(0, 1fr);

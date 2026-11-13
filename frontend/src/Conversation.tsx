@@ -173,10 +173,17 @@ export default function Conversation(props: Props) {
   const setDrafts = (key: string, text: string) => props.onDraftChange(key, text);
   const [jumpSizes, setJumpSizes] = createSignal({ branch: 0, latest: 0 });
   const [scrollRequest, setScrollRequest] = createSignal<{ id: string; bottom: boolean; smooth: boolean }>();
-  const savedPosition = viewState.positions[props.mode] ?? viewState.lastPosition;
+  // An explicit view switch carries the current reading location across routes.
+  // Destination-specific history is only a fallback for ordinary navigation.
+  const transition = viewState.modeTransition?.mode === props.mode ? viewState.modeTransition : undefined;
+  const savedPosition = transition?.position ?? viewState.positions[props.mode] ?? viewState.lastPosition;
+  if (transition) setViewState('modeTransition', undefined);
+  const [restoringTransition, setRestoringTransition] = createSignal(!!transition?.position.anchor);
   let followLatest = savedPosition?.followLatest ?? true;
+  // Layout-model coordinates start inside the viewport's content padding.
+  const contentInset = () => viewport ? Number.parseFloat(getComputedStyle(viewport).paddingTop) || 0 : 0;
   function focusedFollowTop() {
-    return Math.max(0, layout().height - dimensions().height);
+    return Math.max(0, layout().height + contentInset() * 2 - dimensions().height);
   }
   function handleViewportScroll() {
     if (viewport && mode() === 'focused') {
@@ -256,6 +263,7 @@ export default function Conversation(props: Props) {
   let composerRow!: HTMLDivElement;
   let jumpUp!: HTMLButtonElement;
   let jumpLatest!: HTMLButtonElement;
+  let pointer = viewState.pointer;
   let readingAnchor = savedPosition?.anchor;
   let centerAfterLayout = true;
 
@@ -310,15 +318,32 @@ export default function Conversation(props: Props) {
     updateScroll();
   }
 
-  function captureAnchor(lane = focused()) {
+  function captureAnchor(lane = focused(), underCursor = false): NonNullable<typeof savedPosition>['anchor'] {
+    if (underCursor && pointer) {
+      if (viewState.cursorAnchor) return viewState.cursorAnchor;
+      const element = document.elementFromPoint(pointer.x, pointer.y);
+      const article = element?.closest<HTMLElement>('article.tree-node[data-entry-id]');
+      if (element && article && viewport.contains(article)) {
+        const elementPath: number[] = [];
+        let child: Element = element;
+        while (child !== article && child.parentElement) {
+          elementPath.unshift(Array.from(child.parentElement.children).indexOf(child));
+          child = child.parentElement;
+        }
+        const anchor = { id: article.dataset.entryId!, elementPath,
+          offset: element.getBoundingClientRect().top - viewport.getBoundingClientRect().top };
+        setViewState('cursorAnchor', anchor);
+        return anchor;
+      }
+    }
     const positions = layout().items;
     const candidates = [...props.graph.nodes.values()].filter((node: Wire) => positions.has(node.id) && !node.isPrefixDelta && node.first <= lane && node.last >= lane)
       .sort((a: Wire, b: Wire) => positions.get(a.id).top - positions.get(b.id).top);
     const node = candidates.find((item: Wire) => {
       const position = positions.get(item.id);
-      return position.top + position.height >= viewport.scrollTop + 40;
+      return contentInset() + position.top + position.height >= viewport.scrollTop + 40;
     }) || candidates.at(-1);
-    return node ? { id: node.id, offset: positions.get(node.id).top - viewport.scrollTop } : undefined;
+    return node ? { id: node.id, offset: contentInset() + positions.get(node.id).top - viewport.scrollTop } : undefined;
   }
 
   function selectLane(lane: number, preserveReading = true) {
@@ -332,7 +357,8 @@ export default function Conversation(props: Props) {
 
   function changeMode(value: 'focused' | 'side', navigate = true) {
     if (value === mode()) return;
-    readingAnchor = captureAnchor();
+    const anchor = captureAnchor(focused(), true);
+    setViewState('modeTransition', { mode: value, position: { anchor, followLatest: false } });
     interaction.resetPointer();
     centerAfterLayout = true;
     setViewMode(value);
@@ -425,8 +451,20 @@ export default function Conversation(props: Props) {
     const blur = interaction.blur;
   onMount(() => {
     updateViewport();
+    const trackPointer = (event: PointerEvent) => {
+      if (pointer?.x !== event.clientX || pointer?.y !== event.clientY) setViewState('cursorAnchor', undefined);
+      pointer = { x: event.clientX, y: event.clientY };
+      setViewState('pointer', pointer);
+    };
+    const clearCursorAnchor = () => setViewState('cursorAnchor', undefined);
+    viewport.addEventListener('wheel', clearCursorAnchor, { passive: true });
+    viewport.addEventListener('pointerdown', clearCursorAnchor);
+    window.addEventListener('pointermove', trackPointer);
     window.addEventListener('resize', updateViewport);
     onCleanup(() => {
+      viewport.removeEventListener('wheel', clearCursorAnchor);
+      viewport.removeEventListener('pointerdown', clearCursorAnchor);
+      window.removeEventListener('pointermove', trackPointer);
       window.removeEventListener('resize', updateViewport);
     });
   });
@@ -453,8 +491,15 @@ export default function Conversation(props: Props) {
     if (readingAnchor) {
       followLatest = false;
       const node = position.items.get(readingAnchor.id);
-      if (node) viewport.scrollTop = node.top - readingAnchor.offset;
-      readingAnchor = undefined;
+      if (node) {
+        let element: Element | undefined = nodeElements.get(readingAnchor.id)?.closest('article.tree-node') ?? undefined;
+        for (const index of readingAnchor.elementPath ?? []) element = element?.children[index];
+        if (readingAnchor.elementPath && element) {
+          viewport.scrollTop += element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - readingAnchor.offset;
+        } else viewport.scrollTop = contentInset() + node.top - readingAnchor.offset;
+        updateScroll();
+      }
+      if (!restoringTransition()) readingAnchor = undefined;
     }
     if (centerAfterLayout) {
       viewport.scrollLeft = Math.max(0, position.inset + (position.starts[focused()] || 0) + workingWidth() / 2 - dimensions().width / 2);
@@ -475,10 +520,10 @@ export default function Conversation(props: Props) {
     const position = layout().items.get(request.id);
     if (!position) return;
     const composer = layout().composers[focused()];
-    const targetBottom = request.bottom && mode() === 'side' ? composer.top + composer.height : position.top + position.height;
+    const targetBottom = contentInset() + (request.bottom && mode() === 'side' ? composer.top + composer.height : position.top + position.height);
     const top = request.bottom && mode() === 'focused' ? focusedFollowTop()
-      : Math.max(0, Math.min(request.bottom ? targetBottom - dimensions().height + 48 : position.top - 150,
-        Math.max(0, layout().height - dimensions().height)));
+      : Math.max(0, Math.min(request.bottom ? targetBottom - dimensions().height + 48 : contentInset() + position.top - 150,
+        Math.max(0, layout().height + contentInset() * 2 - dimensions().height)));
     const left = Math.max(0, layout().inset + layout().starts[focused()] + workingWidth() / 2 - dimensions().width / 2);
     interaction.setJumping(request.smooth && (Math.abs(viewport.scrollLeft - left) > 1 || Math.abs(viewport.scrollTop - top) > 1));
     viewport.scrollTo({ left, top, behavior: request.smooth ? 'smooth' : 'instant' });
@@ -497,7 +542,41 @@ export default function Conversation(props: Props) {
     return latest;
   });
 
-  let initialScrollPending = !viewState.initialized;
+  // Keep the anchor alive through initial layout and ResizeObserver delivery.
+  // Otherwise the first estimate wins, and wrapping differences move the text.
+  onMount(() => {
+    if (!restoringTransition()) return;
+    let frame = 0;
+    let previous = '';
+    let stableFrames = 0;
+    let attempts = 0;
+    const settle = () => {
+      batch(() => {
+        for (const element of observed.keys()) measure(element);
+        updateViewport();
+      });
+      if (readingAnchor?.elementPath) {
+        let element: Element | undefined = nodeElements.get(readingAnchor.id)?.closest('article.tree-node') ?? undefined;
+        for (const index of readingAnchor.elementPath) element = element?.children[index];
+        if (element) {
+          viewport.scrollTop += element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - readingAnchor.offset;
+          updateScroll();
+        }
+      }
+      const position = layout();
+      const signature = `${position.items.get(readingAnchor?.id)?.top}:${position.height}:${dimensions().width}:${dimensions().height}`;
+      stableFrames = signature === previous ? stableFrames + 1 : 0;
+      previous = signature;
+      if (stableFrames >= 2 || ++attempts >= 12) {
+        readingAnchor = undefined;
+        setRestoringTransition(false);
+      } else frame = requestAnimationFrame(settle);
+    };
+    frame = requestAnimationFrame(settle);
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
+
+  let initialScrollPending = !viewState.initialized && !transition;
   createEffect(() => {
     const latest = latestMessage();
     if (!initialScrollPending || !latest || !props.active) return;

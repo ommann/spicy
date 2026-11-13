@@ -246,8 +246,8 @@ export function layoutConversation(graph, { width, viewportWidth, viewportHeight
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
     const hasPrompt = graph.prefix.get(node.id).captured || (node.entry.type === 'compaction' && node.entry.parentId === null
       && graph.leaves.slice(node.first, node.last + 1).some(leaf => graph.prefix.get(leaf.id).captured));
-    const top = system ? rowGap : parent ? items.get(parent.id).top + items.get(parent.id).height + rowGap
-      : rowGap + (hasPrompt ? prefixHeight + rowGap : 0);
+    const top = system ? 0 : parent ? items.get(parent.id).top + items.get(parent.id).height + rowGap
+      : hasPrompt ? prefixHeight + rowGap : 0;
     const height = conversationNodeHeight(node, heights, rowGap);
     const first = Math.min(...range);
     items.set(node.id, { top, height, hidden, column,
@@ -255,12 +255,12 @@ export function layoutConversation(graph, { width, viewportWidth, viewportHeight
   }
 
   const composers = graph.leaves.map((_, index) => {
-    const bottom = Math.max(rowGap + prefixHeight, ...[...graph.nodes.values()]
+    const bottom = Math.max(prefixHeight, ...[...graph.nodes.values()]
       .filter(node => !items.get(node.id).hidden && node.first <= index && node.last >= index)
       .map(node => items.get(node.id).top + items.get(node.id).height));
     return { left: inset + starts[index], top: bottom + rowGap, height: composerHeights[index] || 40 };
   });
-  const height = Math.max(rowGap + prefixHeight,
+  const height = Math.max(prefixHeight,
     ...(inlineComposers ? composers.map(composer => composer.top + composer.height) : []),
     ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden).map(node => items.get(node.id).top + items.get(node.id).height))
     + Math.max(80, viewportHeight * .75);
@@ -278,6 +278,6 @@ export function layoutConversation(graph, { width, viewportWidth, viewportHeight
       d: `M ${inset + starts[previous.column] + width / 2} ${previous.top + previous.height} V ${position.top - rowGap / 2} H ${inset + starts[position.column] + width / 2} V ${position.top}` });
   }
 
-  return { items, composers, inlineComposers, paths, inset, starts, width: totalWidth, height, lane: focused,
+  return { items, composers, inlineComposers, paths, inset, promptTop: 0, starts, width: totalWidth, height, lane: focused,
     hasHorizontal: true };
 }

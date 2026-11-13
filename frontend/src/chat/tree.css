@@ -161,7 +161,8 @@
   height: 100%;
   overflow: scroll;
   scrollbar-gutter: auto;
-  padding: 0;
+  /* The viewport fills its parent; only its contents receive edge spacing. */
+  padding: 1lh 0;
   position: relative;
   scrollbar-width: none;
   overscroll-behavior: none;

@@ -11,10 +11,6 @@
   padding-right: 0;
 }
 
-.sessions-view .app-toolbar {
-  padding-inline: 2.5ch;
-}
-
 .startup-session-scroll > .scroll-area-viewport {
   height: 100%;
 }
