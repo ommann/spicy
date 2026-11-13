@@ -6,9 +6,9 @@ import { Hono } from 'hono';
 import { getRequestListener } from '@hono/node-server';
 import { RPCHandler, BodyLimitPlugin } from '@orpc/server/fetch';
 import { createServer } from 'vite';
-import { AgentRegistry } from './agents.mjs';
-import { LoginBridge } from './auth.mjs';
-import { createRouter } from './router.mjs';
+import { AgentRegistry } from './agents.ts';
+import { LoginBridge } from './auth.ts';
+import { createRouter } from './router.ts';
 
 const root = fileURLToPath(new URL('../frontend', import.meta.url));
 const repository = fileURLToPath(new URL('..', import.meta.url));
@@ -21,7 +21,7 @@ const agents = new AgentRegistry({
   cwd, managed,
   cli: path.join(repository, 'packages/coding-agent/src/cli.ts'),
   resolver: new URL('../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href,
-  extension: fileURLToPath(new URL('./tree-navigation.mjs', import.meta.url)),
+  extension: fileURLToPath(new URL('./tree-navigation.ts', import.meta.url)),
   fixture: process.env.PI_RPC_FIXTURE && path.resolve(process.env.PI_RPC_FIXTURE),
 });
 const app = new Hono();

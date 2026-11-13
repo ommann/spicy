@@ -31,7 +31,7 @@ test('short session URLs follow live sessions and reopen the same file after bac
     const port = reserve.address().port;
     await new Promise(resolve => reserve.close(resolve));
     const resolver = new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
-    child = spawn(process.execPath, ['--import', resolver, 'index.mjs'], {
+    child = spawn(process.execPath, ['--import', resolver, 'index.ts'], {
       cwd: fileURLToPath(new URL('..', import.meta.url)),
       env: { ...process.env, PORT: String(port), PI_SESSION_DIR: managed,
         PI_CODING_AGENT_DIR: path.join(temporary, 'agent'),

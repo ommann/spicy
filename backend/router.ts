@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { os as rpc, ORPCError } from '@orpc/server';
-import { agentEvents } from './agent-events.mjs';
-import { createOperations, OperationError } from './operations.mjs';
+import { agentEvents } from './agent-events.ts';
+import { createOperations, OperationError } from './operations.ts';
 import { agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
 
 export function createRouter({ agents, login, cwd, managed, token, signal: shutdownSignal }) {

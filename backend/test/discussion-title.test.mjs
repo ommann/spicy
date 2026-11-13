@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getDiscussionTitle } from '../../packages/coding-agent/src/core/discussion-title.ts';
-import register from '../tree-navigation.mjs';
+import register from '../tree-navigation.ts';
 
 const title = (value, isError = false) => ({ type: 'message', message: {
   role: 'toolResult', toolName: 'set_title', isError, details: { title: value },

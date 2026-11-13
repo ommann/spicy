@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { call } from '@orpc/server';
 import * as inputs from '../inputs.ts';
-import { createRouter } from '../router.mjs';
+import { createRouter } from '../router.ts';
 
 const image = { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' };
 const document = { version: 1, parts: [{ id: 'root', label: 'Root', source: 'test', children: [{ id: 'child', label: 'Child', source: 'test', text: 'hello' }] }] };

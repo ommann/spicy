@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agentEvents } from '../agent-events.mjs';
+import { agentEvents } from '../agent-events.ts';
 
 test('multiplexed subscriptions send fresh snapshots and clean up on disconnect', async t => {
   t.mock.timers.enable({ apis: ['setInterval'] });

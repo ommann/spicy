@@ -5,8 +5,8 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { call } from '@orpc/server';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
-import { createOperations, OperationError } from '../operations.mjs';
-import { createRouter } from '../router.mjs';
+import { createOperations, OperationError } from '../operations.ts';
+import { createRouter } from '../router.ts';
 
 function setup(command = async () => ({})) {
   const calls = [];

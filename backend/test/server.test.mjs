@@ -19,7 +19,7 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
   const root = fileURLToPath(new URL('..', import.meta.url));
   const resolver = new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
   const temporary = await mkdtemp(path.join(tmpdir(), 'spicy-agents-test-'));
-  const child = spawn(process.execPath, ['--import', resolver, 'index.mjs'], { cwd: root, env: { ...process.env, PORT: String(port), PI_SESSION_DIR: path.join(temporary, 'sessions'), PI_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.mjs', import.meta.url)) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['--import', resolver, 'index.ts'], { cwd: root, env: { ...process.env, PORT: String(port), PI_SESSION_DIR: path.join(temporary, 'sessions'), PI_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.mjs', import.meta.url)) }, stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = once(child, 'exit');
   let logs = '';
   child.stderr.on('data', chunk => { logs += chunk; });

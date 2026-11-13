@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LoginBridge } from '../auth.mjs';
+import { LoginBridge } from '../auth.ts';
 import { SettingsManager } from '@earendil-works/pi-coding-agent';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

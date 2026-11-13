@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { parseSessionEntries, SessionManager } from '@earendil-works/pi-coding-agent';
-import { PiRpc } from './rpc.mjs';
+import { PiRpc } from './rpc.ts';
 import { applyRecord } from '../frontend/src/stream.mjs';
 
 export class AgentConnection {

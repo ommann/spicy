@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm start",
+    "check": "tsc --noEmit",
     "start": "cd .. && npm start",
     "test": "node --import ../packages/coding-agent/src/experimental/source-resolver.ts --test test/*.test.mjs"
   },

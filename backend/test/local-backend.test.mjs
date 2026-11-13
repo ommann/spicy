@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { PiRpc } from '../rpc.mjs';
+import { PiRpc } from '../rpc.ts';
 
 test('web bridge and agent use the local fork without built packages', { timeout: 20000 }, async t => {
   const repository = new URL('../../', import.meta.url);

@@ -59,7 +59,7 @@ process.on('exit', () => {
 
 // Load workspace source, then serve the API and frontend in this process.
 await import('./packages/coding-agent/src/experimental/source-resolver.ts');
-await import('./backend/index.mjs');
+await import('./backend/index.ts');
 
 async function restartRecordedInstance() {
   let pid;

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getCodexUsage } from './codex-usage.mjs';
+import { getCodexUsage } from './codex-usage.ts';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 
 // Pi owns OAuth, callback navigation, refresh locking and credential persistence.

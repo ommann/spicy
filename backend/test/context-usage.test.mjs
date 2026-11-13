@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentConnection } from '../agents.mjs';
+import { AgentConnection } from '../agents.ts';
 
 test('live context usage is broadcast and retained for reconnect snapshots', () => {
   const agent = new AgentConnection('context-test', process.cwd());

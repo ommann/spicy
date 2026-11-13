@@ -4,7 +4,7 @@ import { channel } from 'node:diagnostics_channel';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { observeProviderConnection } from '../provider-connection.mjs';
+import { observeProviderConnection } from '../provider-connection.ts';
 
 const model = { baseUrl: 'https://provider.example/v1' };
 const request = { origin: 'https://provider.example', path: '/v1/responses', upgrade: 'websocket' };

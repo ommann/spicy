@@ -17,7 +17,7 @@ test('unified launcher restarts the recorded server and preserves runtime settin
     await mkdir(join(root, 'packages/coding-agent/src/experimental'), { recursive: true });
     await copyFile(new URL('../../spicy.mjs', import.meta.url), join(root, 'spicy.mjs'));
     await writeFile(join(root, 'packages/coding-agent/src/experimental/source-resolver.ts'), '');
-    await writeFile(join(root, 'backend/index.mjs'), `
+    await writeFile(join(root, 'backend/index.ts'), `
       import { writeFileSync } from 'node:fs';
       process.on('SIGTERM', () => process.exit(0));
       setInterval(() => {}, 1000);

@@ -1,6 +1,6 @@
 import { Type } from '@earendil-works/pi-ai';
 import { getDiscussionTitle } from '../packages/coding-agent/src/core/discussion-title.ts';
-import { observeProviderConnection } from './provider-connection.mjs';
+import { observeProviderConnection } from './provider-connection.ts';
 
 // RPC exposes fork (a new file), but not same-session /tree navigation.
 // This private command uses Pi's existing tree navigation implementation.

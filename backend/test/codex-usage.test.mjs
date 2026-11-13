@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getCodexUsage } from '../codex-usage.mjs';
+import { getCodexUsage } from '../codex-usage.ts';
 
 const token = `x.${Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'account' } })).toString('base64url')}.x`;
 const runtime = {

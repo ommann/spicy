@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { PiRpc } from '../rpc.mjs';
+import { PiRpc } from '../rpc.ts';
 const fixture = fileURLToPath(new URL('./fake-pi.mjs', import.meta.url));
 test('RPC correlates concurrent commands and preserves Unicode separators in JSONL', async () => {
   const rpc = new PiRpc();

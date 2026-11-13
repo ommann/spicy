@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import register from '../tree-navigation.mjs';
+import register from '../tree-navigation.ts';
 
 test('web reload command reloads resources without sending a model prompt', async () => {
   const commands = new Map();

@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { call } from '@orpc/server';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
-import { AgentRegistry } from '../agents.mjs';
-import { createRouter } from '../router.mjs';
+import { AgentRegistry } from '../agents.ts';
+import { createRouter } from '../router.ts';
 
 const deadline = () => AbortSignal.timeout(10000);
 
@@ -98,7 +98,7 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
     await new Promise(resolve => reserve.close(resolve));
     const temporary = await mkdtemp(path.join(tmpdir(), 'spicy-shutdown-'));
     const resolver = new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
-    const child = spawn(process.execPath, ['--import', resolver, 'index.mjs'], {
+    const child = spawn(process.execPath, ['--import', resolver, 'index.ts'], {
       cwd: fileURLToPath(new URL('..', import.meta.url)),
       env: { ...process.env, PORT: String(port), PI_SESSION_DIR: path.join(temporary, 'sessions'), PI_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.mjs', import.meta.url)), SPICY_STREAM_TIMING: '0' },
       stdio: ['ignore', 'pipe', 'pipe'],
