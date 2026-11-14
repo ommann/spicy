@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { savedHistory } from './saved-history.ts';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,7 +17,7 @@ test('persisted sessions reload image attachments as model-ready content', () =>
     ] };
     session.appendMessage(message);
     const file = session.getSessionFile();
-    const rows = readFileSync(file, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    const rows = savedHistory(file).trim().split('\n').map(line => JSON.parse(line));
     const stored = rows.find(row => row.type === 'message').message.content[1];
     assert.ok(stored.file);
     assert.equal(stored.data, undefined);

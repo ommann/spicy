@@ -1,9 +1,10 @@
 import test from 'node:test';
+import { savedHistory } from './saved-history.ts';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,9 +34,9 @@ test('short session URLs follow live sessions and reopen the same file after bac
     const resolver = new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
     child = spawn(process.execPath, ['--import', resolver, 'index.ts'], {
       cwd: fileURLToPath(new URL('..', import.meta.url)),
-      env: { ...process.env, PORT: String(port), PI_SESSION_DIR: managed,
-        PI_CODING_AGENT_DIR: path.join(temporary, 'agent'),
-        PI_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.ts', import.meta.url)) },
+      env: { ...process.env, PORT: String(port), SPICY_SESSION_DIR: managed,
+        SPICY_CODING_AGENT_DIR: path.join(temporary, 'agent'),
+        SPICY_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.ts', import.meta.url)) },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let logs = '';
@@ -43,7 +44,15 @@ test('short session URLs follow live sessions and reopen the same file after bac
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Backend startup timed out: ${logs}`)), 10000);
       child.once('exit', code => { clearTimeout(timeout); reject(new Error(`Backend exited ${code}: ${logs}`)); });
-      child.stdout.once('data', () => { clearTimeout(timeout); resolve(); });
+      let output = '';
+      const ready = chunk => {
+        output += chunk;
+        if (!output.includes(`Spicy: http://localhost:${port}`)) return;
+        child.stdout.off('data', ready);
+        clearTimeout(timeout);
+        resolve();
+      };
+      child.stdout.on('data', ready);
     });
     base = `http://127.0.0.1:${port}`;
     let token;
@@ -66,7 +75,7 @@ test('short session URLs follow live sessions and reopen the same file after bac
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.equal(saved.entries.length, 2);
-    const contents = await readFile(saved.state.sessionFile, 'utf8');
+    const contents = savedHistory(saved.state.sessionFile);
     assert.equal(JSON.parse(contents.split('\n')[0]).urlId, urlId);
     assert.equal((await fetch(`${base}/${urlId}`)).status, 200);
     await stop();
@@ -94,7 +103,7 @@ test('short session URLs follow live sessions and reopen the same file after bac
     assert.ok(family.relatedAgents.some(agent => agent.state.sessionFile === fork.state.sessionFile));
     assert.equal(family.connected, false);
     assert.ok(family.relatedAgents.every(agent => !agent.connected), 'Viewing related branches does not start their agents');
-    assert.equal(await readFile(saved.state.sessionFile, 'utf8'), contents);
+    assert.equal(savedHistory(saved.state.sessionFile), contents);
     assert.equal((await api.agents.create({ sessionUrlId: urlId })).agentId, reopened.agentId);
     const listing = await api.sessions({ scope: 'all' });
     const listed = listing.find(session => session.urlId === urlId);
@@ -117,7 +126,7 @@ test('short session URLs follow live sessions and reopen the same file after bac
     const header = { ...JSON.parse(contents.slice(0, newline)), id: 'duplicate-session' };
     await writeFile(path.join(managed, 'duplicate.jsonl'), JSON.stringify(header) + contents.slice(newline));
     await assert.rejects(api.agents.create({ sessionUrlId: urlId }), error => error.code === 'CONFLICT');
-    assert.equal(await readFile(saved.state.sessionFile, 'utf8'), contents);
+    assert.equal(savedHistory(saved.state.sessionFile), contents);
   } finally {
     await stop();
     await rm(temporary, { recursive: true, force: true });

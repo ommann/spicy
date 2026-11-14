@@ -1012,6 +1012,7 @@ async function listSessionsFromDir(
 			},
 			signal,
 		);
+		signal?.throwIfAborted();
 		return results.filter((info): info is SessionInfo => info !== null);
 	} catch {
 		signal?.throwIfAborted();

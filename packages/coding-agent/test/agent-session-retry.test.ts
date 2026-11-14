@@ -256,7 +256,7 @@ describe("AgentSession retry", () => {
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
 		const agent = new Agent({
 			getApiKey: () => "test-key",
-			initialState: { model, systemPrompt: "Test", tools: [] },
+			initialState: { model, systemPrompt: "Test", tools: [echoTool] },
 			streamFn: () => {
 				callCount++;
 				const stream = createAssistantMessageEventStream();

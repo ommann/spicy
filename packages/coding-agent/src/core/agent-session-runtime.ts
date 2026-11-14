@@ -13,6 +13,7 @@ import { emitSessionShutdownEvent } from "./extensions/runner.ts";
 import type { CreateAgentSessionResult } from "./sdk.ts";
 import { assertSessionCwdExists } from "./session-cwd.ts";
 import { SessionManager } from "./session-manager.ts";
+import { readStoredHeader } from "./session-storage.ts";
 
 /**
  * Result returned by runtime creation.
@@ -295,7 +296,7 @@ export class AgentSessionRuntime {
 				return { cancelled: false, selectedText };
 			}
 
-			if (!existsSync(currentSessionFile)) {
+			if (!readStoredHeader(currentSessionFile) && !existsSync(currentSessionFile)) {
 				throw new Error("This session has not been saved yet. Send a message before cloning or forking it.");
 			}
 			const sessionManager = SessionManager.open(currentSessionFile, sessionDir);

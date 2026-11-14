@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, rmSync } from "fs";
+import { mkdirSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { type CustomEntry, SessionManager } from "../../src/core/session-manager.ts";
+import { readStoredHeader } from '../../src/core/session-storage.ts';
 import { assistantMsg, readSessionFileRoles, userMsg } from "../utilities.ts";
 
 describe("SessionManager append and tree traversal", () => {
@@ -495,11 +496,10 @@ describe("createBranchedSession", () => {
 			const newFile = session.createBranchedSession(modelChangeId);
 			expect(newFile).toBeDefined();
 
-			// Nothing to save yet, so the file is created later by the first user message
-			expect(existsSync(newFile!)).toBe(false);
+			expect(readStoredHeader(newFile!)).toBeUndefined();
 
 			session.appendMessage(userMsg("new question"));
-			expect(existsSync(newFile!)).toBe(true);
+			expect(readStoredHeader(newFile!)).toBeDefined();
 
 			// Simulate extension adding entry before assistant (like preset on turn_start)
 			session.appendCustomEntry("preset-state", { name: "plan" });
@@ -558,7 +558,7 @@ describe("createBranchedSession", () => {
 		}
 	});
 
-	it("writes file immediately when forking at a user message", () => {
+	it("persists immediately when forking at a user message", () => {
 		const tempDir = join(tmpdir(), `session-fork-with-user-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
 
@@ -568,7 +568,7 @@ describe("createBranchedSession", () => {
 			session.appendMessage(assistantMsg("first answer"));
 
 			const newFile = session.createBranchedSession(id1);
-			expect(existsSync(newFile!)).toBe(true);
+			expect(readStoredHeader(newFile!)).toBeDefined();
 
 			session.appendMessage(assistantMsg("new answer"));
 			expect(readSessionFileRoles(newFile!)).toEqual(["session", "user", "assistant"]);

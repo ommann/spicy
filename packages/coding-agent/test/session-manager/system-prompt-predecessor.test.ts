@@ -57,20 +57,18 @@ describe("system prompt predecessors", () => {
 			const session = SessionManager.create(dir, dir);
 			const first = session.appendMessage(prompt("Legacy instructions"));
 			session.appendMessage(userMsg("Hello"));
-			const file = session.getSessionFile()!;
-			const legacy = readFileSync(file, "utf8").split("\n").map((line) => {
-				if (!line) return line;
-				const entry = JSON.parse(line);
-				delete entry.predecessorId;
+			const file = join(dir, 'legacy.jsonl');
+			const legacy = [session.getHeader(), ...session.getEntries()].map(entry => {
+				if (entry && 'predecessorId' in entry) delete entry.predecessorId;
 				return JSON.stringify(entry);
-			}).join("\n");
+			}).join('\n') + '\n';
 			writeFileSync(file, legacy);
 			const loaded = SessionManager.open(file);
 			const second = loaded.appendMessage(prompt("New instructions"), first);
 			const reopened = SessionManager.open(file);
 			expect(reopened.getEntry(first)).not.toHaveProperty("predecessorId");
 			expect(reopened.getEntry(second)).toMatchObject({ predecessorId: first });
-			expect(readFileSync(file, "utf8").startsWith(legacy)).toBe(true);
+			expect(readFileSync(file, "utf8")).toBe(legacy);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

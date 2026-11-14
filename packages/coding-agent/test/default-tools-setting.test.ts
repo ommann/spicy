@@ -356,11 +356,12 @@ describe("defaultTools setting", () => {
 			session.dispose();
 		});
 
-		// #11062
-		it("activates extension tools the transcript never added or removed", async () => {
-			// Built-in tools and tools registered inactive stay inactive.
-			const session = await resume(createRecordedSession(["read", "grep"]));
-			expect(session.getActiveToolNames().sort()).toEqual(["active_tool", "grep", "read"]);
+		it("does not add unrecorded extension tools when resuming", async () => {
+			const sessionManager = createRecordedSession(["read", "grep"]);
+			const original = structuredClone(sessionManager.getEntries().filter(entry => entry.type === 'message'));
+			const session = await resume(sessionManager);
+			expect(session.getActiveToolNames().sort()).toEqual(["grep", "read"]);
+			expect(sessionManager.getEntries().filter(entry => entry.type === 'message')).toEqual(original);
 			session.dispose();
 		});
 
@@ -375,7 +376,7 @@ describe("defaultTools setting", () => {
 
 		// #11075
 		it("restores the target branch's loadout on tree navigation", async () => {
-			// The target branch never mentions active_tool, so it is active there. It removed grep.
+			// The target branch declares read and removes grep; active_tool was never declared.
 			const sessionManager = createRecordedSession(["read", "grep"]);
 			recordLoadoutChange(sessionManager, [], ["grep"]);
 			const target = sessionManager.appendMessage({ role: "user", content: "first", timestamp: Date.now() });
@@ -384,7 +385,7 @@ describe("defaultTools setting", () => {
 			expect(session.getActiveToolNames().sort()).toEqual(["grep", "read"]);
 
 			await session.navigateTree(target, { summarize: false });
-			expect(session.getActiveToolNames().sort()).toEqual(["active_tool", "read"]);
+			expect(session.getActiveToolNames().sort()).toEqual(["read"]);
 			session.dispose();
 		});
 
@@ -411,22 +412,27 @@ describe("defaultTools setting", () => {
 			session.dispose();
 		});
 
-		it("does not restore excluded tools", async () => {
-			const session = await resume(createChangedSession(), {
-				excludeTools: ["inactive_tool"],
-			});
-			expect(session.getActiveToolNames().sort()).toEqual(["grep", "read"]);
+		it("preserves excluded declarations but does not execute excluded tools", async () => {
+			const sessionManager = createChangedSession();
+			const original = structuredClone(sessionManager.getEntries().filter(entry => entry.type === 'message'));
+			const session = await resume(sessionManager, { excludeTools: ["inactive_tool"] });
+			expect(session.getActiveToolNames().sort()).toEqual(["grep", "inactive_tool", "read"]);
+			const excluded = session.agent.state.tools.find(tool => tool.name === 'inactive_tool');
+			if (!excluded) throw new Error('Missing recorded inactive_tool declaration');
+			await expect(excluded.execute('excluded-test', {})).rejects.toThrow('Tool inactive_tool is unavailable in the current runtime');
+			expect(sessionManager.getEntries().filter(entry => entry.type === 'message')).toEqual(original);
 			session.dispose();
 		});
 
-		it("uses explicit tool options instead of the recorded loadout", async () => {
-			const allowlisted = await resume(createChangedSession(), { tools: ["read", "write"] });
-			expect(allowlisted.getActiveToolNames()).toEqual(["read", "write"]);
-			allowlisted.dispose();
-
-			const builtinless = await resume(createChangedSession(), { noTools: "builtin" });
-			expect(builtinless.getActiveToolNames()).toEqual(["active_tool"]);
-			builtinless.dispose();
+		it("does not replace recorded declarations with runtime tool options", async () => {
+			for (const options of [{ tools: ["read", "write"] }, { noTools: "builtin" as const }]) {
+				const sessionManager = createChangedSession();
+				const original = structuredClone(sessionManager.getEntries().filter(entry => entry.type === 'message'));
+				const session = await resume(sessionManager, options);
+				expect(session.getActiveToolNames().sort()).toEqual(["grep", "inactive_tool", "read"]);
+				expect(sessionManager.getEntries().filter(entry => entry.type === 'message')).toEqual(original);
+				session.dispose();
+			}
 		});
 
 		it("applies +name and -name tool options to the recorded loadout", async () => {

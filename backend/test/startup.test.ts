@@ -23,7 +23,7 @@ test('unified launcher restarts the recorded server and preserves runtime settin
       setInterval(() => {}, 1000);
       writeFileSync(new URL('../state.json', import.meta.url), JSON.stringify({
         pid: process.pid,
-        settings: process.env.PI_CODING_AGENT_DIR,
+        settings: process.env.SPICY_CODING_AGENT_DIR,
         project: process.env.PI_CWD,
         port: process.env.PORT,
         nodeOptions: process.env.NODE_OPTIONS,
@@ -54,7 +54,7 @@ test('unified launcher restarts the recorded server and preserves runtime settin
     }
 
     const original = launch([], {
-      PI_CODING_AGENT_DIR: join(root, 'settings'),
+      SPICY_CODING_AGENT_DIR: join(root, 'settings'),
       PI_CWD: root,
       PORT: '15174',
       NODE_OPTIONS: '--no-warnings',

@@ -6,7 +6,6 @@ import {
 	readdirSync,
 	readFileSync,
 	realpathSync,
-	renameSync,
 	rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -178,26 +177,6 @@ describe("--session-id", () => {
 
 		expect(created.getSessionId()).toBe("fresh-id");
 		expect(list).not.toHaveBeenCalled();
-	});
-
-	it("reopens an exact ID from a renamed session file", async () => {
-		const tempRoot = createTempDir();
-		const projectDir = join(tempRoot, "project");
-		const sessionDir = join(tempRoot, "sessions");
-		mkdirSync(projectDir, { recursive: true });
-		const original = SessionManager.create(projectDir, sessionDir, { id: "renamed-id" });
-		persistSession(original, "persist me");
-		const renamedPath = join(sessionDir, "imported-session.jsonl");
-		renameSync(original.getSessionFile()!, renamedPath);
-
-		const reopened = await createSessionManager(
-			args({ sessionId: "renamed-id" }),
-			projectDir,
-			sessionDir,
-			SettingsManager.inMemory(),
-		);
-
-		expect(reopened.getSessionFile()).toBe(renamedPath);
 	});
 
 	it("filters exact IDs by cwd in a custom session directory", () => {

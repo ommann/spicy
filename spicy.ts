@@ -15,7 +15,7 @@ if (args.includes('--help') || args.includes('-h')) {
 
 Serve current source at http://localhost:5174.
 Settings: .pi-user/ by default; --global-user-dir uses ~/.pi/agent.
-PI_CODING_AGENT_DIR overrides the local default.
+SPICY_CODING_AGENT_DIR overrides the local default.
 --restart stops the recorded instance and preserves its runtime settings.`);
   process.exit(0);
 }
@@ -31,7 +31,7 @@ if (args.includes('--restart')) {
 }
 
 // Choose settings before loading any backend modules.
-let agentDirectory = process.env.PI_CODING_AGENT_DIR;
+let agentDirectory = process.env.SPICY_CODING_AGENT_DIR ?? process.env.PI_CODING_AGENT_DIR; // Legacy fallback.
 
 if (args.includes('--global-user-dir')) {
   agentDirectory = join(homedir(), '.pi', 'agent');
@@ -40,7 +40,7 @@ if (args.includes('--global-user-dir')) {
 }
 
 await mkdir(agentDirectory, { recursive: true });
-process.env.PI_CODING_AGENT_DIR = agentDirectory;
+process.env.SPICY_CODING_AGENT_DIR = agentDirectory;
 process.env.PI_CWD = process.env.PI_CWD || process.cwd();
 
 // Record this server for restart; remove only our own PID on exit.
@@ -126,5 +126,5 @@ async function restartRecordedInstance() {
 }
 
 function isRuntimeSetting(name) {
-  return name.startsWith('PI_') || ['NODE_OPTIONS', 'PORT'].includes(name);
+  return name.startsWith('SPICY_') || name.startsWith('PI_') || ['NODE_OPTIONS', 'PORT'].includes(name);
 }

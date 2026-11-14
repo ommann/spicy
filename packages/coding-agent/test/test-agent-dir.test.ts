@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { readStoredHeader } from '../src/core/session-storage.ts';
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -14,12 +14,12 @@ describe("test agent directory isolation", () => {
 		session.appendMessage({ role: "user", content: "test isolation", timestamp: Date.now() });
 		const file = session.getSessionFile()!;
 		expect(relative(join(agentDir, "sessions"), file).startsWith("..")).toBe(false);
-		expect(existsSync(file)).toBe(true);
+		expect(readStoredHeader(file)?.id).toBe(session.getSessionId());
 	});
 
 	it("retains the isolated baseline after restoring environment stubs", () => {
 		const agentDir = getAgentDir();
-		vi.stubEnv("PI_CODING_AGENT_DIR", "/unused-test-override");
+		vi.stubEnv("SPICY_CODING_AGENT_DIR", "/unused-test-override");
 		vi.unstubAllEnvs();
 		expect(getAgentDir()).toBe(agentDir);
 	});
@@ -27,7 +27,7 @@ describe("test agent directory isolation", () => {
 	it("passes isolation to child processes", () => {
 		const inherited = execFileSync(
 			process.execPath,
-			["-e", "process.stdout.write(process.env.PI_CODING_AGENT_DIR)"],
+			["-e", "process.stdout.write(process.env.SPICY_CODING_AGENT_DIR)"],
 			{
 				encoding: "utf8",
 			},

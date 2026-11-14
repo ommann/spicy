@@ -623,7 +623,11 @@ test('Sessions shows history cards, filters projects and links to saved chats wi
   ];
   rpc = createRpcFixture({
     info: os.handler(() => empty),
-    sessions: os.handler(() => saved),
+    histories: os.handler(() => saved.map(session => ({
+      id: session.urlId, path: session.cwd, modified: session.modified,
+      members: [{ entries, leafId: 'user2', state: { sessionUrlId: session.urlId, sessionFile: session.id } }],
+      latest: { id: 'user2', text: 'Saved message', user: true, activity: session.modified, href: `/b/${session.urlId}` },
+    }))),
     agents: {
       list: os.handler(() => []),
       create: os.handler(({ input }) => {
@@ -643,8 +647,8 @@ test('Sessions shows history cards, filters projects and links to saved chats wi
     assert.equal(root.querySelectorAll('.history-tree-id').length, 3);
     assert.equal(root.querySelectorAll('.startup-empty-chat .branch-draft').length, 2);
     assert.ok(root.querySelector('.startup-empty-chat .editor textarea'));
-    assert.deepEqual(requests.filter(request => request.path === 'agents/create').map(request => request.input),
-      saved.map(session => ({ openSessionId: session.id })));
+    assert.equal(requests.filter(request => request.path === 'histories').length, 1);
+    assert.ok(!requests.some(request => request.path === 'agents/create'), 'Listing saved history does not create agents');
     assert.ok(!requests.some(request => request.path === 'command' || request.path === 'start'), 'Listing does not send prompts');
     const path = root.querySelector('[aria-label="Search project paths"]');
     path.value = 'spicy';

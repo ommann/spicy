@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { loadEntriesFromFile } from '../src/core/session-manager.ts';
 import { ENV_AGENT_DIR } from "../src/config.ts";
 
 const cliPath = resolve(__dirname, "../src/cli.ts");
@@ -58,10 +59,7 @@ function createSessionFile(projectDir: string, sessionFile: string): void {
 }
 
 function readSessionInfoNames(sessionFile: string): string[] {
-	return readFileSync(sessionFile, "utf8")
-		.trim()
-		.split("\n")
-		.map((line) => JSON.parse(line) as { type?: string; name?: string })
+	return loadEntriesFromFile(sessionFile)
 		.filter((entry) => entry.type === "session_info")
 		.map((entry) => entry.name ?? "");
 }

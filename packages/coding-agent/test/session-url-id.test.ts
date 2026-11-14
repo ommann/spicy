@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readStoredHistory } from '../src/core/session-storage.ts';
 import { SessionManager } from "../src/core/session-manager.ts";
 import { createSessionUrlId, SESSION_URL_ID_ALPHABET } from "../src/core/session-url-id.ts";
 
@@ -30,18 +31,18 @@ describe("permanent session URL IDs", () => {
 		expect(urlId).not.toBe(uuid);
 		const entry = session.appendMessage({ role: "user", content: "Keep this message", timestamp: 1 });
 		const file = session.getSessionFile()!;
-		const original = readFileSync(file, "utf8");
+		const original = readStoredHistory(file);
 		const reopened = SessionManager.open(file, directory);
 		expect(reopened.getSessionId()).toBe(uuid);
 		expect(reopened.getHeader()!.urlId).toBe(urlId);
-		expect(readFileSync(file, "utf8")).toBe(original);
+		expect(readStoredHistory(file)).toEqual(original);
 		expect((await SessionManager.list(directory, directory))[0].urlId).toBe(urlId);
 		reopened.createBranchedSession(entry);
 		expect(reopened.getHeader()!.urlId).not.toBe(urlId);
 		const fork = SessionManager.forkFrom(file, directory, directory);
 		expect(fork.getHeader()!.urlId).not.toBe(urlId);
 		expect(fork.getHeader()!.urlId).not.toBe(reopened.getHeader()!.urlId);
-		expect(readFileSync(file, "utf8")).toBe(original);
+		expect(readStoredHistory(file)).toEqual(original);
 	});
 
 	it("backfills a legacy header once, preserving transcript bytes, ancestry and mtime", () => {

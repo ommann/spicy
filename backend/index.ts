@@ -15,7 +15,9 @@ const root = fileURLToPath(new URL('../frontend', import.meta.url));
 const repository = fileURLToPath(new URL('..', import.meta.url));
 const cwd = path.resolve(process.env.PI_CWD || repository);
 const port = Number(process.env.PORT || 5174);
-const managed = process.env.PI_SESSION_DIR ? path.resolve(process.env.PI_SESSION_DIR) : fileURLToPath(new URL('./.sessions', import.meta.url));
+const rpcFixture = process.env.SPICY_RPC_FIXTURE ?? process.env.PI_RPC_FIXTURE; // Legacy fallback.
+const sessionDirectory = process.env.SPICY_SESSION_DIR ?? process.env.PI_SESSION_DIR; // Legacy fallback.
+const managed = sessionDirectory ? path.resolve(sessionDirectory) : fileURLToPath(new URL('./.sessions', import.meta.url));
 // The web server and every child agent share one history database.
 process.env.SPICY_HISTORY_DB ||= path.join(managed, 'history.sqlite');
 await importLegacyHistories([managed]);
@@ -26,7 +28,7 @@ const agents = new AgentRegistry({
   cli: path.join(repository, 'packages/coding-agent/src/cli.ts'),
   resolver: new URL('../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href,
   extension: fileURLToPath(new URL('./tree-navigation.ts', import.meta.url)),
-  fixture: process.env.PI_RPC_FIXTURE && path.resolve(process.env.PI_RPC_FIXTURE),
+  fixture: rpcFixture && path.resolve(rpcFixture),
 });
 const app = new Hono();
 const lifetime = new AbortController();

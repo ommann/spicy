@@ -100,7 +100,7 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
     const resolver = new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
     const child = spawn(process.execPath, ['--import', resolver, 'index.ts'], {
       cwd: fileURLToPath(new URL('..', import.meta.url)),
-      env: { ...process.env, PORT: String(port), PI_SESSION_DIR: path.join(temporary, 'sessions'), PI_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.ts', import.meta.url)), SPICY_STREAM_TIMING: '0' },
+      env: { ...process.env, PORT: String(port), SPICY_SESSION_DIR: path.join(temporary, 'sessions'), SPICY_CODING_AGENT_DIR: path.join(temporary, 'agent'), SPICY_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.ts', import.meta.url)), SPICY_STREAM_TIMING: '0' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const exited = once(child, 'exit');

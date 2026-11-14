@@ -1,11 +1,12 @@
 import test from 'node:test';
+import { savedHistory } from './saved-history.ts';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import net from 'node:net';
 import http from 'node:http';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createORPCClient } from '@orpc/client';
@@ -19,7 +20,7 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
   const root = fileURLToPath(new URL('..', import.meta.url));
   const resolver = new URL('../../packages/coding-agent/src/experimental/source-resolver.ts', import.meta.url).href;
   const temporary = await mkdtemp(path.join(tmpdir(), 'spicy-agents-test-'));
-  const child = spawn(process.execPath, ['--import', resolver, 'index.ts'], { cwd: root, env: { ...process.env, PORT: String(port), PI_SESSION_DIR: path.join(temporary, 'sessions'), PI_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.ts', import.meta.url)) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['--import', resolver, 'index.ts'], { cwd: root, env: { ...process.env, PORT: String(port), SPICY_SESSION_DIR: path.join(temporary, 'sessions'), SPICY_CODING_AGENT_DIR: path.join(temporary, 'agent'), SPICY_RPC_FIXTURE: fileURLToPath(new URL('./fake-pi.ts', import.meta.url)) }, stdio: ['ignore', 'pipe', 'pipe'] });
   const exited = once(child, 'exit');
   let logs = '';
   child.stderr.on('data', chunk => { logs += chunk; });
@@ -27,7 +28,15 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Server startup timed out: ${logs}`)), 5000);
       child.once('exit', code => { clearTimeout(timeout); reject(new Error(`Server exited ${code}: ${logs}`)); });
-      child.stdout.once('data', () => { clearTimeout(timeout); resolve(); });
+      let output = '';
+      const ready = chunk => {
+        output += chunk;
+        if (!output.includes(`Spicy: http://localhost:${port}`)) return;
+        child.stdout.off('data', ready);
+        clearTimeout(timeout);
+        resolve();
+      };
+      child.stdout.on('data', ready);
     });
     const base = `http://127.0.0.1:${port}`;
     let token;
@@ -74,7 +83,7 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
     assert.equal((await api.info({})).leafId, null);
     const anchor = state.entries[1].id;
     const sourceFile = state.state.sessionFile;
-    const sourceContent = await readFile(sourceFile, 'utf8');
+    const sourceContent = savedHistory(sourceFile);
     const [left, right] = await Promise.all([
       api.agents.create({ sourceAgentId: 'default', entryId: anchor }),
       api.agents.create({ sourceAgentId: 'default', entryId: anchor }),
@@ -124,7 +133,7 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
       assert.equal(leftDone.entries[2].message.content, 'Left branch');
       assert.equal(rightDone.entries[2].message.content, 'Right branch');
       assert.equal((await api.info({})).leafId, null);
-      assert.equal(await readFile(sourceFile, 'utf8'), sourceContent);
+      assert.equal(savedHistory(sourceFile), sourceContent);
       assert.ok(sharedEvents.some(event => event.type === 'agent' && event.agentId === left.agentId));
       assert.ok(sharedEvents.some(event => event.type === 'agent' && event.agentId === right.agentId));
       assert.match(JSON.stringify(sharedEvents), /Left branch/);
@@ -158,7 +167,7 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
       assert.equal(resumed.state.sessionFile, stopped.state.sessionFile);
       assert.deepEqual(resumed.entries, stopped.entries);
       await api.stop({ agentId: left.agentId });
-      const savedRight = await readFile(rightDone.state.sessionFile, 'utf8');
+      const savedRight = savedHistory(rightDone.state.sessionFile);
       assert.ok(savedRight.includes('Right branch'));
       assert.ok(!savedRight.includes('Left branch'));
       const project = path.join(temporary, 'different-project');

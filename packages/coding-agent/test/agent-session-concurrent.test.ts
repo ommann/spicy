@@ -475,8 +475,8 @@ describe("AgentSession concurrent prompt guard", () => {
 		await session.agent.waitForIdle();
 
 		expect(snapshots).toEqual([
-			["system", "user", "assistant"],
-			["system", "user", "assistant"],
+			["user", "assistant"],
+			["user", "assistant"],
 		]);
 	});
 
@@ -619,7 +619,6 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		const messageEntries = sessionManager.getEntries().filter((entry) => entry.type === "message");
 		expect(messageEntries.map((entry) => entry.message.role)).toEqual([
-			"system",
 			"user",
 			"assistant",
 			"toolResult",
