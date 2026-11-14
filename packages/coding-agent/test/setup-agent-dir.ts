@@ -9,6 +9,9 @@ import { afterAll } from "vitest";
 // rather than the developer's agent directory. Child processes inherit it too.
 const agentDir = mkdtempSync(join(tmpdir(), "spicy-test-agent-"));
 process.env.SPICY_CODING_AGENT_DIR = agentDir;
+// Validation can inherit the live server's database through its tool process.
+// Let each test's directory select its store, never the inherited live database.
+delete process.env.SPICY_HISTORY_DB;
 
 afterAll(() => {
 	rmSync(agentDir, { recursive: true, force: true });

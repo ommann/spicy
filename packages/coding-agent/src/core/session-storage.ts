@@ -116,7 +116,10 @@ export function readStoredHeader(sessionPath: string): SessionHeader | undefined
 export function listStoredHistories(directory: string, all = false): { path: string; updatedAt: number }[] {
   return withDatabase(directory, false, db => {
     const query = db.select({ path: historySessions.path, updatedAt: historySessions.updatedAt }).from(historySessions);
-    return all ? query.all() : query.where(eq(historySessions.directory, resolve(directory))).all();
+    const root = resolve(directory);
+    return query.where(all
+      ? sql`${historySessions.directory} = ${root} OR substr(${historySessions.directory}, 1, ${root.length + 1}) = ${root + sep}`
+      : eq(historySessions.directory, root)).all();
   }) ?? [];
 }
 
