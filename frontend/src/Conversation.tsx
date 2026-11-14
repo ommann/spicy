@@ -130,6 +130,13 @@ export function ConversationCard(props: { id: string; node: Wire; position: Wire
 }
 
 export default function Conversation(props: Props) {
+  return <Show when={props.viewState} keyed>{state =>
+    <Show when={props.mode} keyed>{initialMode => createConversation(props, state, initialMode)}</Show>
+  }</Show>;
+}
+
+// Each keyed owner gets one store and mode for its entire lifetime.
+function createConversation(props: Props, state: ConversationViewState, initialMode: ConversationMode) {
   const mode = () => props.mode;
   const [labelMuted, setLabelMuted] = createSignal(false);
   const [labelArea, setLabelArea] = createSignal({ left: 0, top: 0, width: 0, height: 0 });
@@ -148,7 +155,7 @@ export default function Conversation(props: Props) {
       for (const event of events) document.removeEventListener(event, activity, true);
     });
   });
-  const [viewState, setViewState] = props.viewState;
+  const [viewState, setViewState] = state;
   let spacingProbe!: HTMLSpanElement;
   const [spacing, setSpacing] = createSignal({ row: 20, column: 48, edge: 24 });
   onMount(() => {
@@ -175,8 +182,8 @@ export default function Conversation(props: Props) {
   const [scrollRequest, setScrollRequest] = createSignal<{ id: string; bottom: boolean; smooth: boolean }>();
   // An explicit view switch carries the current reading location across routes.
   // Destination-specific history is only a fallback for ordinary navigation.
-  const transition = viewState.modeTransition?.mode === props.mode ? viewState.modeTransition : undefined;
-  const savedPosition = transition?.position ?? viewState.positions[props.mode] ?? viewState.lastPosition;
+  const transition = viewState.modeTransition?.mode === initialMode ? viewState.modeTransition : undefined;
+  const savedPosition = transition?.position ?? viewState.positions[initialMode] ?? viewState.lastPosition;
   if (transition) setViewState('modeTransition', undefined);
   const [restoringTransition, setRestoringTransition] = createSignal(!!transition?.position.anchor);
   let followLatest = savedPosition?.followLatest ?? true;

@@ -7,7 +7,8 @@ import { isUnstartedCompaction } from './conversation-model.ts';
 import { promptLabel } from './prompt-numbers';
 
 export function ConversationPrompt(value: { view: ConversationView; index: number }) {
-  const { props, layout, gridPlacement, spacing, workingWidth, versionFor } = value.view;
+  return <Show when={value.view} keyed>{view => {
+  const { props, layout, gridPlacement, spacing, workingWidth, versionFor } = view;
   const leaf = () => props.graph.leaves[value.index];
   return <Show when={leaf()?.entry.type !== 'branch_draft' && props.graph.prefix.get(leaf().id).captured}>
     <article class="tree-node"
@@ -29,11 +30,13 @@ export function ConversationPrompt(value: { view: ConversationView; index: numbe
       </Show></Card>
     </article>
   </Show>;
+  }}</Show>;
 }
 
 export function ConversationNodes(value: { view: ConversationView }) {
+  return <Show when={value.view} keyed>{view => {
   const { props, nodeIds, inheritedVersion, versionFor, layout, gridPlacement, scroll, spacing,
-    registerSection, workingWidth, dismissBranch, observe, unobserve } = value.view;
+    registerSection, workingWidth, dismissBranch, observe, unobserve } = view;
   return <For each={nodeIds()}>{id => {
     const node = () => props.graph.nodes.get(id);
     const inheritedKey = () => inheritedVersion(id)?.key;
@@ -52,4 +55,5 @@ export function ConversationNodes(value: { view: ConversationView }) {
       onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch}
       measure={(key, element) => observe(key, element, 'node')} unmeasure={unobserve} />;
   }}</For>;
+  }}</Show>;
 }

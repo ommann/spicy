@@ -11,7 +11,7 @@ import './session-history.css';
 export const SessionsRouteContext = createContext<Component>();
 export function SessionsRoute() {
   const View = useContext(SessionsRouteContext);
-  return View ? <View /> : null;
+  return <Show when={View} keyed>{Component => <Component />}</Show>;
 }
 
 export default function Sessions(props: {

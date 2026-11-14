@@ -1,4 +1,4 @@
-import { createContext, createEffect, useContext, type Component } from 'solid-js';
+import { Show, createContext, createEffect, useContext, type Component } from 'solid-js';
 import { Navigate, useLocation } from '@solidjs/router';
 import { chatViewPath, setViewMode, type ViewMode } from './view-mode';
 import { sessionPath, sessionUrlIdFromPath } from './session-urls';
@@ -8,7 +8,7 @@ export const ChatRouteContext = createContext<Component<{ mode: ViewMode }>>();
 function ChatView(props: { mode: ViewMode }) {
   const View = useContext(ChatRouteContext);
   createEffect(() => setViewMode(props.mode));
-  return View ? <View mode={props.mode} /> : null;
+  return <Show when={View} keyed>{Component => <Component mode={props.mode} />}</Show>;
 }
 
 export function SingleChatRoute() {

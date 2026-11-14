@@ -1,4 +1,4 @@
-import { createMemo, createSignal, untrack } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { followHiddenLeaves } from './branch-visibility-model.ts';
 import type { Wire } from './types';
 
@@ -16,10 +16,13 @@ export const [showOnlyHiddenBranches, setShowOnlyHiddenBranches] = createSignal(
 
 export function createBranchVisibility() {
   const hiddenLeaves = createMemo(() => new Set(storedLeaves()));
-  function save(ids: string[]) {
-    setStoredLeaves(ids);
+  function persist(ids: string[]) {
     try { window.localStorage.setItem(storageKey, JSON.stringify(ids)); }
     catch { /* The filter still works without persistence. */ }
+  }
+  function save(ids: string[]) {
+    setStoredLeaves(ids);
+    persist(ids);
   }
   return {
     hiddenLeaves,
@@ -30,10 +33,11 @@ export function createBranchVisibility() {
       save([...ids]);
     },
     follow(previous: Wire[], next: Wire[]) {
-      untrack(() => {
-        const current = storedLeaves();
+      setStoredLeaves(current => {
         const updated = followHiddenLeaves(current, previous, next);
-        if (updated.length !== current.length || updated.some((id, index) => id !== current[index])) save(updated);
+        if (updated.length === current.length && updated.every((id, index) => id === current[index])) return current;
+        persist(updated);
+        return updated;
       });
     },
   };
