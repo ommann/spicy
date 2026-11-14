@@ -1,5 +1,4 @@
-import type { ChannelListener } from 'node:diagnostics_channel';
-import { channel } from 'node:diagnostics_channel';
+import { channel, type ChannelListener } from 'node:diagnostics_channel';
 
 // Observe the provider transport. Never open, retry, or keep a connection alive.
 export function observeProviderConnection(send: (state: string) => void) {

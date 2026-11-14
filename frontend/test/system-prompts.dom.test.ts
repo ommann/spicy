@@ -537,7 +537,7 @@ test('chat references open the Solid view without creating a model request or mo
     const reference = root.querySelector('[data-system-prompt="2"]');
     assert.ok(reference, `Chat contains numbered prompt references: ${root.textContent}`);
     assert.equal(reference.tagName, 'A');
-    assert.equal(reference.getAttribute('href'), '/k7m3xqa9/system-prompts/system2');
+    assert.equal(reference.getAttribute('href'), '/b/k7m3xqa9/system-prompts/system2');
     for (const label of ['Sessions', 'Chat', 'System prompts', 'Editor', 'Single', 'Tree']) {
       const link = button(root, label);
       assert.equal(link?.tagName, 'A', `${label} is a native navigation link`);
@@ -559,13 +559,13 @@ test('chat references open the Solid view without creating a model request or mo
     await flush();
     const dialog = root.querySelector('.system-prompts-view');
     assert.ok(dialog);
-    assert.equal(dispose.history.get(), '/k7m3xqa9/system-prompts/system2');
+    assert.equal(dispose.history.get(), '/b/k7m3xqa9/system-prompts/system2');
     assert.match(dialog.textContent, /Original instructions/);
     button(root, 'Chat').click();
     await flush();
     assert.equal(root.querySelector('.system-prompts-view'), null);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft', 'Returning to Chat preserves the unsent draft');
-    assert.equal(dispose.history.get(), '/k7m3xqa9/tree');
+    assert.equal(dispose.history.get(), '/t/k7m3xqa9');
     dispose.history.back();
     await flush();
     assert.ok(root.querySelector('.system-prompts-view'), 'History back restores the prompt route');
@@ -601,13 +601,13 @@ test('session URLs override tab selection, preserve deep links and restore on br
     assert.ok(!requests.some(item => item.path === 'info' && item.input.agentId === 'stale'));
     button(root, 'Chat').click();
     await flush();
-    assert.equal(dispose.history.get(), '/k7m3xqa9/tree');
+    assert.equal(dispose.history.get(), '/t/k7m3xqa9');
     dispose.history.set({ value: '/v8n4zrc2' });
     for (let i = 0; i < 6; i++) await flush();
-    assert.equal(dispose.history.get(), '/v8n4zrc2/tree');
+    assert.equal(dispose.history.get(), '/t/v8n4zrc2');
     dispose.history.back();
     for (let i = 0; i < 6; i++) await flush();
-    assert.equal(dispose.history.get(), '/k7m3xqa9/tree');
+    assert.equal(dispose.history.get(), '/t/k7m3xqa9');
     assert.deepEqual(requests.filter(item => item.path === 'agents/create').map(item => item.input.sessionUrlId), ['k7m3xqa9', 'v8n4zrc2', 'k7m3xqa9']);
     assert.ok(requests.every(item => ['info', 'agents/list', 'agents/create', 'events'].includes(item.path)));
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
@@ -870,7 +870,7 @@ test('Single routes mount only one branch and composer while preserving shared s
   const dispose = components.mountApp(root, '/single');
   try {
     for (let i = 0; i < 8; i++) await flush();
-    assert.equal(dispose.history.get(), '/testchat/single');
+    assert.equal(dispose.history.get(), '/single');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     assert.ok(root.querySelector('.tree-node[data-entry-id="right-answer"]'));
     assert.equal(root.querySelector('.tree-node[data-entry-id="left-answer"]'), null);
@@ -913,7 +913,7 @@ test('Single routes mount only one branch and composer while preserving shared s
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     button(root, 'Tree').click();
     await flush();
-    assert.equal(dispose.history.get(), '/testchat/tree');
+    assert.equal(dispose.history.get(), '/t/testchat');
     assert.ok(root.querySelector('.tree-connections'));
     assert.equal(root.querySelectorAll('.message-composer').length, 2);
     assert.match(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
@@ -921,17 +921,17 @@ test('Single routes mount only one branch and composer while preserving shared s
     assert.ok(root.querySelector('.message-composer:has(.editor[data-leaf-id="stream-right-0"]) .composer-attachments img'));
     button(root, 'Single').click();
     await flush();
-    assert.equal(dispose.history.get(), '/testchat/single');
+    assert.equal(dispose.history.get(), '/b/testchat');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep left draft');
     assert.equal(root.querySelector('.tree-node[data-entry-id="stream-right-0"]'), null);
     dispose.history.back();
     await flush();
-    assert.equal(dispose.history.get(), '/testchat/tree');
+    assert.equal(dispose.history.get(), '/t/testchat');
     assert.equal(root.querySelectorAll('.message-composer').length, 2);
     dispose.history.forward();
     await flush();
-    assert.equal(dispose.history.get(), '/testchat/single');
+    assert.equal(dispose.history.get(), '/b/testchat');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     button(root, 'Tree').click();
     await flush();
