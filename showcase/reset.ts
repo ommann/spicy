@@ -57,15 +57,15 @@ user('Long code and horizontal overflow');
 assistant('```typescript\n'+Array.from({length:65},(_,i)=>`const example${i+1} = { index: ${i+1}, label: "Rendering example ${i+1}" };`).join('\n')+'\n```\n\n```text\n'+ 'A very wide line — '.repeat(30)+'\n```');
 user('Long prose');
 assistant(Array.from({length:18},(_,i)=>`Paragraph ${i+1}. This synthetic paragraph provides repeated text for reviewing wrapping, block height, scrolling, and collapsing. The beginning and ending should remain distinguishable when evaluating middle-collapse behavior.`).join('\n\n'));
-user('Image referenced as an attachment-style file path:\n\n' + cwd + '/showcase/images/collapse-example.png');
+user('Image referenced as an attachment-style file path:\n\n' + cwd + '/showcase/fixtures/collapse-example.png');
 assistant('This example contains only the image file path as text, without embedded image data.');
-entry({type:'message',message:{role:'user',content:[{type:'text',text:'User message with an attached image: this collapse hides almost nothing.'},{type:'image',mimeType:'image/png',data:fs.readFileSync(new URL('./images/collapse-example.png', import.meta.url)).toString('base64')}],timestamp:Date.now()}});
+entry({type:'message',message:{role:'user',content:[{type:'text',text:'User message with an attached image: this collapse hides almost nothing.'},{type:'image',mimeType:'image/png',data:fs.readFileSync(new URL('./fixtures/collapse-example.png', import.meta.url)).toString('base64')}],timestamp:Date.now()}});
 assistant('This example tests an image attachment in a user message, separately from an image returned by read.');
 user('Read an image: screenshot of a near-threshold collapse');
 {
   const call = randomUUID();
-  assistant([{type:'toolCall',id:call,name:'read',arguments:{path:'showcase/images/collapse-example.png'}}], 'toolUse');
-  entry({type:'message',message:{role:'toolResult',toolCallId:call,toolName:'read',content:[{type:'text',text:'Read image file [image/png]'},{type:'image',mimeType:'image/png',data:fs.readFileSync(new URL('./images/collapse-example.png', import.meta.url)).toString('base64')}],isError:false,timestamp:Date.now()}});
+  assistant([{type:'toolCall',id:call,name:'read',arguments:{path:'showcase/fixtures/collapse-example.png'}}], 'toolUse');
+  entry({type:'message',message:{role:'toolResult',toolCallId:call,toolName:'read',content:[{type:'text',text:'Read image file [image/png]'},{type:'image',mimeType:'image/png',data:fs.readFileSync(new URL('./fixtures/collapse-example.png', import.meta.url)).toString('base64')}],isError:false,timestamp:Date.now()}});
 }
 assistant('The image above is the supplied example of a collapse control consuming the space it saves.');
 user('Read result');
