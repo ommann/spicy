@@ -2,14 +2,22 @@ import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { withDatabase } from '../packages/coding-agent/src/core/session-storage.ts';
 
-export interface UsageSample { observedAt: number; window: string; usedPercent: number; resetAt: number }
+import type { UsageSample } from '../shared/usage.ts';
+
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
 export function usageAccount(account: string) { return createHash('sha256').update(account).digest('hex'); }
-export function saveUsage(account: string, usage: any, observedAt = Date.now()) {
+export function saveUsage(account: string, usage: unknown, observedAt = Date.now()) {
   const samples: UsageSample[] = [];
-  for (const [window, key] of [['5-hour', 'primary_window'], ['weekly', 'secondary_window']]) {
-    const value = usage?.rate_limit?.[key];
-    if (!Number.isFinite(value?.used_percent) || value.used_percent < 0 || value.used_percent > 100 || !Number.isFinite(value?.reset_at)) continue;
-    samples.push({ observedAt, window, usedPercent: value.used_percent, resetAt: value.reset_at * 1000 });
+  const limits = record(record(usage).rate_limit);
+  for (const [usageWindow, key] of [['5-hour', 'primary_window'], ['weekly', 'secondary_window']] as const) {
+    const value = record(limits[key]);
+    const usedPercent = value.used_percent;
+    const resetAt = value.reset_at;
+    if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent) || usedPercent < 0 || usedPercent > 100
+      || typeof resetAt !== 'number' || !Number.isFinite(resetAt)) continue;
+    samples.push({ observedAt, window: usageWindow, usedPercent, resetAt: resetAt * 1000 });
   }
   if (!samples.length) return;
   withDatabase(process.cwd(), true, db => db.transaction(tx => {

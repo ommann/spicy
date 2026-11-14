@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { readUsage, saveUsage, usageAccount } from '../usage-history.ts';
-import { formatSchedule, projectUsage, usageDayBoundaries, usageSchedule, weeklyCalendarRange } from '../../frontend/src/usage-projection.ts';
+import { formatSchedule, projectUsage, usageDayBoundaries, usageSchedule, usageRate, weeklyCalendarRange } from '../../frontend/src/usage-projection.ts';
 
 test('usage snapshots persist with isolated accounts and validated windows', t => {
   const directory = mkdtempSync(join(tmpdir(), 'spicy-usage-'));
@@ -25,25 +25,40 @@ test('usage snapshots persist with isolated accounts and validated windows', t =
 
 test('schedule compares projected depletion with reset, not current linear budget', () => {
   const hour = 3600000;
-  const samples = [20, 40, 60].map((usedPercent, index) => ({ observedAt: index * hour, usedPercent, resetAt: 6 * hour, window: 'weekly' }));
-  assert.equal(usageSchedule(samples), -2 * hour);
-  assert.equal(usageSchedule(samples.map(sample => ({ ...sample, resetAt: 3 * hour }))), hour);
-  assert.equal(usageSchedule(samples.slice(0, 1)), null);
+  const samples = [25, 50, 75].map((usedPercent, index) => ({ observedAt: (index + 1) * hour, usedPercent, resetAt: 5 * hour, window: '5-hour' as const }));
+  assert.equal(usageSchedule(samples), -hour);
+  const slower = samples.map(sample => ({ ...sample, usedPercent: sample.usedPercent / 2 }));
+  assert.equal(usageSchedule(slower), 3 * hour);
   assert.equal(usageSchedule([]), null);
-  assert.equal(formatSchedule(90000000), 'Ahead of schedule: 1d 1h');
-  assert.equal(formatSchedule(-5400000), 'Behind schedule: 1h 30m');
+  assert.equal(formatSchedule(90000000), 'Behind schedule: 1d 1h');
+  assert.equal(formatSchedule(-5400000), 'Ahead of schedule: 1h 30m');
+  assert.equal(formatSchedule(0), 'On schedule');
+  assert.equal(formatSchedule(1000), 'On schedule');
+  assert.equal(formatSchedule(-1000), 'On schedule');
 });
 
 test('regression resists a one-point tick and includes flat observations', () => {
   const hour = 3600000;
-  const samples = [20, 24, 28, 32].map((usedPercent, index) => ({ observedAt: index * hour, usedPercent, resetAt: 7 * 24 * hour, window: 'weekly' }));
+  const samples = [4, 8, 12, 16].map((usedPercent, index) => ({ observedAt: (index + 1) * hour, usedPercent, resetAt: 7 * 24 * hour, window: 'weekly' as const }));
   const before = projectUsage(samples)!.at;
-  const after = projectUsage([...samples, { ...samples.at(-1)!, observedAt: 3 * hour + 60000, usedPercent: 33 }])!.at;
+  const after = projectUsage([...samples, { ...samples.at(-1)!, observedAt: 4 * hour + 60000, usedPercent: 17 }])!.at;
   assert.ok(Math.abs(after - before) < hour);
-  const flat = [...samples, { ...samples.at(-1)!, observedAt: 4 * hour }];
+  const flat = [...samples, { ...samples.at(-1)!, observedAt: 5 * hour }];
   assert.ok(projectUsage(flat)!.at > before);
-  assert.equal(projectUsage(samples.map(sample => ({ ...sample, usedPercent: 40 }))), null);
-  assert.equal(projectUsage(samples.map((sample, index) => ({ ...sample, usedPercent: index ? 21 : 20 }))), null);
+  assert.notEqual(projectUsage(samples.map(sample => ({ ...sample, usedPercent: 40 }))), null);
+  assert.equal(projectUsage(samples.map(sample => ({ ...sample, usedPercent: 1 }))), null);
+});
+
+test('100% boundary anchors both windows independently of calendar padding', () => {
+  const hour = 3600000;
+  for (const [window, duration] of [['5-hour', 5 * hour], ['weekly', 168 * hour]] as const) {
+    const start = new Date(2026, 10, 12, 3, 30).getTime();
+    const sample = { observedAt: start + duration / 2, usedPercent: 40, resetAt: start + duration, window };
+    const samples = [sample];
+    assert.ok(Math.abs(usageRate(samples)! - 80 / duration) < 1e-12);
+    assert.ok(Math.abs(usageSchedule(samples)! - duration / 4) < 1);
+    assert.deepEqual(samples, [sample]);
+  }
 });
 
 test('weekly calendar shows eight whole days unless reset is midnight', () => {
@@ -70,11 +85,12 @@ test('day sections follow local midnights within chart bounds', () => {
 
 test('simple projection stops at zero or reset and never crosses reset windows', () => {
   const hour = 3600000;
-  const sample = (observedAt: number, usedPercent: number, resetAt = 10 * hour) => ({ observedAt, usedPercent, resetAt, window: '5-hour' });
-  assert.deepEqual(projectUsage([sample(0, 20), sample(hour, 40), sample(2 * hour, 60)]), { at: 4 * hour, remaining: 0 });
-  assert.deepEqual(projectUsage([sample(0, 20, 3 * hour), sample(hour, 40, 3 * hour), sample(2 * hour, 60, 3 * hour)]), { at: 3 * hour, remaining: 20 });
+  const sample = (observedAt: number, usedPercent: number, resetAt = 5 * hour) => ({ observedAt, usedPercent, resetAt, window: '5-hour' as const });
+  assert.deepEqual(projectUsage([sample(hour, 25), sample(2 * hour, 50), sample(3 * hour, 75)]), { at: 4 * hour, remaining: 0 });
+  assert.deepEqual(projectUsage([sample(hour, 10), sample(2 * hour, 20), sample(3 * hour, 30)]), { at: 5 * hour, remaining: 50 });
   assert.equal(projectUsage([sample(1000, 20)]), null);
-  assert.equal(projectUsage([sample(1000, 20), sample(2000, 20)]), null);
-  assert.equal(projectUsage([sample(1000, 20), sample(2000, 10)]), null);
-  assert.equal(projectUsage([sample(1000, 20, 1500), sample(2000, 40)]), null);
+  assert.equal(projectUsage([sample(hour, 0), sample(2 * hour, 0)]), null);
+  assert.equal(projectUsage([sample(5 * hour, 40)]), null);
+  const current = [sample(hour, 10), sample(2 * hour, 20)];
+  assert.deepEqual(projectUsage([sample(0, 90, hour), ...current]), projectUsage(current));
 });
