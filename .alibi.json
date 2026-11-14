@@ -1,72 +1,189 @@
 {
   "eslint": {
-    "stage1": {
-      "rules": {
-        "no-debugger": "error",
-        "no-duplicate-imports": "error"
+    "stage1": [
+      {
+        "rules": {
+          "no-debugger": "error"
+        }
+      },
+      {
+        "rules": {
+          "no-duplicate-imports": "error"
+        }
       }
-    },
-    "noisy": {
-      "rules": {
-        "curly": "error",
-        "eqeqeq": "error"
+    ],
+    "noisy": [
+      {
+        "rules": {
+          "curly": "error"
+        }
+      },
+      {
+        "rules": {
+          "eqeqeq": "error"
+        }
       }
-    },
-    "stage2": {
-      "rules": {
-        "no-implicit-coercion": "error",
-        "no-nested-ternary": "error",
-        "consistent-return": "error",
-        "default-case": "error"
+    ],
+    "stage2": [
+      {
+        "rules": {
+          "no-implicit-coercion": "error"
+        }
+      },
+      {
+        "rules": {
+          "no-nested-ternary": "error"
+        }
+      },
+      {
+        "rules": {
+          "consistent-return": "error"
+        }
+      },
+      {
+        "rules": {
+          "default-case": "error"
+        }
       }
-    },
-    "stage3": {
-      "files": [
-        "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
-      ],
-      "rules": {
-        "solid/reactivity": "error",
-        "solid/no-destructure": "error",
-        "solid/components-return-once": "error",
-        "solid/no-react-deps": "error",
-        "solid/no-react-specific-props": "error",
-        "solid/prefer-for": "error",
-        "solid/style-prop": "error",
-        "solid/event-handlers": "error",
-        "solid/no-accessor-as-prop": "error",
-        "solid/prefer-classlist": "error",
-        "solid/no-unused-signal": "error",
-        "solid/no-write-in-pure-computation": "error",
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "solid-js",
-                "importNames": [
-                  "untrack",
-                  "createRoot",
-                  "runWithOwner"
-                ],
-                "message": "Reactive escape hatch: review tracking/ownership and disposal; document justified use with a narrow suppression."
-              },
-              {
-                "name": "solid-js/store",
-                "importNames": [
-                  "createMutable"
-                ],
-                "message": "Mutable-store escape hatch: review direct mutation; document justified use with a narrow suppression."
-              }
-            ]
-          }
-        ]
+    ],
+    "stage3": [
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/reactivity": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/no-destructure": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/components-return-once": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/no-react-deps": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/no-react-specific-props": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/prefer-for": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/style-prop": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/event-handlers": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/no-accessor-as-prop": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/prefer-classlist": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/no-unused-signal": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "solid/no-write-in-pure-computation": "error"
+        }
+      },
+      {
+        "files": [
+          "frontend/**/*.{js,jsx,ts,tsx,mjs,mts}"
+        ],
+        "rules": {
+          "no-restricted-imports": [
+            "error",
+            {
+              "paths": [
+                {
+                  "name": "solid-js",
+                  "importNames": [
+                    "untrack",
+                    "createRoot",
+                    "runWithOwner"
+                  ],
+                  "message": "Reactive escape hatch: review tracking/ownership and disposal; document justified use with a narrow suppression."
+                },
+                {
+                  "name": "solid-js/store",
+                  "importNames": [
+                    "createMutable"
+                  ],
+                  "message": "Mutable-store escape hatch: review direct mutation; document justified use with a narrow suppression."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "solid",
+        "settings": {}
       }
-    }
+    ]
   },
   "groups": [
     [
-      "npm:build",
-      "npm:lint",
+      "npm:build"
+    ],
+    [
       "npm:test"
     ],
     [
@@ -92,7 +209,7 @@
     "eslint:stage1": "agent",
     "eslint:noisy": "off",
     "eslint:stage2": "user",
-    "eslint:stage3": "user",
+    "eslint:stage3": "agent",
     "npm:lint": "agent",
     "never-applicable": "off",
     "stryker-mutation": "off",
@@ -109,7 +226,8 @@
     "ast-grep-no-sanitization-bypass",
     "ast-grep-no-dynamic-code",
     "ast-grep-no-discarded-router-navigation",
-    "ast-grep-no-clear-interval"
+    "ast-grep-no-clear-interval",
+    "npm:lint"
   ],
   "options": {
     "useNix": false

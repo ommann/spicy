@@ -1,3 +1,4 @@
+import { Show } from 'solid-js';
 import ColumnToolbar from './ColumnToolbar';
 
 interface Props {
@@ -14,6 +15,8 @@ export default function ChatToolbar(props: Props) {
   return <ColumnToolbar active={props.active} label="Trace navigation" hasContent={true} mode={props.mode}
     onMode={props.onMode} modeHref={props.modeHref} onModeLink={props.onModeLink}
     onOptions={props.onOptions}>
-    <span id="usage" role="status" classList={{ 'notification-error': props.notification.isError }}>{props.notification.message}</span>
+    <Show when={props.notification.isError && props.notification.message}>
+      <span id="usage" role="alert" class="notification-error">{props.notification.message}</span>
+    </Show>
   </ColumnToolbar>;
 }

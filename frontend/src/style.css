@@ -287,8 +287,7 @@
  */
 .app-toolbar {
   font: inherit;
-  display: grid;
-  grid-template-columns: max-content max-content max-content minmax(0, 1fr);
+  display: flex;
   align-items: center;
   position: fixed;
   inset: 0 0 auto;
@@ -308,7 +307,7 @@
 }
 
 .app-toolbar-actions {
-  grid-column: -2 / -1;
+  margin-left: auto;
   display: grid;
   align-items: center;
   justify-self: end;

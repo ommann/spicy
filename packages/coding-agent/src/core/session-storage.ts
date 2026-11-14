@@ -41,7 +41,7 @@ export function historyDatabasePath(directory: string): string {
     ? join(getAgentDir(), 'history.sqlite') : join(normalized, 'history.sqlite');
 }
 
-function withDatabase<T>(directory: string, write: boolean, run: (db: ReturnType<typeof drizzle>) => T): T | undefined {
+export function withDatabase<T>(directory: string, write: boolean, run: (db: ReturnType<typeof drizzle>) => T): T | undefined {
   const file = historyDatabasePath(directory);
   if (!write && !existsSync(file)) return undefined;
   if (write) mkdirSync(dirname(file), { recursive: true });
@@ -56,6 +56,11 @@ function withDatabase<T>(directory: string, write: boolean, run: (db: ReturnType
     if (write) {
       connection.pragma('journal_mode = WAL');
       connection.pragma('synchronous = FULL');
+      connection.exec(`CREATE TABLE IF NOT EXISTS usage_samples (
+        account TEXT NOT NULL, observed_at INTEGER NOT NULL, window TEXT NOT NULL,
+        used_percent REAL NOT NULL, reset_at INTEGER NOT NULL,
+        PRIMARY KEY(account, window, observed_at)
+      )`);
       if (version === 0) db.transaction(tx => {
         tx.run(sql`CREATE TABLE IF NOT EXISTS history_sessions (path TEXT PRIMARY KEY NOT NULL, directory TEXT NOT NULL, id TEXT NOT NULL, url_id TEXT, cwd TEXT NOT NULL, parent_session TEXT, timestamp TEXT NOT NULL, updated_at INTEGER NOT NULL, header TEXT NOT NULL)`);
         tx.run(sql`CREATE INDEX IF NOT EXISTS history_sessions_directory ON history_sessions(directory)`);

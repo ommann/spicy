@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { getCodexUsage } from './codex-usage.ts';
+import { readUsage, saveUsage, usageAccount } from './usage-history.ts';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 
 type Interaction = Parameters<ModelRuntime['login']>[2];
@@ -52,7 +53,21 @@ export class LoginBridge {
   }
 
   async codexUsage(signal?: AbortSignal) {
-    return getCodexUsage(await this.runtime(), { signal });
+    return getCodexUsage(await this.runtime(), { signal, capture: (account, usage) => saveUsage(usageAccount(account), usage) });
+  }
+
+  async usageHistory() {
+    const runtime = await this.runtime();
+    if ((await runtime.checkAuth('openai-codex'))?.type !== 'oauth') return [];
+    const resolved = await runtime.getAuth('openai-codex');
+    let account: unknown;
+    try {
+      const token = resolved?.auth?.apiKey;
+      if (!token) return [];
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+      account = payload['https://api.openai.com/auth']?.chatgpt_account_id;
+    } catch { return []; }
+    return typeof account === 'string' ? readUsage(usageAccount(account)) : [];
   }
 
   state(): Omit<LoginFlow['view'], 'id' | 'providerId'> & Partial<Pick<LoginFlow['view'], 'id' | 'providerId'>> {

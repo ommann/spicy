@@ -1,0 +1,13 @@
+.usage-view { width: min(64ch, 82vw); font: inherit; }
+.usage-window { padding-block: 1lh; }
+.usage-window header { display: flex; align-items: baseline; justify-content: space-between; gap: 1ch; white-space: nowrap; }
+.usage-window strong { font-weight: normal; }
+.usage-muted { color: var(--muted); }
+.usage-view svg { display: block; width: 100%; overflow: visible; fill: currentColor; }
+.usage-view svg text { font: 10px monospace; fill: var(--muted); }
+.usage-grid { stroke: var(--muted); stroke-opacity: .25; stroke-width: 1; }
+.usage-actual, .usage-projected { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.usage-projected { stroke-dasharray: 5 5; }
+.usage-reset { stroke: currentColor; stroke-width: 1; }
+.usage-schedule { border-top: 1px solid var(--muted); padding-top: 1lh; }
+button.composer-context { font: inherit; padding: 0; border: 0; background: none; cursor: pointer; }

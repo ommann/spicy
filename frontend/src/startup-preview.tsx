@@ -1,6 +1,7 @@
 import { For, createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import Navigation, { NavigationLinksContext } from './Navigation';
+import Navigation from './Navigation';
+import { NavigationLinksContext } from './navigation-context';
 import MessageComposer from './MessageComposer';
 import Input from './Input';
 import AgentHealth from './AgentHealth';

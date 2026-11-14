@@ -10,7 +10,8 @@ const runtime = {
 
 test('fetches account usage like Codex without opting into Reserve', async () => {
   const usage = { rate_limit: { primary_window: { used_percent: 42, reset_at: 123 } } };
-  const result = await getCodexUsage(runtime, { fetch: async (url, options) => {
+  let captured;
+  const result = await getCodexUsage(runtime, { capture: (account, value) => { captured = { account, value }; }, fetch: async (url, options) => {
     assert.equal(url, 'https://chatgpt.com/backend-api/wham/usage');
     assert.deepEqual(options.headers, { Authorization: `Bearer ${token}`, 'ChatGPT-Account-Id': 'account' });
     assert.equal(options.redirect, 'error');
@@ -18,6 +19,7 @@ test('fetches account usage like Codex without opting into Reserve', async () =>
     return Response.json(usage);
   } });
   assert.deepEqual(result, usage);
+  assert.deepEqual(captured, { account: 'account', value: usage });
 });
 
 test('does not request usage for API-key or missing authentication', async () => {

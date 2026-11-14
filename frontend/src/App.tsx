@@ -59,7 +59,7 @@ import { chatArrowCursor } from './chat-cursor';
 import { streamingContent } from './streaming-content';
 import type { AgentHealthStatus } from './AgentHealth';
 import { codeLinewrap } from './code-linewrap';
-import { NavigationLinksContext } from './Navigation';
+import { NavigationLinksContext } from './navigation-context';
 import { SAVED_SYSTEM_PROMPT_ENTRY, type SystemPromptBuilder, systemPromptDocumentFromState, systemPromptOutputMatches, systemPromptBuilderForOutput } from '../../packages/coding-agent/src/core/system-prompt-document';
 
 const empty: Snapshot = {

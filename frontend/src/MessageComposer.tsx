@@ -1,5 +1,6 @@
 import { For, Show, createEffect, createSignal, on, onCleanup, onMount, type JSX } from 'solid-js';
 import ScrollableTextarea from './ScrollableTextarea';
+import Usage from './Usage';
 import { api } from './api';
 import type { AgentHealthStatus } from './AgentHealth';
 import './message-composer.css';
@@ -60,6 +61,7 @@ export default function MessageComposer(props: Props) {
     if (props.onImagesChange) props.onImagesChange(next);
     else updateLocalImages(next);
   }
+  const [usageOpen, setUsageOpen] = createSignal(false);
   const [limitHint, setLimitHint] = createSignal('');
   const [limitsHovered, setLimitsHovered] = createSignal(false);
   let limitsFetchedAt = 0;
@@ -163,10 +165,11 @@ export default function MessageComposer(props: Props) {
         if (event.key === 'Escape') { event.preventDefault(); props.onAbort?.(); }
       }} />
     <Show when={formatContextWindow(props.contextUsage)}>{status =>
-      <span class="composer-context" aria-label={`Context window: ${status()}`}
+      <button type="button" class="composer-context" aria-label={`Context window: ${status()}. Open usage`} onClick={() => setUsageOpen(true)}
         onMouseEnter={() => { setLimitsHovered(true); void loadLimits(); }}
-        onMouseLeave={() => setLimitsHovered(false)}>{limitsHovered() && limitHint() ? limitHint() : status()}</span>
+        onMouseLeave={() => setLimitsHovered(false)}>{limitsHovered() && limitHint() ? limitHint() : status()}</button>
     }</Show>
+    <Show when={usageOpen()}><Usage onClose={() => setUsageOpen(false)} /></Show>
     <div ref={measure} class="composer-measure" aria-hidden="true">{props.value + '\u200b'}</div>
     </div>
   </div>;
