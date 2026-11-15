@@ -332,8 +332,9 @@ export default function App(props: ParentProps) {
       if (labelSource) {
         const destination = composerLanes().find(lane => lane.path.includes(record.rootId));
         if (destination) {
-          try { transferBranchLabel(labelSource, destination.key); }
-          catch { setNotification({ message: 'Could not transfer the branch label in LocalStorage.', isError: true }); }
+          void transferBranchLabel(labelSource, destination.key).catch(() => {
+            setNotification({ message: 'Could not transfer the branch label.', isError: true });
+          });
         }
       }
       if (record.type === 'history_root' && id === selectedAgentId()) {

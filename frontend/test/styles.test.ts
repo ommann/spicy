@@ -26,8 +26,13 @@ test('CSS variables have defaults or explicit fallbacks', async () => {
 });
 
 test('theme loads before component styles and defines the complete ANSI palette', async () => {
-  const css = await readFile('src/style.css', 'utf8');
-  assert.ok(css.startsWith('@import "./theme.css";'));
+  const html = await readFile('index.html', 'utf8');
+  assert.ok(html.includes('<meta name="color-scheme" content="dark"/>'));
+  const stylesheet = html.indexOf('<link rel="stylesheet" href="/src/theme.css"/>');
+  assert.ok(stylesheet !== -1 && stylesheet < html.indexOf('<script type="module"'));
+  const themeRoot = postcss.parse(await readFile('src/theme.css', 'utf8'));
+  assert.ok(themeRoot.nodes.some(node => node.type === 'rule' && node.selector === ':root'
+    && node.nodes.some(declaration => declaration.prop === 'background' && declaration.value === 'var(--background)')));
   const theme = postcss.parse(await readFile('src/theme.css', 'utf8'));
   const tokens = new Set();
   theme.walkDecls(declaration => tokens.add(declaration.prop));

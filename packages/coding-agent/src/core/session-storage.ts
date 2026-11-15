@@ -32,6 +32,39 @@ export const historyEntries = sqliteTable('history_entries', {
   uniqueIndex('history_entries_order').on(table.sessionPath, table.sequence),
   index('history_entries_parent').on(table.sessionPath, table.parentId)]);
 
+export const branchLabels = sqliteTable('branch_labels', {
+  key: text('key').primaryKey(),
+  text: text('text').notNull(),
+  color: text('color').notNull(),
+});
+export const previewRevision = sqliteTable('preview_revision', {
+  id: integer('id').primaryKey(),
+  revision: integer('revision').notNull(),
+});
+export const previewCache = sqliteTable('preview_cache', {
+  key: text('key').primaryKey(),
+  revision: integer('revision').notNull(),
+  payload: text('payload').notNull(),
+});
+
+export const sessionPreviewRevisions = sqliteTable('session_preview_revisions', {
+  sessionPath: text('session_path').primaryKey(),
+  revision: integer('revision').notNull(),
+});
+export const treePreviewCache = sqliteTable('tree_preview_cache', {
+  key: text('key').primaryKey(),
+  signature: text('signature').notNull(),
+  payload: text('payload').notNull(),
+});
+
+export function invalidatePreviews(db: Pick<ReturnType<typeof drizzle>, 'update' | 'insert'>, sessionPath?: string) {
+  if (sessionPath) db.insert(sessionPreviewRevisions).values({ sessionPath, revision: 1 })
+    .onConflictDoUpdate({ target: sessionPreviewRevisions.sessionPath,
+      set: { revision: sql`${sessionPreviewRevisions.revision} + 1` } }).run();
+  db.update(previewRevision).set({ revision: sql`${previewRevision.revision} + 1` })
+    .where(eq(previewRevision.id, 1)).run();
+}
+
 /** A configured store contains all its chats, never a database per chat. */
 export function historyDatabasePath(directory: string): string {
   if (process.env.SPICY_HISTORY_DB) return resolve(process.env.SPICY_HISTORY_DB);
@@ -56,6 +89,7 @@ export function withDatabase<T>(directory: string, write: boolean, run: (db: Ret
     if (write) {
       connection.pragma('journal_mode = WAL');
       connection.pragma('synchronous = FULL');
+      connection.exec(`CREATE TABLE IF NOT EXISTS branch_labels (key TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, color TEXT NOT NULL)`);
       connection.exec(`CREATE TABLE IF NOT EXISTS usage_samples (
         account TEXT NOT NULL, observed_at INTEGER NOT NULL, window TEXT NOT NULL,
         used_percent REAL NOT NULL, reset_at INTEGER NOT NULL,
@@ -92,6 +126,14 @@ export function withDatabase<T>(directory: string, write: boolean, run: (db: Ret
           FROM history_previews p`);
         tx.run(sql`PRAGMA user_version = 1`);
       }, { behavior: 'immediate' });
+      // Schema setup only; cache reads/writes use the typed tables above.
+      connection.exec(`
+        CREATE TABLE IF NOT EXISTS session_preview_revisions (session_path TEXT PRIMARY KEY NOT NULL, revision INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS tree_preview_cache (key TEXT PRIMARY KEY NOT NULL, signature TEXT NOT NULL, payload TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS preview_revision (id INTEGER PRIMARY KEY CHECK (id = 1), revision INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS preview_cache (key TEXT PRIMARY KEY NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL);
+      `);
+      db.insert(previewRevision).values({ id: 1, revision: 0 }).onConflictDoNothing().run();
     }
     if (version === 0 && !write) throw new Error(`Uninitialized history database: ${file}`);
     return run(db);
@@ -141,6 +183,7 @@ export function writeStoredHistory(sessionPath: string, entries: FileEntry[], ex
       updatedAt: Date.now(), header: JSON.stringify(header) }).onConflictDoUpdate({ target: historySessions.path,
         set: { id: header.id, urlId: header.urlId, cwd: header.cwd ?? '', parentSession: header.parentSession ?? null,
           timestamp: header.timestamp, updatedAt: Date.now(), header: JSON.stringify(header) } }).run();
+    invalidatePreviews(tx, key);
     let sequence = 0;
     for (const entry of entries) {
       if (entry.type === 'session') continue;
@@ -181,5 +224,6 @@ export function appendStoredEntry(sessionPath: string, entry: Exclude<FileEntry,
     tx.insert(historyEntries).values({ sessionPath: key, sequence, id: entry.id, parentId: entry.parentId,
       type: entry.type, timestamp: entry.timestamp, payload: serializeSessionEntry(entry, key) }).run();
     tx.update(historySessions).set({ updatedAt: Date.now() }).where(eq(historySessions.path, key)).run();
+    invalidatePreviews(tx, key);
   }, { behavior: 'immediate' }));
 }

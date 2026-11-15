@@ -1,6 +1,8 @@
 /* Default theme. Component styles consume semantic tokens, not palette literals. */
 :root {
   color-scheme: dark;
+  background: var(--background);
+  color: var(--text);
   --background: #181a1a;
   --rsvp-background: var(--background);
   --rsvp-text: #fff;

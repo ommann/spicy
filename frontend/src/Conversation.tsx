@@ -13,7 +13,7 @@ import { setViewMode } from './view-mode';
 import type { ConversationMode, ConversationViewState } from './conversation-view-state';
 import { ChatEntryPart } from './ChatContent';
 import MessageComposer from './MessageComposer';
-import { branchLabel, setBranchLabel } from './branch-labels';
+import { branchLabel, setBranchLabel, loadBranchLabels } from './branch-labels';
 import BranchLabel from './BranchLabel';
 import './branch-labels.css';
 import type { ContextWindowUsage } from './context-window';
@@ -130,6 +130,7 @@ export function ConversationCard(props: { id: string; node: Wire; position: Wire
 }
 
 export default function Conversation(props: Props) {
+  onMount(() => { void loadBranchLabels().catch(error => console.error('Could not load branch labels:', error instanceof Error ? error.message : String(error))); });
   return <Show when={props.viewState} keyed>{state =>
     <Show when={props.mode} keyed>{initialMode => createConversation(props, state, initialMode)}</Show>
   }</Show>;
@@ -402,8 +403,8 @@ function createConversation(props: Props, state: ConversationViewState, initialM
         window.alert('Use /label TEXT blue (text and a color name), or /label clear. No attachments.');
         return false;
       }
-      try { setBranchLabel(key, clear ? undefined : { text: label, color }); }
-      catch { window.alert('Could not save the branch label to LocalStorage.'); return false; }
+      try { await setBranchLabel(key, clear ? undefined : { text: label, color }); }
+      catch { window.alert('Could not save the branch label.'); return false; }
       update(key, '');
       return true;
     }

@@ -1,30 +1,20 @@
 import { createSignal } from 'solid-js';
+import { api } from './api';
+import type { BranchLabel } from '../../shared/branch-labels.ts';
+export type { BranchLabel } from '../../shared/branch-labels.ts';
 
-export type BranchLabel = { text: string; color: string };
-const storageKey = 'spicy.branch-labels.v1';
-function load(): Record<string, BranchLabel> {
-  try {
-    const stored = JSON.parse(localStorage.getItem(storageKey) || '{}');
-    return Object.fromEntries(Object.entries(stored).filter((entry): entry is [string, BranchLabel] => {
-      const value = entry[1] as BranchLabel | null;
-      return !!value && typeof value.text === 'string' && value.text.length > 0
-        && typeof value.color === 'string' && /^[a-z]+$/i.test(value.color) && CSS.supports('color', value.color);
-    }));
-  } catch { return {}; }
-}
-const [labels, setLabels] = createSignal(load());
+const [labels, setLabels] = createSignal<Record<string, BranchLabel>>({});
 export const branchLabel = (key: string) => labels()[key];
-export function transferBranchLabel(from: string, to: string) {
-  if (from === to || !labels()[from]) return;
-  const next = { ...labels(), [to]: labels()[from] };
-  delete next[from];
-  localStorage.setItem(storageKey, JSON.stringify(next));
-  setLabels(next);
+export async function loadBranchLabels() {
+  setLabels(await api.branchLabels.list({}));
 }
-export function setBranchLabel(key: string, label?: BranchLabel) {
-  const next = { ...labels() };
-  if (label) next[key] = label;
-  else delete next[key];
-  localStorage.setItem(storageKey, JSON.stringify(next));
-  setLabels(next);
+async function change(input: Parameters<typeof api.branchLabels.change>[0]) {
+  const { token } = await api.info({});
+  setLabels(await api.branchLabels.change(input, { context: { token } }));
+}
+export async function transferBranchLabel(from: string, to: string) {
+  if (from !== to && labels()[from]) await change({ key: to, from });
+}
+export async function setBranchLabel(key: string, label?: BranchLabel) {
+  await change({ key, label });
 }

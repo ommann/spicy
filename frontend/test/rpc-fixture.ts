@@ -12,6 +12,7 @@ export function createRpcFixture(router) {
     return next();
   });
   const handler = new RPCHandler(recorded.router({
+    branchLabels: { list: os.handler(() => ({})) },
     ...router,
     events: os.handler(async function* ({ input, signal }) {
       const publisher = new EventPublisher({ maxBufferedEvents: Infinity });

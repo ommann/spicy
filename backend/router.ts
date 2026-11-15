@@ -4,7 +4,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { os as rpc, ORPCError } from '@orpc/server';
 import { agentEvents } from './agent-events.ts';
 import { createOperations, OperationError } from './operations.ts';
-import { agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
+import { readBranchLabels, changeBranchLabel } from './branch-labels.ts';
+import { branchLabelInput, agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
 
 export function createRouter({ agents, login, cwd, managed, token, signal: shutdownSignal }: { agents: AgentRegistry; login: LoginBridge; cwd: string; managed: string; token: string; signal?: AbortSignal }) {
   const operations = createOperations({ agents, cwd, managed });
@@ -26,6 +27,10 @@ export function createRouter({ agents, login, cwd, managed, token, signal: shutd
   });
   return {
     info: procedure.input(agentInput).handler(({ input }) => ({ token, ...operations.info(input) })),
+    branchLabels: {
+      list: procedure.input(emptyInput).handler(() => readBranchLabels(managed)),
+      change: mutation.input(branchLabelInput).handler(({ input }) => { changeBranchLabel(managed, input); return readBranchLabels(managed); }),
+    },
     histories: procedure.input(emptyInput).handler(() => operations.histories()),
     sessions: procedure.input(sessionsInput).handler(({ input }) => operations.sessions(input)),
     session: procedure.input(sessionInput).handler(({ input }) => operations.session(input)),
