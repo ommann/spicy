@@ -27,19 +27,21 @@
 
 .rsvp-word {
   display: grid;
-  grid-template-columns: calc(50% - 2ch) max-content 1fr;
+  /* Equal side tracks keep the focal letter's center fixed at any glyph width. */
+  grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
   align-items: baseline;
-  font-family: monospace;
-  font-size: clamp(36px, 6vw, 72px);
-  line-height: 1.1;
+  font-family: var(--rsvp-font-family);
+  font-size: var(--rsvp-font-size);
+  font-weight: var(--rsvp-font-weight);
+  line-height: var(--rsvp-line-height);
   white-space: pre;
-  transform: translateX(-0.5ch);
+  transform: translate(var(--rsvp-focal-offset), var(--rsvp-text-offset-y));
 }
 
 .rsvp-start-progress {
   position: absolute;
-  bottom: -3px;
-  height: 3px;
+  bottom: calc(-1 * var(--rsvp-underline-gap));
+  height: var(--rsvp-underline-thickness);
   background: var(--rsvp-focus);
   transform-origin: left;
   animation: rsvp-countdown var(--rsvp-start-delay) linear forwards;
@@ -58,6 +60,21 @@
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
+
+.rsvp-code { color: var(--purple); }
+.rsvp-focus .rsvp-code { color: inherit; }
+.rsvp-bold { font-weight: var(--rsvp-bold-weight); }
+.rsvp-italic { font-style: italic; }
+.rsvp-strike { text-decoration: line-through; }
+
+.rsvp-centered .rsvp-word {
+  display: flex;
+  justify-content: center;
+  transform: translateY(var(--rsvp-text-offset-y));
+}
+
+.rsvp-no-focus .rsvp-focus { color: inherit; }
+.rsvp-no-focus .rsvp-focus .rsvp-code { color: var(--purple); }
 
 .rsvp-before { text-align: right; }
 .rsvp-focus {

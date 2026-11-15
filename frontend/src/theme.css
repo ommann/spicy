@@ -2,7 +2,7 @@
 :root {
   color-scheme: dark;
   --background: #181a1a;
-  --rsvp-background: #000;
+  --rsvp-background: var(--background);
   --rsvp-text: #fff;
   --rsvp-focus: #f00;
   --rsvp-overlay: rgb(0 0 0 / 70%);
