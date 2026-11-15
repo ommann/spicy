@@ -28,7 +28,7 @@ const replaceEditSchema = Type.Object(
 	{},
 );
 
-const editSchema = Type.Object(
+export const editSchema = Type.Object(
 	{
 		path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
 		edits: Type.Array(replaceEditSchema, {
@@ -208,9 +208,11 @@ export function createEditToolDefinition(
 						},
 					],
 					details: {
-						diff: diffResult.diff, patch, firstChangedLine: diffResult.firstChangedLine,
-						oldLineCount: baseContent ? baseContent.replace(/\n$/, '').split('\n').length : 0,
-						newLineCount: newContent ? newContent.replace(/\n$/, '').split('\n').length : 0,
+						diff: diffResult.diff,
+						patch,
+						firstChangedLine: diffResult.firstChangedLine,
+						oldLineCount: baseContent ? baseContent.replace(/\n$/, "").split("\n").length : 0,
+						newLineCount: newContent ? newContent.replace(/\n$/, "").split("\n").length : 0,
 					},
 				};
 			});

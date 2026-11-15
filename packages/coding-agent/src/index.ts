@@ -319,6 +319,12 @@ export {
 } from "./core/skills.ts";
 export { createSyntheticSourceInfo } from "./core/source-info.ts";
 export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./core/tools/edit-diff.ts";
+export {
+	createEditManyTool,
+	createEditManyToolDefinition,
+	type EditManyToolDetails,
+	type EditManyToolOptions,
+} from "./core/tools/edit-many.ts";
 // Tools
 export {
 	type BashOperations,

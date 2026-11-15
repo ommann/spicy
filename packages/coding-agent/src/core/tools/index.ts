@@ -17,6 +17,12 @@ export {
 	type EditToolInput,
 	type EditToolOptions,
 } from "./edit.ts";
+export {
+	createEditManyTool,
+	createEditManyToolDefinition,
+	type EditManyToolDetails,
+	type EditManyToolOptions,
+} from "./edit-many.ts";
 export { withFileMutationQueue } from "./file-mutation-queue.ts";
 export {
 	createFindTool,

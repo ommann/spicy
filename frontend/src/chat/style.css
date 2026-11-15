@@ -76,6 +76,13 @@ code {
   white-space: nowrap;
   overflow: hidden;
 }
+.edit-many {
+  display: grid;
+  gap: 1lh;
+}
+.edit-many > .tool {
+  margin-bottom: 0;
+}
 .tool strong {
   color: var(--tool-title-text);
 }

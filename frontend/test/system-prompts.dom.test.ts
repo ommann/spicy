@@ -1166,6 +1166,29 @@ test('image preview navigates its group with buttons and arrow keys and preserve
     assert.equal(closed, true);
   } finally { dispose(); }
 });
+test('edit_many renders each file using the normal edit diff and error presentation', () => {
+  const dispose = components.mountChatContent(root, [
+    { id: 'assistant', type: 'message', message: { role: 'assistant', content: [
+      { type: 'toolCall', id: 'many-edits', name: 'edit_many', arguments: { files: [
+        { path: 'a.ts', edits: [{ oldText: 'old', newText: 'new' }] },
+        { path: 'b.ts', edits: [{ oldText: 'old', newText: 'new' }] },
+      ] } },
+    ] } },
+    { id: 'result', type: 'message', message: { role: 'toolResult', toolCallId: 'many-edits', details: { files: [
+      { path: 'a.ts', details: { patch: '--- a.ts\n+++ a.ts\n@@ -1 +1 @@\n-old\n+new\n' }, content: [{ type: 'text', text: 'Edited' }] },
+      { path: 'b.ts', isError: true, content: [{ type: 'text', text: 'Text not found' }] },
+    ] } } },
+  ]);
+  try {
+    assert.equal(root.querySelectorAll('.edit-many .tool').length, 2);
+    assert.equal(root.querySelectorAll('.edit-many .diff-view').length, 1);
+    assert.equal(root.querySelectorAll('.edit-many .tool-error').length, 1);
+    assert.match(root.textContent, /a.ts/);
+    assert.match(root.textContent, /Text not found/);
+    assert.doesNotMatch(root.textContent, /"files"/);
+  } finally { dispose(); }
+});
+
 test('single image preview has no navigation buttons', () => {
   const dispose = components.mountImagePreview(root, { src: 'only.png', alt: 'Only', caption: '', opener: document.createElement('button') }, () => {});
   try { assert.equal(root.querySelectorAll('[aria-label="Previous image"], [aria-label="Next image"]').length, 0); }

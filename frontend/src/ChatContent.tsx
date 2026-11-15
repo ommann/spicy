@@ -228,7 +228,8 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
     if (image) openImage?.({ src: `data:${image.mimeType};base64,${image.data}`, alt: label(), caption: args().path || '', opener });
   }
 
-  return <section ref={useContext(SectionContext)} class="tool" classList={{ 'tool-error': !!props.result?.isError, 'compact-read': !!compactRead(), 'bash-tool': isBash() }} data-entry-id={props.entryId}>
+  const editFiles = () => (props.call.name === 'edit_many' || props.call.name === 'edit') && Array.isArray(args().files) ? args().files : [];
+  return <Show when={editFiles().length} fallback={<section ref={useContext(SectionContext)} class="tool" classList={{ 'tool-error': !!props.result?.isError, 'compact-read': !!compactRead(), 'bash-tool': isBash() }} data-entry-id={props.entryId}>
     <div class="tool-title" classList={{ 'image-read-link': imageRead() }} tabIndex={imageRead() ? 0 : undefined}
       onClick={event => { if (imageRead()) preview(event.currentTarget); }}
       onKeyDown={event => {
@@ -256,7 +257,14 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
       }><DiffView files={editDiff()} preview expandRequest={props.expandRequest} /></Show>
     </Show>
     <Images blocks={props.result?.content || []} caption={args().path || ''} />
-  </section>;
+  </section>}>
+    <div class="edit-many" data-entry-id={props.entryId}><For each={editFiles()}>{(file, index) => {
+      const result = () => props.result?.details?.files?.[index()];
+      return <Tool call={{ ...props.call, name: 'edit', arguments: file }}
+        result={result() || (props.result ? { isError: true, content: props.result.content } : undefined)}
+        entryId={props.entryId} expandRequest={props.expandRequest} />;
+    }}</For></div>
+  </Show>;
 }
 
 function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest; bodyClass?: string; actions?: JSX.Element }) {
