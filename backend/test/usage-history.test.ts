@@ -18,9 +18,13 @@ test('usage snapshots persist with isolated accounts and validated windows', t =
   const account = usageAccount('usage-test');
   saveUsage(account, { rate_limit: { primary_window: { used_percent: 20, reset_at: 100 }, secondary_window: { used_percent: 30, reset_at: 200 } } }, 1000);
   saveUsage(account, { rate_limit: { primary_window: { used_percent: 40, reset_at: 100 }, secondary_window: { used_percent: -1, reset_at: 200 } } }, 2000);
-  assert.equal(readUsage(account).length, 3);
+  // Unstarted windows report moving resets at 100% remaining; do not persist them.
+  saveUsage(account, { rate_limit: { primary_window: { used_percent: 0, reset_at: 300 }, secondary_window: { used_percent: 0, reset_at: 400 } } }, 3000);
+  saveUsage(account, { rate_limit: { primary_window: { used_percent: 0, reset_at: 500 }, secondary_window: { used_percent: 0.1, reset_at: 400 } } }, 4000);
+  assert.equal(readUsage(account).length, 4);
+  assert.equal(readUsage(account).at(-1)?.usedPercent, 0.1);
   assert.deepEqual(readUsage(usageAccount('other-account')), []);
-  assert.equal(readUsage(account).at(-1)?.usedPercent, 40);
+  assert.equal(readUsage(account)[2]?.usedPercent, 40);
 });
 
 test('schedule compares projected depletion with reset, not current linear budget', () => {
