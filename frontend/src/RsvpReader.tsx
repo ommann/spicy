@@ -1,42 +1,50 @@
-import { createContext, createSignal, onCleanup, Show } from 'solid-js';
+import { createContext, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { Lexer, type Token } from 'marked';
+import { rsvpText } from './rsvp-text';
 import { RsvpEngine, TextTokenizer } from '@rsvp-engine/core';
 import { createKeyboardShortcuts } from './keyboard-shortcuts';
 import './rsvp-reader.css';
 
-export const RsvpTarget = createContext<(text?: () => string) => void>();
+const START_DELAY_MS = 500;
 
-// Consume Markdown tokens as data, never recover text from rendered DOM.
-function prose(source: string): string {
-  function text(tokens: Token[]): string {
-    return tokens.map(token => {
-      if (token.type === 'space' || token.type === 'hr') return '\n';
-      if (token.type === 'list') return token.items.map((item: { tokens: Token[] }) => text(item.tokens)).join('\n');
-      if (token.type === 'table') return [token.header, ...token.rows].map(row => row.map((cell: { tokens: Token[] }) => text(cell.tokens)).join(' ')).join('\n');
-      if (token.type === 'br') return '\n';
-      if ('tokens' in token && Array.isArray(token.tokens)) return text(token.tokens);
-      if ('text' in token && typeof token.text === 'string') return token.text;
-      return '';
-    }).join('\n');
-  }
-  return text(Lexer.lex(source));
-}
+export const RsvpTarget = createContext<(text?: () => string) => void>();
 
 export default function RsvpReader(props: { active: boolean; latest: () => string; target: () => string }) {
   const [open, setOpen] = createSignal(false);
   const [showSpeed, setShowSpeed] = createSignal(false);
+  const [starting, setStarting] = createSignal(0);
+  let startSequence = 0;
   let speedTimer: ReturnType<typeof setTimeout> | undefined;
   let startTimer: ReturnType<typeof setTimeout> | undefined;
-  const engine = new RsvpEngine({ tokenizer: new TextTokenizer(), wpm: 300 });
+  const engine = new RsvpEngine({ tokenizer: new TextTokenizer(), wpm: 400 });
   const [snapshot, setSnapshot] = createSignal(engine.getSnapshot());
   const unsubscribe = engine.subscribe(value => setSnapshot(value));
   const word = () => snapshot().currentItem?.value ?? '';
   const pivot = () => snapshot().currentItem?.ovpIndex ?? 0;
   const focal = () => Array.from(word().slice(pivot()))[0] ?? '';
-  function close() {
+  function cancelStart() {
     clearTimeout(startTimer);
     startTimer = undefined;
+    setStarting(0);
+  }
+  function measureUnderline(line: HTMLSpanElement) {
+    onMount(() => {
+      const focus = line.parentElement!;
+      const before = focus.previousElementSibling!;
+      const context = document.createElement('canvas').getContext('2d');
+      if (!context) return;
+      context.font = getComputedStyle(focus).font;
+      const metrics = context.measureText(word());
+      // Measure only the leading text, excluding the countdown line itself.
+      const range = document.createRange();
+      range.selectNodeContents(before);
+      const start = before.textContent ? range.getBoundingClientRect().left : focus.getBoundingClientRect().left;
+      line.style.width = `${Math.max(0, metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight)}px`;
+      line.style.left = `${start - focus.getBoundingClientRect().left - metrics.actualBoundingBoxLeft}px`;
+    });
+  }
+  function close() {
+    cancelStart();
     if (engine.state === 'PLAYING') engine.pause();
     setOpen(false);
     clearTimeout(speedTimer);
@@ -44,16 +52,14 @@ export default function RsvpReader(props: { active: boolean; latest: () => strin
   }
   function toggle() {
     if (startTimer !== undefined) {
-      clearTimeout(startTimer);
-      startTimer = undefined;
+      cancelStart();
       return;
     }
     if (engine.state === 'PLAYING') engine.pause();
     else if (engine.totalItems) engine.play();
   }
   function seek(offset: number) {
-    clearTimeout(startTimer);
-    startTimer = undefined;
+    cancelStart();
     if (!engine.totalItems) return;
     if (engine.state === 'PLAYING') engine.pause();
     engine.seek(Math.max(0, Math.min(engine.totalItems - 1, engine.currentIndex + offset)));
@@ -65,18 +71,19 @@ export default function RsvpReader(props: { active: boolean; latest: () => strin
     speedTimer = setTimeout(() => setShowSpeed(false), 1200);
   }
   createKeyboardShortcuts({ enabled: () => props.active, codes: ['KeyR'], allowInEditor: true, onKey: () => {
-    const source = prose(props.target() || props.latest());
+    const source = rsvpText(props.target() || props.latest());
     if (!source.trim()) return;
-    clearTimeout(startTimer);
-    startTimer = undefined;
+    cancelStart();
     if (engine.state === 'PLAYING') engine.pause();
     engine.load(source);
     if (!engine.totalItems) return;
     setOpen(true);
+    setStarting(++startSequence);
     startTimer = setTimeout(() => {
       startTimer = undefined;
+      setStarting(0);
       engine.play();
-    }, 1000);
+    }, START_DELAY_MS);
   } });
   function key(event: KeyboardEvent) {
     if (event.code === 'Escape') { close(); return; }
@@ -97,7 +104,7 @@ export default function RsvpReader(props: { active: boolean; latest: () => strin
   onCleanup(() => { clearTimeout(startTimer); clearTimeout(speedTimer); unsubscribe(); engine.destroy(); });
   return <Portal><Show when={open()}><div class="rsvp-overlay" onClick={close}><div class="rsvp-reader" aria-label="Speed reader" onClick={event => event.stopPropagation()}>
       <div class="rsvp-stage" aria-hidden="true">
-        <div class="rsvp-word"><span class="rsvp-before">{word().slice(0, pivot())}</span><span class="rsvp-focus">{focal()}</span><span class="rsvp-after">{word().slice(pivot() + focal().length)}</span></div>
+        <div class="rsvp-word"><span class="rsvp-before">{word().slice(0, pivot())}</span><span class="rsvp-focus">{focal()}<Show when={starting()} keyed>{() => <span ref={measureUnderline} class="rsvp-start-progress" aria-hidden="true" style={{ '--rsvp-start-delay': `${START_DELAY_MS}ms` }} />}</Show></span><span class="rsvp-after">{word().slice(pivot() + focal().length)}</span></div>
       </div>
       <Show when={showSpeed()}><span class="rsvp-speed">{snapshot().wpm} WPM</span></Show>
     </div></div></Show></Portal>;

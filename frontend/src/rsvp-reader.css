@@ -36,6 +36,20 @@
   transform: translateX(-0.5ch);
 }
 
+.rsvp-start-progress {
+  position: absolute;
+  bottom: -3px;
+  height: 3px;
+  background: var(--rsvp-focus);
+  transform-origin: left;
+  animation: rsvp-countdown var(--rsvp-start-delay) linear forwards;
+}
+
+@keyframes rsvp-countdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
 .rsvp-speed {
   position: absolute;
   right: 1ch;
@@ -46,4 +60,7 @@
 }
 
 .rsvp-before { text-align: right; }
-.rsvp-focus { color: var(--rsvp-focus); }
+.rsvp-focus {
+  position: relative;
+  color: var(--rsvp-focus);
+}
