@@ -50,6 +50,7 @@ export {
 	type ReadToolInput,
 	type ReadToolOptions,
 } from "./read.ts";
+export { createReadManyTool, createReadManyToolDefinition, type ReadManyToolOptions } from "./read-many.ts";
 export {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,

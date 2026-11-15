@@ -277,12 +277,12 @@ export {
 	type CustomMessageEntry,
 	type FileEntry,
 	getLatestCompactionEntry,
+	loadEntriesFromFile,
 	type ModelChangeEntry,
 	migrateSessionEntries,
 	type NewSessionOptions,
 	type ProjectedSessionEntry,
 	parseSessionEntries,
-	loadEntriesFromFile,
 	type SessionContext,
 	type SessionEntry,
 	type SessionEntryBase,
@@ -369,6 +369,7 @@ export {
 	type WriteToolOptions,
 	withFileMutationQueue,
 } from "./core/tools/index.ts";
+export { createReadManyTool, createReadManyToolDefinition, type ReadManyToolOptions } from "./core/tools/read-many.ts";
 export {
 	hasTrustRequiringProjectResources,
 	type ProjectTrustDecision,

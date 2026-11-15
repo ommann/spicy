@@ -1,6 +1,7 @@
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, on, onCleanup, onMount, useContext, type JSX } from 'solid-js';
 import { ImageContext, SectionContext } from './conversation-dom';
 import CollapseToggle from './CollapseToggle';
+import ScrollArea from './ScrollArea';
 import { RsvpTarget } from './RsvpReader';
 import DiffView from './DiffView';
 import { recordedEditDiff } from './diff-model.ts';
@@ -19,14 +20,19 @@ function Images(props: { blocks: Wire[]; caption?: string }) {
   const open = useContext(ImageContext);
   const images = () => (props.blocks || []).filter(block => block.type === 'image' && block.data && /^image\/(png|jpeg|jpg|gif|webp)$/.test(block.mimeType));
 
-  return <For each={images()}>{image => <img class="trace-image" src={`data:${image.mimeType};base64,${image.data}`}
+  function preview(index: number, opener: HTMLElement) {
+    const items = images().map(image => ({ src: `data:${image.mimeType};base64,${image.data}`, alt: props.caption || 'Image from Pi session', caption: props.caption || '' }));
+    open?.({ ...items[index], opener, images: items, index });
+  }
+
+  return <Show when={images().length}><ScrollArea class={images().length > 1 ? 'image-strip-area' : undefined} contentClass={images().length > 1 ? 'image-strip' : undefined}><For each={images()}>{(image, index) => <img class="trace-image" src={`data:${image.mimeType};base64,${image.data}`}
     alt={props.caption || 'Image from Pi session'} loading="lazy" tabIndex={0} role="button" aria-label="Open image preview"
-    onClick={event => open?.({ src: `data:${image.mimeType};base64,${image.data}`, alt: props.caption || 'Image from Pi session', caption: props.caption || '', opener: event.currentTarget })}
+    onClick={event => preview(index(), event.currentTarget)}
     onKeyDown={event => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
       event.preventDefault();
-      open?.({ src: `data:${image.mimeType};base64,${image.data}`, alt: props.caption || 'Image from Pi session', caption: props.caption || '', opener: event.currentTarget });
-    }} />}</For>;
+      preview(index(), event.currentTarget);
+    }} />}</For></ScrollArea></Show>;
 }
 
 function MessageBody(props: { content: string | Wire[] }) {
@@ -207,7 +213,8 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
     const value = args().path || args().command || args().url || args();
     return typeof value === 'string' ? value : JSON.stringify(value);
   };
-  const compactRead = () => props.call.name === 'read' && !props.result?.isError;
+  const readFiles = () => (props.call.name === 'read' || props.call.name === 'read_many') && Array.isArray(args().files) ? args().files : [];
+  const compactRead = () => (props.call.name === 'read' || props.call.name === 'read_many') && !props.result?.isError;
   const imageRead = () => props.call.name === 'read' && (props.result?.content || []).some((block: Wire) => block.type === 'image');
   const output = () => props.call.name === 'write' && typeof args().content === 'string'
     ? [{ type: 'text', text: args().content }] : props.result?.content || [{ type: 'text', text: 'No result recorded in this branch.' }];
@@ -228,9 +235,16 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
         if (imageRead() && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); preview(event.currentTarget); }
       }}
       role={imageRead() ? 'button' : undefined} aria-label={imageRead() ? `Open image: ${props.call.name} ${label()}` : undefined}>
+      <Show when={readFiles().length} fallback={<>
       <Show when={!isBash()}><strong>{props.call.name}</strong></Show><span class={args().path ? 'path' : 'tool-arguments'}
         onDblClick={event => { if (isBash()) { event.preventDefault(); selectSource(event.currentTarget); } }}><Show when={isBash()} fallback={<AnsiText text={label()} />}><ShellCommand text={pretty() ?? label()} /></Show></span>
       <Show when={args().offset}><span class="range">{`:${args().offset}${args().limit ? `-${args().offset + args().limit - 1}` : ''}`}</span></Show>
+      </>}>
+        <div class="multi-read-lines"><For each={readFiles()}>{file => <div class="tool-title">
+          <strong>read</strong><span class="path"><AnsiText text={file.path} /></span>
+          <Show when={file.offset || file.limit}><span class="range">{`:${file.offset || 1}${file.limit ? `-${(file.offset || 1) + file.limit - 1}` : ''}`}</span></Show>
+        </div>}</For></div>
+      </Show>
     </div>
     <Show when={!compactRead()}>
       <Show when={editDiff().length} fallback={

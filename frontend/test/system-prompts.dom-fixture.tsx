@@ -12,6 +12,11 @@ import { SessionsRoute } from '../src/Sessions';
 import SystemPrompts from '../src/SystemPrompts';
 import SystemPromptContent from '../src/SystemPromptContent';
 import ChatContent from '../src/ChatContent';
+import ImagePreview, { type PreviewImage } from '../src/ImagePreview';
+
+export function mountImagePreview(root: HTMLElement, image: PreviewImage, onClose: () => void) {
+  return render(() => <ImagePreview image={image} onClose={onClose} />, root);
+}
 import { ConversationCard } from '../src/Conversation';
 
 export function mountStreamingCard(root: HTMLElement, initial: any) {

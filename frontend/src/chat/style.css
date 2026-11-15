@@ -314,6 +314,26 @@ pre {
   border: 1px solid var(--dialog-border);
   background: var(--image-background);
 }
+.image-strip-area {
+  margin-top: 20px;
+}
+.image-strip-area > .scroll-area-viewport {
+  scroll-snap-type: x proximity;
+}
+.image-strip {
+  display: flex;
+  gap: 10px;
+  max-width: 100%;
+}
+.image-strip .trace-image {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: min(85%, 800px);
+  max-height: min(360px, 45dvh);
+  margin-top: 0;
+  object-fit: contain;
+  scroll-snap-align: start;
+}
 .markdown-code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

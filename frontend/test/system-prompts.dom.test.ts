@@ -1099,3 +1099,75 @@ test('Solid chat content preserves tool, codemode, ANSI, image and branch presen
     assert.ok([...codemode.querySelectorAll('.collapse-toggle')].every(control => control.getAttribute('aria-expanded') === 'true'));
   } finally { dispose(); }
 });
+
+for (const name of ['read_many', 'read']) {
+  test(name + ' renders multiple files as compact read lines in one block', () => {
+    const dispose = components.mountChatContent(root, [
+      { id: 'assistant', type: 'message', message: { role: 'assistant', content: [
+        { type: 'toolCall', id: 'many', name, arguments: { files: [
+          { path: 'first.ts' }, { path: 'second.ts', offset: 10, limit: 5 }, { path: 'third.ts', limit: 3 },
+        ] } },
+      ] } },
+      { id: 'result', type: 'message', message: { role: 'toolResult', toolCallId: 'many', content: [
+        { type: 'text', text: 'Hidden file contents' },
+      ] } },
+    ]);
+    try {
+      assert.equal(root.querySelectorAll('.tool').length, 1);
+      const lines = [...root.querySelectorAll('.multi-read-lines .tool-title')];
+      assert.deepEqual(lines.map(line => line.textContent), ['readfirst.ts', 'readsecond.ts:10-14', 'readthird.ts:1-3']);
+      assert.equal(root.querySelectorAll('.compact-read').length, 1);
+      assert.doesNotMatch(root.textContent, /Hidden file contents|"files"/);
+    } finally { dispose(); }
+  });
+}
+
+test('image strips group message images and tool images without extra controls', () => {
+  const image = { type: 'image', mimeType: 'image/png', data: 'AAAA' };
+  const dispose = components.mountChatContent(root, [
+    { id: 'user', type: 'message', message: { role: 'user', content: [image, image, { type: 'text', text: 'Between images' }, image] } },
+    { id: 'assistant', type: 'message', message: { role: 'assistant', content: [
+      { type: 'toolCall', id: 'many-images', name: 'read_many', arguments: { files: [{ path: 'a.png' }, { path: 'b.png' }] } },
+    ] } },
+    { id: 'result', type: 'message', message: { role: 'toolResult', toolCallId: 'many-images', content: [image, image] } },
+  ]);
+  try {
+    const strips = [...root.querySelectorAll('.image-strip')];
+    assert.equal(strips.length, 2);
+    assert.deepEqual(strips.map(strip => strip.querySelectorAll('.trace-image').length), [3, 2]);
+    assert.equal(root.querySelectorAll('.trace-image').length, 5);
+    assert.equal(strips[0].querySelectorAll('button').length, 0);
+    assert.ok([...root.querySelectorAll('.trace-image')].every(image => image.tabIndex === 0));
+    assert.match(root.textContent, /Between images/);
+  } finally { dispose(); }
+});
+
+test('image preview navigates its group with buttons and arrow keys and preserves close', () => {
+  const opener = document.createElement('button');
+  let closed = false;
+  const images = [{ src: 'first.png', alt: 'First', caption: 'first.png' }, { src: 'second.png', alt: 'Second', caption: 'second.png' }];
+  const dispose = components.mountImagePreview(root, { ...images[0], images, index: 0, opener }, () => { closed = true; });
+  try {
+    const previous = root.querySelector('[aria-label="Previous image"]');
+    const next = root.querySelector('[aria-label="Next image"]');
+    assert.equal(previous.disabled, true);
+    assert.equal(previous.querySelectorAll('svg').length, 1);
+    assert.equal(next.querySelectorAll('svg').length, 1);
+    assert.equal(root.querySelector('.image-preview-count').textContent, '1/2');
+    next.click();
+    assert.equal(root.querySelector('.image-preview-count').textContent, '2/2');
+    assert.equal(root.querySelector('.image-preview-image').getAttribute('src'), 'second.png');
+    assert.equal(root.querySelector('.image-preview-caption').textContent, 'second.png');
+    assert.equal(next.disabled, true);
+    root.querySelector('dialog').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    assert.equal(root.querySelector('.image-preview-image').getAttribute('alt'), 'First');
+    assert.equal(root.querySelector('.image-preview-count').textContent, '1/2');
+    [...root.querySelectorAll('button')].find(button => button.textContent === 'Close').click();
+    assert.equal(closed, true);
+  } finally { dispose(); }
+});
+test('single image preview has no navigation buttons', () => {
+  const dispose = components.mountImagePreview(root, { src: 'only.png', alt: 'Only', caption: '', opener: document.createElement('button') }, () => {});
+  try { assert.equal(root.querySelectorAll('[aria-label="Previous image"], [aria-label="Next image"]').length, 0); }
+  finally { dispose(); }
+});
