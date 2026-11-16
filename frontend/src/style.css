@@ -201,11 +201,18 @@
   padding-inline: var(--bash-padding-inline);
 }
 
+
 .bash-tool .tool-title {
   display: flex;
   align-items: baseline;
   gap: 1ch;
   white-space: normal;
+}
+
+.user-bash-prefix {
+  color: var(--user-bash-prefix);
+  font-weight: 700;
+  user-select: none;
 }
 
 .bash-tool .tool-arguments {

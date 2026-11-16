@@ -60,8 +60,8 @@ export function projectChatParts(entries) {
       kind: 'error', text: message.stopReason === 'aborted' ? 'Operation aborted' : message.errorMessage || 'The reply failed.',
     });
     if (message.role === 'bashExecution') add(entry, {
-      kind: 'tool', call: { name: 'bash', arguments: { command: message.command } },
-      result: { content: [{ type: 'text', text: message.output || '' }], isError: message.exitCode !== 0 },
+      kind: 'tool', call: { name: 'bash', userBash: true, excludeFromContext: message.excludeFromContext, arguments: { command: message.command } },
+      result: { content: [{ type: 'text', text: message.output || '' }], isError: !message.shellPending && (message.cancelled || message.exitCode !== 0) },
     });
     remember();
   }

@@ -32,6 +32,7 @@ test('each procedure accepts its own payload and rejects unknown or incorrectly 
 
 test('command discriminator validates required fields and preserves supported payloads', () => {
   const valid = [
+    { type: 'bash', command: 'pwd' }, { type: 'bash', command: 'pwd', excludeFromContext: true }, { type: 'abort_bash' },
     { type: 'prompt', message: 'hello', streamingBehavior: 'steer' },
     { type: 'prompt', message: '', images: [image], systemPrompt: { choice: 'current', ignored: [], selected: { key: 'prompt', content: 'hello', sections: {}, promptBuilder: { document, excludedIds: [] } } } },
     ...['abort', 'clear_queue', 'get_available_models', 'get_available_thinking_levels', 'get_system_prompt_document'].map(type => ({ type })),
@@ -44,7 +45,7 @@ test('command discriminator validates required fields and preserves supported pa
   ];
   for (const value of valid) assert.deepEqual(inputs.commandInput.parse(value), value);
   const invalid = [
-    {}, { type: 'bash', command: 'echo no' }, { type: 'set_model', provider: 'p' },
+    {}, { type: 'bash', command: ' ' }, { type: 'bash', command: 'pwd', excludeFromContext: 'yes' }, { type: 'set_model', provider: 'p' },
     { type: 'set_thinking_level', level: 'unknown' }, { type: 'fork' },
     { type: 'prompt', message: ' ' }, { type: 'prompt', message: 'hi', streamingBehavior: 'other' },
     { type: 'prompt', message: 'hi', systemPrompt: { selected: { key: 'x', content: 'x' } } },
@@ -71,7 +72,7 @@ test('oRPC rejects invalid payloads before agent operations, while valid request
   const agents = { get: () => { lookups++; return agent; } };
   const router = createRouter({ agents, login: {}, token: 'test-token', cwd: '/tmp', managed: '/tmp' });
   const options = { context: { headers: new Headers({ 'X-Spicy-Token': 'test-token' }) } };
-  for (const value of [{ type: 'set_model' }, { type: 'bash', command: 'no' }, { type: 'prompt', message: false }]) {
+  for (const value of [{ type: 'set_model' }, { type: 'bash', command: '' }, { type: 'prompt', message: false }]) {
     await assert.rejects(call(router.command, value, options), error => error.code === 'BAD_REQUEST');
   }
   await assert.rejects(call(router.agents.create, { entryId: 'orphan' }, options), error => error.code === 'BAD_REQUEST');

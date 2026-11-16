@@ -48,6 +48,7 @@ import StreamingContentOption from './StreamingContentOption';
 import ThinkingOptions from './ThinkingOptions';
 import HiddenBranchesOption from './HiddenBranchesOption';
 import { parseCompactionCommand } from './compaction-command.ts';
+import { parseBashCommand } from './bash-command.ts';
 import { transferBranchLabel } from './branch-labels';
 import { createBranchVisibility, showOnlyHiddenBranches } from './branch-visibility';
 import { filterConversationBranches } from './branch-visibility-model.ts';
@@ -320,11 +321,12 @@ export default function App(props: ParentProps) {
         const generating = record.type === 'agent_start' ? true : record.type === 'agent_settled' ? false
           : previous.generating ?? (previous.running && !previous.compacting);
         const compacting = record.type === 'compaction_start' ? true : record.type === 'compaction_end' ? false : !!previous.compacting;
-        const running = generating || compacting;
+        const shellRunning = record.type === 'bash_execution_start' ? true : record.type === 'bash_execution_end' ? false : !!previous.shellRunning;
+        const running = generating || compacting || shellRunning;
         const dialogs = record.type === 'extension_ui_request' && ['confirm', 'select', 'input', 'editor'].includes(record.method)
           ? [...previous.dialogs.filter(dialog => dialog.id !== record.id), record] : previous.dialogs;
         const providerConnection = record.type === 'provider_connection' ? record.state : previous.providerConnection;
-        return { ...previous, live, running, generating, compacting, dialogs, providerConnection,
+        return { ...previous, live, running, generating, compacting, shellRunning, dialogs, providerConnection,
           ...(record.type === 'history_root' ? { entries: record.entries, leafId: record.leafId } : {}),
           ...(record.type === 'context_usage' ? { state: { ...previous.state, contextUsage: record.usage } } : {}),
         };
@@ -445,9 +447,15 @@ export default function App(props: ParentProps) {
     if (busy() || (!message.trim() && !images.length)) return false;
     setBusy(true);
     try {
+      const bash = parseBashCommand(message, images.length > 0);
       const agent = await prepareHomeChat();
-      await api.command({ agentId: agent.agentId, type: 'prompt', message, images, systemPrompt: { choice: 'current' } }, rpcOptions);
-      showAgent(agent, true);
+      if (bash) {
+        showAgent(agent, true);
+        setViewMode('focused');
+        openFocusedChat();
+      }
+      const result = await api.command({ agentId: agent.agentId, ...(bash ?? { type: 'prompt', message, images, systemPrompt: { choice: 'current' } }) }, rpcOptions);
+      showAgent(bash ? result.snapshot : agent, true);
       homeAgent = undefined;
       if (homeDraft() === message) setHomeDraft('');
       setNotification({ message: '', isError: false });
@@ -512,6 +520,7 @@ export default function App(props: ParentProps) {
     try {
       const queue = await api.command({ agentId: id, type: 'clear_queue' }, rpcOptions);
       if (id === selectedAgentId()) conversation?.setDraft([...(queue.steering || []), ...(queue.followUp || [])].join('\n'));
+      await api.command({ agentId: id, type: 'abort_bash' }, rpcOptions);
       await api.command({ agentId: id, type: 'abort' }, rpcOptions);
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
@@ -587,6 +596,7 @@ export default function App(props: ParentProps) {
       item.id === draft.id ? { ...item, text: message, sentAt: Date.now() } : item) }));
 
     try {
+      const bash = parseBashCommand(message, images.length > 0);
       const compaction = parseCompactionCommand(message);
       if (draft || target) {
         const entryId = draft?.sourceId || target;
@@ -605,7 +615,11 @@ export default function App(props: ParentProps) {
         accept(agent!);
       }
       if (!agent?.agentId) throw new Error('Agent did not start');
-      if (compaction) {
+      if (bash) {
+        const result = await api.command({ agentId: agent.agentId, ...bash }, rpcOptions);
+        accept(result.snapshot);
+        if (draft) setDraftBranches(previous => ({ ...previous, [key]: previous[key].filter(item => item.id !== draft.id) }));
+      } else if (compaction) {
         const result = await api.command({ agentId: agent.agentId, type: 'compact', ...compaction }, rpcOptions);
         accept(result.snapshot);
         const targetId = graph().ancestors(result.snapshot.leafId).find((id: string) => graph().nodes.has(id));

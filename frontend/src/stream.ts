@@ -1,5 +1,14 @@
 /** RPC deltas have no cumulative message snapshot. Reconstruct by contentIndex. */
 export function applyRecord(messages, record) {
+  if (record.type === 'bash_execution_start') return [...messages, {
+    role: 'bashExecution', command: record.command, excludeFromContext: record.excludeFromContext,
+    timestamp: record.timestamp, output: '', shellPending: true,
+  }];
+  if (record.type === 'bash_execution_update') {
+    const index = messages.findLastIndex(message => message.shellPending);
+    return messages.map((message, i) => i === index ? { ...message, output: message.output + record.delta } : message);
+  }
+  if (record.type === 'bash_execution_end') return messages.filter(message => !message.shellPending);
   if (record.type === 'tool_execution_update') {
     const index = messages.findLastIndex(message => message.role === 'toolResult' && message.toolCallId === record.toolCallId);
     const result = { role: 'toolResult', toolCallId: record.toolCallId, toolName: record.toolName,

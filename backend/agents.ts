@@ -56,7 +56,7 @@ export class AgentConnection {
   }
 
   payload() {
-    return { agentId: this.id, ...this.snapshot, live: this.live, dialogs: [...this.dialogs.values()], connected: !!this.rpc.child, running: this.rpc.running, generating: this.rpc.generating, compacting: this.rpc.compacting, cwd: this.cwd, diagnostic: this.diagnostic, source: this.source, connectionError: this.connectionError, providerConnection: this.providerConnection };
+    return { agentId: this.id, ...this.snapshot, live: this.live, dialogs: [...this.dialogs.values()], connected: !!this.rpc.child, running: this.rpc.running || this.live.some(message => message.shellPending), shellRunning: this.live.some(message => message.shellPending), generating: this.rpc.generating, compacting: this.rpc.compacting, cwd: this.cwd, diagnostic: this.diagnostic, source: this.source, connectionError: this.connectionError, providerConnection: this.providerConnection };
   }
 
   broadcast(type: string, data: RpcRecord | string) {

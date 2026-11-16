@@ -65,6 +65,8 @@ export const commandInput = z.discriminatedUnion('type', [
   z.strictObject({ ...command('prompt'), ...prompt, streamingBehavior: z.enum(['steer', 'followUp']).optional() })
     .refine(value => value.message.trim().length > 0 || Boolean(value.images?.length), { message: 'Message is empty', path: ['message'] }),
   z.strictObject(command('abort')),
+  z.strictObject({ ...command('bash'), command: z.string().trim().min(1), excludeFromContext: z.boolean().optional() }),
+  z.strictObject(command('abort_bash')),
   z.strictObject(command('clear_queue')),
   z.strictObject({ ...command('fork'), entryId: id }),
   z.strictObject({ ...command('new_session'), parentSession: z.string().optional() }),

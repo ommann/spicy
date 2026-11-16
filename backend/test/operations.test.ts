@@ -27,6 +27,25 @@ function setup(command = async () => ({})) {
   return { agent, agents, calls, operations: createOperations({ agents, cwd: '/tmp', managed: '/tmp' }) };
 }
 
+test('shell commands stream a pending card, refresh history and release the lock', async () => {
+  const state = setup(async command => {
+    assert.equal(state.agent.mutating, true);
+    assert.deepEqual(command, { type: 'bash', command: 'pwd', excludeFromContext: true });
+    assert.equal(state.agent.live[0].excludeFromContext, true);
+    return { output: '/tmp\n', exitCode: 0 };
+  });
+  state.agent.live = [];
+  const records = [];
+  state.agent.broadcast = (type, record) => records.push(record.type);
+  const result = await state.operations.command({ agentId: 'selected', type: 'bash', command: 'pwd', excludeFromContext: true });
+  assert.equal(result.output, '/tmp\n');
+  assert.equal(result.snapshot.agentId, 'selected');
+  assert.deepEqual(records, ['bash_execution_start', 'bash_execution_end']);
+  assert.deepEqual(state.agent.live, []);
+  assert.equal(state.agent.mutating, false);
+  assert.deepEqual(state.calls, ['refresh', 'release', 'claim']);
+});
+
 test('commands keep agent selection, locking and session ownership updates', async () => {
   const state = setup(async command => {
     assert.equal(state.agent.mutating, true);

@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { historyCards } from './history.ts';
+import { applyRecord } from '../frontend/src/stream.ts';
 import type { z } from 'zod';
 import type { AgentRegistry, AgentConnection } from './agents.ts';
 import type { HistoryEntry } from './types.ts';
@@ -191,23 +192,34 @@ export function createOperations({ agents, cwd, managed }: { agents: AgentRegist
       const reload = command.type === 'prompt' && command.message?.trim() === '/reload';
       if (reload && rpc.running) fail('Stop the agent before reloading');
       const changesBranch = reload || ['fork', 'new_session', 'set_model', 'set_thinking_level', 'save_system_prompt', 'compact'].includes(command.type);
-      if ((changesBranch || command.type === 'prompt') && agent.mutating) fail('Another command is in progress');
+      if ((changesBranch || command.type === 'bash' || command.type === 'prompt') && agent.mutating) fail('Another command is in progress');
       if (changesBranch && command.type !== 'compact' && rpc.running) fail('Stop the agent before changing the session');
-      if (changesBranch || command.type === 'prompt') agent.mutating = true;
+      if (changesBranch || command.type === 'bash' || command.type === 'prompt') agent.mutating = true;
       try {
         if (reload) {
           const available = await rpc.command({ type: 'get_commands' });
           if (!(available.commands as { name: string }[]).some(entry => entry.name === 'spicy-reload')) fail('Reconnect Pi to enable /reload');
           (command as Extract<typeof command, { type: 'prompt' }>).message = '/spicy-reload';
         }
+        if (command.type === 'bash') {
+          const record = { type: 'bash_execution_start', command: command.command, excludeFromContext: command.excludeFromContext, timestamp: Date.now() };
+          agent.live = applyRecord(agent.live, record);
+          agent.broadcast('record', record);
+        }
         const result = await rpc.command(command);
-        if (changesBranch) {
+        if (changesBranch || command.type === 'bash') {
           await agent.refresh();
           agents.release(agent);
           agents.claim(agent, agent.snapshot.state?.sessionFile);
         }
-        return command.type === 'compact' ? { ...result, snapshot: agent.payload() } : result || {};
-      } finally { if (changesBranch || command.type === 'prompt') agent.mutating = false; }
+        return command.type === 'compact' || command.type === 'bash' ? { ...result, snapshot: agent.payload() } : result || {};
+      } finally {
+        if (command.type === 'bash') {
+          agent.live = agent.live.filter(message => !message.shellPending);
+          agent.broadcast('record', { type: 'bash_execution_end' });
+        }
+        if (changesBranch || command.type === 'bash' || command.type === 'prompt') agent.mutating = false;
+      }
     },
   };
 }

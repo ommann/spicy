@@ -30,21 +30,21 @@
   /* Equal side tracks keep the focal letter's center fixed at any glyph width. */
   grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
   align-items: baseline;
-  font-family: var(--rsvp-font-family);
-  font-size: var(--rsvp-font-size);
-  font-weight: var(--rsvp-font-weight);
-  line-height: var(--rsvp-line-height);
+  font-family: var(--rsvp-font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-size: var(--rsvp-font-size, clamp(36px, 5.5vw, 62px));
+  font-weight: var(--rsvp-font-weight, 400);
+  line-height: var(--rsvp-line-height, 1.1);
   white-space: pre;
-  transform: translate(var(--rsvp-focal-offset), var(--rsvp-text-offset-y));
+  transform: translate(var(--rsvp-focal-offset, -2ch), var(--rsvp-text-offset-y, -5px));
 }
 
 .rsvp-start-progress {
   position: absolute;
-  bottom: calc(-1 * var(--rsvp-underline-gap));
-  height: var(--rsvp-underline-thickness);
+  bottom: calc(-1 * var(--rsvp-underline-gap, 3px));
+  height: var(--rsvp-underline-thickness, 3px);
   background: var(--rsvp-focus);
   transform-origin: left;
-  animation: rsvp-countdown var(--rsvp-start-delay) linear forwards;
+  animation: rsvp-countdown var(--rsvp-start-delay, 500ms) linear forwards;
 }
 
 @keyframes rsvp-countdown {
@@ -63,14 +63,14 @@
 
 .rsvp-code { color: var(--purple); }
 .rsvp-focus .rsvp-code { color: inherit; }
-.rsvp-bold { font-weight: var(--rsvp-bold-weight); }
+.rsvp-bold { font-weight: var(--rsvp-bold-weight, 700); }
 .rsvp-italic { font-style: italic; }
 .rsvp-strike { text-decoration: line-through; }
 
 .rsvp-centered .rsvp-word {
   display: flex;
   justify-content: center;
-  transform: translateY(var(--rsvp-text-offset-y));
+  transform: translateY(var(--rsvp-text-offset-y, -5px));
 }
 
 .rsvp-no-focus .rsvp-focus { color: inherit; }

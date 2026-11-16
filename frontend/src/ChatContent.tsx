@@ -237,6 +237,7 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
       }}
       role={imageRead() ? 'button' : undefined} aria-label={imageRead() ? `Open image: ${props.call.name} ${label()}` : undefined}>
       <Show when={readFiles().length} fallback={<>
+      <Show when={props.call.userBash}><span class="user-bash-prefix">{props.call.excludeFromContext ? '!!' : '!'}</span></Show>
       <Show when={!isBash()}><strong>{props.call.name}</strong></Show><span class={args().path ? 'path' : 'tool-arguments'}
         onDblClick={event => { if (isBash()) { event.preventDefault(); selectSource(event.currentTarget); } }}><Show when={isBash()} fallback={<AnsiText text={label()} />}><ShellCommand text={pretty() ?? label()} /></Show></span>
       <Show when={args().offset}><span class="range">{`:${args().offset}${args().limit ? `-${args().offset + args().limit - 1}` : ''}`}</span></Show>
