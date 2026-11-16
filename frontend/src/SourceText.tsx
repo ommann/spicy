@@ -5,6 +5,9 @@ import { createAnsiTokenizer } from './ansi.ts';
 import { Lexer, type Tokens } from 'marked';
 import './markdown-table.css';
 import { FileLinkCwdContext, fileLink } from './file-link';
+import EditorLink from './EditorLink';
+import { parseFileReference } from './file-reference';
+import { webReference } from './web-reference';
 import { showBoldSyntax, showItalicSyntax, showInlineCodeSyntax } from './formatting-syntax';
 
 type SourceChunk = { text: string; language?: string; code?: boolean; table?: Tokens.Table };
@@ -59,7 +62,13 @@ function MarkdownText(props: { text: string }) {
     </em></Match>
     <Match when={token().type === 'codespan'}><code style={{ color: 'var(--purple)', font: 'inherit' }}>
       <Show when={showInlineCodeSyntax()}>{token().raw.match(/^`+/)?.[0]}</Show>
-      {(token() as Tokens.Codespan).text}
+      <Show when={webReference((token() as Tokens.Codespan).text)} fallback={
+        <Show when={parseFileReference((token() as Tokens.Codespan).text)} fallback={(token() as Tokens.Codespan).text}>
+          {reference => <EditorLink path={reference().path} line={reference().line}>{(token() as Tokens.Codespan).text}</EditorLink>}
+        </Show>
+      }>
+        {href => <a href={href()} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', 'text-decoration': 'none' }}>{(token() as Tokens.Codespan).text}</a>}
+      </Show>
       <Show when={showInlineCodeSyntax()}>{token().raw.match(/^`+/)?.[0]}</Show>
     </code></Match>
   </Switch>}</Index>;
