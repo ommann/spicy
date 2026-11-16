@@ -4,6 +4,7 @@ import CollapseToggle from './CollapseToggle';
 import ScrollArea from './ScrollArea';
 import { RsvpTarget } from './RsvpReader';
 import DiffView from './DiffView';
+import EditorLink from './EditorLink';
 import { recordedEditDiff } from './diff-model.ts';
 import { Dynamic } from 'solid-js/web';
 import SourceText, { AnsiText, ShellCommand, TerminalText } from './SourceText';
@@ -238,13 +239,14 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
       role={imageRead() ? 'button' : undefined} aria-label={imageRead() ? `Open image: ${props.call.name} ${label()}` : undefined}>
       <Show when={readFiles().length} fallback={<>
       <Show when={props.call.userBash}><span class="user-bash-prefix">{props.call.excludeFromContext ? '!!' : '!'}</span></Show>
-      <Show when={!isBash()}><strong>{props.call.name}</strong></Show><span class={args().path ? 'path' : 'tool-arguments'}
+      <Show when={!isBash()}><strong>{props.call.name}</strong></Show><Show when={args().path && ['read', 'edit', 'write'].includes(props.call.name) && !imageRead()} fallback={<><span class={args().path ? 'path' : 'tool-arguments'}
         onDblClick={event => { if (isBash()) { event.preventDefault(); selectSource(event.currentTarget); } }}><Show when={isBash()} fallback={<AnsiText text={label()} />}><ShellCommand text={pretty() ?? label()} /></Show></span>
       <Show when={args().offset}><span class="range">{`:${args().offset}${args().limit ? `-${args().offset + args().limit - 1}` : ''}`}</span></Show>
+      </>}><EditorLink path={args().path} line={args().offset || 1} class="path"><AnsiText text={label()} /><Show when={args().offset || args().limit}><span class="range">{`:${args().offset || 1}${args().limit ? `-${(args().offset || 1) + args().limit - 1}` : ''}`}</span></Show></EditorLink></Show>
       </>}>
         <div class="multi-read-lines"><For each={readFiles()}>{file => <div class="tool-title">
-          <strong>read</strong><span class="path"><AnsiText text={file.path} /></span>
-          <Show when={file.offset || file.limit}><span class="range">{`:${file.offset || 1}${file.limit ? `-${(file.offset || 1) + file.limit - 1}` : ''}`}</span></Show>
+          <strong>read</strong><EditorLink path={file.path} line={file.offset || 1} class="path"><AnsiText text={file.path} />
+          <Show when={file.offset || file.limit}><span class="range">{`:${file.offset || 1}${file.limit ? `-${(file.offset || 1) + file.limit - 1}` : ''}`}</span></Show></EditorLink>
         </div>}</For></div>
       </Show>
     </div>
@@ -255,7 +257,7 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
             <TerminalText text={block.text} language={props.call.name === 'read' || props.call.name === 'write' ? language() : undefined} />
           }</For>
         </ExpandableContent>
-      }><DiffView files={editDiff()} preview expandRequest={props.expandRequest} /></Show>
+      }><DiffView files={editDiff()} editorPath={args().path} preview expandRequest={props.expandRequest} /></Show>
     </Show>
     <Images blocks={props.result?.content || []} caption={args().path || ''} />
   </section>}>

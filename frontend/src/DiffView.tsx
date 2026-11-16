@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup } from 'solid-js';
 import CollapseToggle from './CollapseToggle';
+import EditorLink from './EditorLink';
 import { collapseDiffRows, previewHeight } from './collapse-policy.ts';
 import ScrollArea from './ScrollArea';
 import { highlightTokens, supportsLanguage } from './syntax.ts';
@@ -58,7 +59,7 @@ function prepareHunk(hunk: Wire, language?: string) {
   });
 }
 
-export default function DiffView(props: { files: Wire[]; fullDocument?: boolean; language?: string; preview?: boolean; expandRequest?: { open: boolean } }) {
+export default function DiffView(props: { files: Wire[]; editorPath?: string; fullDocument?: boolean; language?: string; preview?: boolean; expandRequest?: { open: boolean } }) {
   const [expanded, setExpanded] = createSignal(false);
   const [viewport, setViewport] = createSignal(800);
   const [lineHeight, setLineHeight] = createSignal(20);
@@ -112,7 +113,9 @@ export default function DiffView(props: { files: Wire[]; fullDocument?: boolean;
       </Show>
       <For each={file.hunks}>{hunk => <>
         <For each={hunk.rows}>{row => <div class={`diff-line diff-${row.kind === 'omitted' ? row.omittedKind : row.kind}`}>
-          <span class="diff-line-number" aria-hidden="true">{row.kind === 'meta' || row.kind === 'omitted' ? '' : row.kind === 'remove' ? row.oldLine : row.newLine}</span>
+          <Show when={props.editorPath && row.newLine > 0 && row.kind !== 'remove' && row.kind !== 'meta' && row.kind !== 'omitted'} fallback={<span class="diff-line-number" aria-hidden="true">{row.kind === 'meta' || row.kind === 'omitted' ? '' : row.kind === 'remove' ? row.oldLine : row.newLine}</span>}>
+            <EditorLink path={props.editorPath!} line={row.newLine} class="diff-line-number">{row.newLine}</EditorLink>
+          </Show>
           <Show when={row.kind !== 'omitted'} fallback={<span class="diff-omission" title={row.text} aria-label={row.text}>...</span>}><code class="diff-source" data-source-row><For each={row.tokens}>{token => <span class={token.className}
             classList={{ 'diff-word': token.emphasized }}>{token.text}</span>}</For></code></Show>
         </div>}</For>

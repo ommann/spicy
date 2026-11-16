@@ -7,6 +7,11 @@ export const branchLabelInput = z.union([
   z.strictObject({ key: id, label: z.strictObject({ text: z.string().min(1), color: z.string().regex(/^[a-z]+$/i) }).optional() }),
   z.strictObject({ key: id, from: id }),
 ]);
+export const openEditorInput = z.strictObject({
+  cwd: z.string().refine(value => path.isAbsolute(value) && !value.includes('\0'), 'cwd must be absolute'),
+  path: z.string().min(1).refine(value => !value.includes('\0'), 'Invalid path'),
+  line: z.number().int().min(1).max(2147483647).default(1),
+});
 const agent = { agentId: id.optional() };
 export const agentInput = z.strictObject(agent).default({});
 export const emptyInput = z.strictObject({}).default({});

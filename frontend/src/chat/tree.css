@@ -297,6 +297,19 @@
   color: inherit;
 }
 
+.editor-link {
+  cursor: pointer;
+}
+.path.editor-link {
+  text-decoration: none;
+}
+.editor-link:focus-visible { outline: 1px solid currentColor; }
+.editor-link-error {
+  display: block;
+  margin-top: 0.5lh;
+  color: var(--status-error);
+}
+
 .diff-line-number {
   white-space: nowrap;
   color: var(--muted);
