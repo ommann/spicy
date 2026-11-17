@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Exercise the real launcher against an inert backend: no agents or model requests.
-test('unified launcher restarts the recorded server and preserves runtime settings', async () => {
+test('unified launcher loads checkout dotenv and reloads it on restart', async () => {
   const root = await mkdtemp(join(tmpdir(), 'spicy-startup-'));
   const children = [];
 
@@ -24,7 +24,7 @@ test('unified launcher restarts the recorded server and preserves runtime settin
       writeFileSync(new URL('../state.json', import.meta.url), JSON.stringify({
         pid: process.pid,
         settings: process.env.SPICY_CODING_AGENT_DIR,
-        project: process.env.PI_CWD,
+        project: process.env.SPICY_CWD,
         port: process.env.PORT,
         nodeOptions: process.env.NODE_OPTIONS,
       }));
@@ -53,18 +53,18 @@ test('unified launcher restarts the recorded server and preserves runtime settin
       assert.fail('Server did not start');
     }
 
-    const original = launch([], {
-      SPICY_CODING_AGENT_DIR: join(root, 'settings'),
-      PI_CWD: root,
-      PORT: '15174',
-      NODE_OPTIONS: '--no-warnings',
-    });
+    const configuration = `SPICY_CODING_AGENT_DIR=${join(root, 'settings')}\nSPICY_CWD=${root}\nSPICY_HISTORY_DB=${join(root, 'history.sqlite')}\nSPICY_SESSION_DIR=${join(root, 'sessions')}\nPORT=15174\n`;
+    await writeFile(join(root, '.env'), configuration);
+    const original = launch([], { PORT: '9999', NODE_OPTIONS: '' });
     const originalState = await waitForServer(original.pid);
     const originalExit = once(original, 'exit');
 
-    const replacement = launch(['--restart'], { PORT: '15175', NODE_OPTIONS: '' });
+    assert.equal(originalState.port, '15174');
+    assert.equal(originalState.project, root);
+    await writeFile(join(root, '.env'), configuration.replace('15174', '15175'));
+    const replacement = launch(['--restart'], { PORT: '9999', NODE_OPTIONS: '' });
     const replacementState = await waitForServer(replacement.pid);
-    assert.deepEqual(replacementState, { ...originalState, pid: replacement.pid });
+    assert.deepEqual(replacementState, { ...originalState, pid: replacement.pid, port: '15175' });
     assert.equal((await readFile(join(root, '.pid'), 'utf8')).trim(), String(replacement.pid));
     await originalExit;
 

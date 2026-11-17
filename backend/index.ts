@@ -13,7 +13,7 @@ import { importLegacyHistories } from '../packages/coding-agent/src/core/history
 
 const root = fileURLToPath(new URL('../frontend', import.meta.url));
 const repository = fileURLToPath(new URL('..', import.meta.url));
-const cwd = path.resolve(process.env.PI_CWD || repository);
+const cwd = path.resolve(process.env.SPICY_CWD || repository);
 const port = Number(process.env.PORT || 5174);
 const rpcFixture = process.env.SPICY_RPC_FIXTURE ?? process.env.PI_RPC_FIXTURE; // Legacy fallback.
 const sessionDirectory = process.env.SPICY_SESSION_DIR ?? process.env.PI_SESSION_DIR; // Legacy fallback.

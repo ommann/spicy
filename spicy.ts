@@ -2,6 +2,7 @@
 import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, readlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { parseEnv } from 'node:util';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +17,8 @@ if (args.includes('--help') || args.includes('-h')) {
 Serve current source at http://localhost:5174.
 Settings: .pi-user/ by default; --global-user-dir uses ~/.pi/agent.
 SPICY_CODING_AGENT_DIR overrides the local default.
---restart stops the recorded instance and preserves its runtime settings.`);
+Configuration is loaded from the checkout's .env (overrides shell values).
+--restart stops the recorded instance and reloads .env.`);
   process.exit(0);
 }
 
@@ -24,6 +26,12 @@ if (args.includes('--tui')) {
   console.error('The terminal interface has been removed. Run spicy to open the web app.');
   process.exit(1);
 }
+
+const configuration = parseEnv(readFileSync(new URL('./.env', import.meta.url), 'utf8'));
+Object.assign(process.env, configuration);
+const required = ['PORT', 'SPICY_CWD', 'SPICY_HISTORY_DB', 'SPICY_SESSION_DIR', 'SPICY_CODING_AGENT_DIR'];
+const missing = required.filter(name => !process.env[name]?.trim());
+if (missing.length) throw new Error(`Missing required configuration: ${missing.join(', ')}`);
 
 // Restart only the instance recorded in .pid. No process scanning.
 if (args.includes('--restart')) {
@@ -41,7 +49,7 @@ if (args.includes('--global-user-dir')) {
 
 await mkdir(agentDirectory, { recursive: true });
 process.env.SPICY_CODING_AGENT_DIR = agentDirectory;
-process.env.PI_CWD = process.env.PI_CWD || process.cwd();
+
 
 // Record this server for restart; remove only our own PID on exit.
 writeFileSync(pidFile, `${process.pid}\n`);
@@ -85,24 +93,9 @@ async function restartRecordedInstance() {
     throw new Error('.pid does not identify this Spicy launcher; refusing to stop it.');
   }
 
-  // Preserve settings and passive tracing, without writing environment secrets to disk.
+  // Restart using the current checkout configuration, not the old process environment.
   const executable = await readlink(`/proc/${pid}/exe`);
   const environment = { ...process.env };
-  const previousEnvironment = (await readFile(`/proc/${pid}/environ`, 'utf8')).split('\0');
-
-  for (const name of Object.keys(environment)) {
-    if (isRuntimeSetting(name)) {
-      delete environment[name];
-    }
-  }
-  for (const variable of previousEnvironment) {
-    const separator = variable.indexOf('=');
-    const name = variable.slice(0, separator);
-    if (separator > 0 && isRuntimeSetting(name)) {
-      environment[name] = variable.slice(separator + 1);
-    }
-  }
-  environment.PI_CWD = environment.PI_CWD || cwd;
 
   process.kill(Number(pid), 'SIGTERM');
   const deadline = Date.now() + 10_000;
@@ -123,8 +116,3 @@ async function restartRecordedInstance() {
   // Replace this process: no extra launcher or signal-forwarding wrapper.
   const startupArgs = [...command.slice(entry + 1), ...args].filter(arg => arg !== '--restart');
   process.execve(executable, [executable, launcher, ...startupArgs], environment);
-}
-
-function isRuntimeSetting(name) {
-  return name.startsWith('SPICY_') || name.startsWith('PI_') || ['NODE_OPTIONS', 'PORT'].includes(name);
-}

@@ -25,7 +25,7 @@ export class LoginBridge {
 
   constructor(
     loadRuntime = () => ModelRuntime.create({ refreshOnCreate: false, allowModelNetwork: false }),
-    loadSettings = () => SettingsManager.create(process.env.PI_CWD || process.cwd()),
+    loadSettings = () => SettingsManager.create(process.env.SPICY_CWD || process.cwd()),
   ) {
     this.loadRuntime = loadRuntime;
     this.loadSettings = loadSettings;

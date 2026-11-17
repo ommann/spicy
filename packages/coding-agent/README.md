@@ -27,7 +27,7 @@ To use `spicy` from any project directory, run `npm link --ignore-scripts` once 
 spicy        # web app
 ```
 
-Both commands use the current directory as the project (`PI_CWD` overrides it). No build step is required.
+Both commands use the current directory as the project (`SPICY_CWD` overrides it). No build step is required.
 
 The retained [codemode reference](docs/codemode.md) describes script globals, tool discovery, and classifier/image model APIs.
 
