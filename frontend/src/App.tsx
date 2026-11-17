@@ -38,7 +38,6 @@ import { promptLabel } from './prompt-numbers';
 import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
 import { branchEntries } from './session-entries.ts';
-import { cacheDiscussionTitle } from './discussion-titles';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import ToolApps from './ToolApps';
 import { api, type UiReply } from './api';
@@ -428,13 +427,6 @@ export default function App(props: ParentProps) {
     conversation.setModeWidth(mode, value === 'auto' ? 'auto' : Number(value));
     setViewOptions(conversation.options());
   }
-
-  createEffect(() => {
-    for (const agent of Object.values(agentSnapshots())) {
-      const id = agent.state?.sessionUrlId;
-      if (id && agent.leafId) cacheDiscussionTitle(id, agent.entries, agent.leafId);
-    }
-  });
 
   async function prepareHomeChat() {
     await bridgeReady;
