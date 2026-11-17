@@ -954,12 +954,21 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
   ], leafId: `${id}-answer`, state: { sessionId: scope, sessionUrlId: 'testchat' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test/project' });
   const snapshots = { left: makeAgent('left', 10), right: makeAgent('right', 20) };
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
+  const hidden = new Set();
   rpc = createRpcFixture({
     info: os.handler(({ input }) => ({ ...snapshots[input.agentId || 'left'], token: 'test' })),
     agents: { list: os.handler(() => Object.values(snapshots)) },
+    hiddenBranches: {
+      list: os.handler(() => [...hidden]),
+      change: os.handler(({ input }) => {
+        if ('from' in input) { if (hidden.delete(input.from)) hidden.add(input.to); }
+        else if (input.hidden) hidden.add(input.leafId);
+        else hidden.delete(input.leafId);
+      }),
+    },
   });
   const dispose = components.mountApp(root, '/tree');
-  const stored = () => JSON.parse(window.localStorage.getItem('spicy.hidden-branches'));
+  const stored = () => [...hidden];
   const hide = async id => {
     const input = root.querySelector(`.editor[data-leaf-id="${id}"] textarea`);
     assert.ok(input, `Shown composer for ${id}`);
@@ -1023,13 +1032,12 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
     assert.equal(root.querySelectorAll('.message-composer').length, 2);
     assert.ok(root.querySelector('.tree-node[data-entry-id="left-answer"]'));
     assert.ok(root.querySelector('.tree-node[data-entry-id="stream-right-0"]'));
-    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'events', 'branchLabels/list'].includes(request.path)), '/hide never reaches the backend');
+    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'events', 'branchLabels/list', 'uiOptions/get', 'hiddenBranches/list', 'hiddenBranches/change'].includes(request.path)), 'Hiding uses dedicated persistence endpoints');
   } finally {
     try { await onlyHidden(false); }
     finally {
       dispose();
       window.sessionStorage.removeItem('pi-agent-view');
-      window.localStorage.removeItem('spicy.hidden-branches');
     }
   }
 });

@@ -49,7 +49,14 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
     assert.match(await promptRoute.text(), /<div id="root"><\/div>/);
     await assert.rejects(api.start({}), error => error.code === 'FORBIDDEN');
     await assert.rejects(api.uiOptions.change({ codeLinewrap: true }), error => error.code === 'FORBIDDEN');
+    await assert.rejects(api.hiddenBranches.change({ leafId: 'hidden-test', hidden: true }), error => error.code === 'FORBIDDEN');
     token = info.token;
+    await api.hiddenBranches.change({ leafId: 'hidden-test', hidden: true });
+    assert.deepEqual(await api.hiddenBranches.list({}), ['hidden-test']);
+    await api.hiddenBranches.change({ from: 'hidden-test', to: 'hidden-next' });
+    assert.deepEqual(await api.hiddenBranches.list({}), ['hidden-next']);
+    await api.hiddenBranches.change({ leafId: 'hidden-next', hidden: false });
+    assert.deepEqual(await api.hiddenBranches.list({}), []);
     assert.equal((await api.uiOptions.get({})).codeLinewrap, false);
     await api.uiOptions.change({ codeLinewrap: true, viewMode: 'focused' });
     assert.equal((await api.uiOptions.get({})).codeLinewrap, true);

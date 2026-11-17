@@ -10,6 +10,10 @@ export const uiOptionsInput = z.strictObject({
 });
 
 const id = z.string().min(1);
+export const hiddenBranchInput = z.union([
+  z.strictObject({ leafId: id, hidden: z.boolean() }),
+  z.strictObject({ from: id, to: id }),
+]);
 export const branchLabelInput = z.union([
   z.strictObject({ key: id, label: z.strictObject({ text: z.string().min(1), color: z.string().regex(/^[a-z]+$/i) }).optional() }),
   z.strictObject({ key: id, from: id }),

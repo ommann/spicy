@@ -224,7 +224,7 @@ export default function App(props: ParentProps) {
     }
     return state;
   });
-  const visibility = createBranchVisibility();
+  const visibility = createBranchVisibility(reportFailure);
   const composerLanes = createMemo<Wire[]>(() => {
     const state = composerState();
     const next = matchConversationLanes(graph(), state.lanes);

@@ -1,5 +1,6 @@
 import { readUiOptions, changeUiOptions } from './ui-options.ts';
-import { uiOptionsInput } from './inputs.ts';
+import { uiOptionsInput, hiddenBranchInput } from './inputs.ts';
+import { readHiddenBranches, changeHiddenBranch } from './hidden-branches.ts';
 import { openEditor } from './open-editor.ts';
 import type { AgentRegistry } from './agents.ts';
 import type { LoginBridge } from './auth.ts';
@@ -31,6 +32,10 @@ export function createRouter({ agents, login, cwd, managed, token, signal: shutd
   return {
     openEditor: mutation.input(openEditorInput).handler(({ input }) => openEditor(input.cwd, input.path, input.line)),
     info: procedure.input(agentInput).handler(({ input }) => ({ token, ...operations.info(input) })),
+    hiddenBranches: {
+      list: procedure.input(emptyInput).handler(() => readHiddenBranches(managed)),
+      change: mutation.input(hiddenBranchInput).handler(({ input }) => { changeHiddenBranch(managed, input); }),
+    },
     uiOptions: {
       get: procedure.input(emptyInput).handler(() => readUiOptions(managed)),
       change: mutation.input(uiOptionsInput).handler(({ input }) => { changeUiOptions(managed, input); }),

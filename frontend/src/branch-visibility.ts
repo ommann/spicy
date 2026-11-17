@@ -1,44 +1,56 @@
-import { createMemo, createSignal } from 'solid-js';
-import { followHiddenLeaves } from './branch-visibility-model.ts';
+import { createMemo, createSignal, onMount } from 'solid-js';
+import { api } from './api';
 import type { Wire } from './types';
 
-const storageKey = 'spicy.hidden-branches';
-function load(): string[] {
-  try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(storageKey) || '[]');
-    const ids = Array.isArray(value) ? value
-      : value && typeof value === 'object' ? Object.values(value).filter(Array.isArray).flat() : [];
-    return [...new Set(ids.filter((id): id is string => typeof id === 'string'))];
-  } catch { return []; }
+type Change = Parameters<typeof api.hiddenBranches.change>[0];
+function apply(ids: string[], change: Change): string[] {
+  const result = new Set(ids);
+  if ('from' in change) {
+    if (result.delete(change.from)) result.add(change.to);
+  } else if (change.hidden) result.add(change.leafId);
+  else result.delete(change.leafId);
+  return [...result];
 }
-const [storedLeaves, setStoredLeaves] = createSignal(load());
+
 export const [showOnlyHiddenBranches, setShowOnlyHiddenBranches] = createSignal(false);
 
-export function createBranchVisibility() {
+export function createBranchVisibility(onError: (error: unknown) => void = console.error) {
+  const [storedLeaves, setStoredLeaves] = createSignal<string[]>([]);
   const hiddenLeaves = createMemo(() => new Set(storedLeaves()));
-  function persist(ids: string[]) {
-    try { window.localStorage.setItem(storageKey, JSON.stringify(ids)); }
-    catch { /* The filter still works without persistence. */ }
-  }
-  function save(ids: string[]) {
-    setStoredLeaves(ids);
-    persist(ids);
+  let pending: Change[] = [];
+  let loaded = false;
+  let writes = Promise.resolve();
+  onMount(() => {
+    void api.hiddenBranches.list({}).then(ids => {
+      setStoredLeaves(pending.reduce(apply, ids));
+      pending = [];
+      loaded = true;
+    }).catch(onError);
+  });
+  function change(input: Change) {
+    if (!loaded) pending.push(input);
+    setStoredLeaves(current => apply(current, input));
+    writes = writes.then(async () => {
+      const { token } = await api.info({});
+      await api.hiddenBranches.change(input, { context: { token } });
+    }).catch(async error => {
+      onError(error);
+      try { setStoredLeaves(await api.hiddenBranches.list({})); }
+      catch (reloadError) { onError(reloadError); }
+    });
   }
   return {
     hiddenLeaves,
     toggle(leafId: string) {
-      const ids = new Set(hiddenLeaves());
-      if (ids.has(leafId)) ids.delete(leafId);
-      else ids.add(leafId);
-      save([...ids]);
+      change({ leafId, hidden: !hiddenLeaves().has(leafId) });
     },
     follow(previous: Wire[], next: Wire[]) {
-      setStoredLeaves(current => {
-        const updated = followHiddenLeaves(current, previous, next);
-        if (updated.length === current.length && updated.every((id, index) => id === current[index])) return current;
-        persist(updated);
-        return updated;
-      });
+      for (const lane of next) {
+        const old = previous.find(item => item.key === lane.key);
+        if (old && old.leafId !== lane.leafId && (!loaded || hiddenLeaves().has(old.leafId))) {
+          change({ from: old.leafId, to: lane.leafId });
+        }
+      }
     },
   };
 }
