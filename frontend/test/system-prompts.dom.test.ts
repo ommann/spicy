@@ -2,7 +2,8 @@ import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { os, ORPCError } from '@orpc/server';
-import { createRpcFixture } from './rpc-fixture.ts';
+import { createRpcFixture as createBaseRpcFixture } from './rpc-fixture.ts';
+import { defaultUiOptions } from '../../shared/ui-options.ts';
 import { build } from 'vite';
 import solid from 'vite-plugin-solid';
 import { fileURLToPath } from 'node:url';
@@ -47,11 +48,23 @@ window.HTMLDialogElement.prototype.close = function () {
   this.open = false;
   this.dispatchEvent(new window.Event('close'));
 };
+// UI controls persist options even in component-only tests without an app fixture.
+function createRpcFixture(router = {}) {
+  let options = { ...defaultUiOptions };
+  return createBaseRpcFixture({
+    info: os.handler(() => ({ token: 'test' })),
+    uiOptions: {
+      get: os.handler(() => options),
+      change: os.handler(({ input }) => { options = { ...options, ...input }; return options; }),
+    },
+    ...router,
+  });
+}
+const componentRpc = createRpcFixture();
 let rpc;
 // RPCLink captures fetch at construction; keep one function and replace only the test server.
 globalThis.fetch = request => {
-  assert.ok(rpc, `Unexpected request outside an RPC fixture: ${request.url}`);
-  return rpc.fetch(request);
+  return (rpc ?? componentRpc).fetch(request);
 };
 const components = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 afterEach(async () => { rpc?.close(); await flush(); rpc = undefined; });
@@ -575,7 +588,7 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(root.querySelector('.system-prompts-view'), null);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft');
     assert.equal(JSON.stringify(entries), before);
-    assert.ok(requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list'].includes(request.path) || request.input?.type === 'get_available_models'), 'Viewing prompts does not mutate the session');
+    assert.ok(requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list', 'uiOptions/get', 'uiOptions/change'].includes(request.path) || request.input?.type === 'get_available_models'), 'Viewing prompts does not mutate the session');
   } finally { dispose(); }
 });
 
@@ -610,7 +623,7 @@ test('session URLs override tab selection, preserve deep links and restore on br
     for (let i = 0; i < 6; i++) await flush();
     assert.equal(dispose.history.get(), '/t/k7m3xqa9');
     assert.deepEqual(requests.filter(item => item.path === 'agents/create').map(item => item.input.sessionUrlId), ['k7m3xqa9', 'v8n4zrc2', 'k7m3xqa9']);
-    assert.ok(requests.every(item => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list'].includes(item.path)));
+    assert.ok(requests.every(item => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list', 'uiOptions/get', 'uiOptions/change'].includes(item.path)));
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
@@ -945,7 +958,7 @@ test('Single routes mount only one branch and composer while preserving shared s
     assert.match(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep right draft');
     assert.ok(root.querySelector('.composer-attachments img'));
-    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list'].includes(request.path) || request.input?.type === 'get_available_models'), 'View navigation sends no commands or prompts');
+    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list', 'uiOptions/get', 'uiOptions/change'].includes(request.path) || request.input?.type === 'get_available_models'), 'View navigation sends no commands or prompts');
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
@@ -1036,7 +1049,7 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
     assert.equal(root.querySelectorAll('.message-composer').length, 2);
     assert.ok(root.querySelector('.tree-node[data-entry-id="left-answer"]'));
     assert.ok(root.querySelector('.tree-node[data-entry-id="stream-right-0"]'));
-    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list', 'uiOptions/get', 'hiddenBranches/list', 'hiddenBranches/change'].includes(request.path) || request.input?.type === 'get_available_models'), 'Hiding uses dedicated persistence endpoints');
+    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list', 'uiOptions/get', 'uiOptions/change', 'hiddenBranches/list', 'hiddenBranches/change'].includes(request.path) || request.input?.type === 'get_available_models'), 'Hiding uses dedicated persistence endpoints');
   } finally {
     try { await onlyHidden(false); }
     finally {
