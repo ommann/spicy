@@ -28,7 +28,7 @@ import SelectWithDialog from './SelectWithDialog';
 import { type ConversationController, type ViewOptions } from './Conversation';
 import SingleConversation from './SingleConversation';
 import TreeConversation from './TreeConversation';
-import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes } from './conversation-model.ts';
+import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes, type ConversationLane } from './conversation-model.ts';
 import { applyRecord } from "./stream.ts";
 import { traceRecord } from './stream-timing';
 import { createAgentEvents } from './agent-events.ts';
@@ -207,7 +207,7 @@ export default function App(props: ParentProps) {
   });
 
   const composerStates = new Map<string, {
-    drafts: Record<string, string>; setDraft: (key: string, text: string) => void; lanes: Wire[]; view: ConversationViewState;
+    drafts: Record<string, string>; setDraft: (key: string, text: string) => void; lanes: ConversationLane[]; view: ConversationViewState;
   }>();
   const composerScope = createMemo(() => JSON.stringify([
     branchKey(), agentSnapshots()[visibleAgentIds()[0]]?.state?.sessionId || '',
@@ -223,7 +223,7 @@ export default function App(props: ParentProps) {
     return state;
   });
   const visibility = createBranchVisibility(reportFailure);
-  const composerLanes = createMemo<Wire[]>(() => {
+  const composerLanes = createMemo<ConversationLane[]>(() => {
     const state = composerState();
     const next = matchConversationLanes(graph(), state.lanes);
     visibility.follow(state.lanes, next);
@@ -586,6 +586,7 @@ export default function App(props: ParentProps) {
       const compaction = parseCompactionCommand(message);
       if (draft || target) {
         const entryId = draft?.sourceId || target;
+        if (!entryId) throw new Error('Could not find the source entry for this branch');
         const source = agentForEntry(visibleAgents(), entryId, selectedAgentId());
         if (!source) throw new Error('Could not find the source agent for this branch');
         agent = await api.agents.create({ sourceAgentId: source.agentId, entryId }, rpcOptions);

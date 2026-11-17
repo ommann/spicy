@@ -5,6 +5,7 @@ import SystemPromptReference from './SystemPromptReference';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { isUnstartedCompaction } from './conversation-model.ts';
 import { promptLabel } from './prompt-numbers';
+import { requiredMapValue } from '../../shared/required-map-value.ts';
 
 export function ConversationPrompt(value: { view: ConversationView; index: number }) {
   return <Show when={value.view} keyed>{view => {
@@ -38,7 +39,8 @@ export function ConversationNodes(value: { view: ConversationView }) {
   const { props, nodeIds, inheritedVersion, versionFor, layout, gridPlacement, scroll, spacing,
     registerSection, workingWidth, dismissBranch, observe, unobserve } = view;
   return <For each={nodeIds()}>{id => {
-    const node = () => props.graph.nodes.get(id);
+    // nodeIds contains only IDs in this graph's node map.
+    const node = () => requiredMapValue(props.graph.nodes, id);
     const inheritedKey = () => inheritedVersion(id)?.key;
     const selection = () => node().entry.type === 'branch_draft' && node().entry.draftSourceId ? {
       value: node().entry.draftPromptKey ?? inheritedKey() ?? '',

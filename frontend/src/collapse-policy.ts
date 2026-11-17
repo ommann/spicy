@@ -1,20 +1,24 @@
+import type { DiffRow } from '../../shared/prefix-diff.ts';
+
+export interface OmittedRow { kind: 'omitted'; omittedKind: string; text: string; tokens: never[] }
+
 // Grow previews with the content, but don't let a preview dominate the viewport.
-export function previewHeight(fullHeight, lineHeight, viewportHeight) {
+export function previewHeight(fullHeight: number, lineHeight: number, viewportHeight: number) {
   const minimum = 10 * lineHeight;
   const maximum = Math.max(minimum, viewportHeight * 0.6);
   return Math.min(maximum, Math.max(minimum, Math.sqrt(fullHeight / lineHeight) * 3 * lineHeight));
 }
 
 // Include the box insets, but only admit complete text lines.
-export function wholeLinePreviewHeight(height, lineHeight, topInset = 0, bottomInset = 0) {
+export function wholeLinePreviewHeight(height: number, lineHeight: number, topInset = 0, bottomInset = 0) {
   return topInset + Math.max(0, Math.floor((height - topInset - bottomInset) / lineHeight)) * lineHeight;
 }
 
 // Keep context around every change. If changes alone exceed the budget, share
 // space between change regions rather than dropping the later regions entirely.
-export function collapseDiffRows(rows, budget, context = 2) {
+export function collapseDiffRows<T extends DiffRow>(rows: T[], budget: number, context = 2): (T | OmittedRow)[] {
   const keep = new Set();
-  const changes = [];
+  const changes: [number, number][] = [];
   for (let i = 0; i < rows.length;) {
     if (!['add', 'remove'].includes(rows[i].kind)) { i++; continue; }
     const start = i;
@@ -29,7 +33,7 @@ export function collapseDiffRows(rows, budget, context = 2) {
       if (i < start || i >= end || changeCount <= budget || end - start <= allowance || i < start + Math.ceil(allowance / 2) || i >= end - Math.floor(allowance / 2)) keep.add(i);
     }
   }
-  const result = [];
+  const result: (T | OmittedRow)[] = [];
   for (let i = 0; i < rows.length;) {
     if (keep.has(i)) { result.push(rows[i++]); continue; }
     const start = i;

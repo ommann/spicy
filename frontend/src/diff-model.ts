@@ -1,7 +1,12 @@
 import { diffWordsWithSpace, parsePatch } from 'diff';
 import { diffLines } from './prefix-diff.ts';
+import type { DiffRow } from '../../shared/prefix-diff.ts';
 
-export function recordedEditDiff(details, path, edits = []) {
+interface EditDetails { patch?: string; diff?: string; oldLineCount?: number; newLineCount?: number }
+interface EditReplacement { oldText: string; newText: string }
+type Range = [number, number];
+
+export function recordedEditDiff(details: EditDetails | null | undefined, path: string, edits: EditReplacement[] = []) {
   if (typeof details?.patch === 'string' && details.patch.trim()) {
     try {
       const files = parsePatch(details.patch);
@@ -39,8 +44,8 @@ export function recordedEditDiff(details, path, edits = []) {
 }
 
 // Annotate replacement runs once, not on hover or for each syntax token.
-export function emphasizeRows(rows) {
-  const result = rows.map(row => ({ ...row, emphasis: [] }));
+export function emphasizeRows<T extends DiffRow>(rows: T[]) {
+  const result = rows.map(row => ({ ...row, emphasis: [] as Range[] }));
   for (let start = 0; start < result.length;) {
     if (!['add', 'remove'].includes(result[start].kind)) { start++; continue; }
     let end = start;
@@ -52,7 +57,7 @@ export function emphasizeRows(rows) {
       const after = added.map(row => row.text).join('\n');
       if (before.length + after.length <= 30000) {
         const changes = diffWordsWithSpace(before, after, { timeout: 30, maxEditLength: 2000 });
-        const ranges = { remove: [], add: [] };
+        const ranges: Record<'remove' | 'add', Range[]> = { remove: [], add: [] };
         let oldOffset = 0, newOffset = 0;
         for (const change of changes || []) {
           if (change.removed) ranges.remove.push([oldOffset, oldOffset + change.value.length]);
@@ -60,11 +65,11 @@ export function emphasizeRows(rows) {
           if (!change.added) oldOffset += change.value.length;
           if (!change.removed) newOffset += change.value.length;
         }
-        for (const [kind, group] of [['remove', removed], ['add', added]]) {
+        for (const [kind, group] of [['remove', removed], ['add', added]] as const) {
           let offset = 0;
           for (const row of group) {
             row.emphasis = ranges[kind].filter(([a, b]) => b > offset && a < offset + row.text.length)
-              .map(([a, b]) => [Math.max(0, a - offset), Math.min(row.text.length, b - offset)]);
+              .map(([a, b]): Range => [Math.max(0, a - offset), Math.min(row.text.length, b - offset)]);
             offset += row.text.length + 1;
           }
         }

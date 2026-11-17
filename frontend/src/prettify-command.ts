@@ -1,5 +1,5 @@
 // Format only direct Node heredocs; leave shell commands and delimiters untouched.
-export async function prettifyCommand(command) {
+export async function prettifyCommand(command: string) {
   const [{ format }, babel, estree] = await Promise.all([
     import('prettier/standalone'), import('prettier/plugins/babel'), import('prettier/plugins/estree'),
   ]);
@@ -25,4 +25,4 @@ export async function prettifyCommand(command) {
   return changed ? lines.join('') : null;
 }
 
-export const canPrettifyCommand = command => /(?:^|[;&|]\s*)\s*node(?:js)?(?:[ \t]+--input-type=module)?[ \t]+<<[ \t]*['"]?[A-Za-z_]\w*/m.test(command);
+export const canPrettifyCommand = (command: string) => /(?:^|[;&|]\s*)\s*node(?:js)?(?:[ \t]+--input-type=module)?[ \t]+<<[ \t]*['"]?[A-Za-z_]\w*/m.test(command);

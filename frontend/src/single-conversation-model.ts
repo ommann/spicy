@@ -1,9 +1,9 @@
-import { CHAT_BLOCK_GAP, conversationNodeHeight } from './conversation-model.ts';
+import { CHAT_BLOCK_GAP, conversationNodeHeight, type ConversationGraph, type ConversationNode, type LayoutPosition, type LayoutOptions } from './conversation-model.ts';
 
-export function singleConversationNodes(graph, lane) {
+export function singleConversationNodes(graph: ConversationGraph, lane: number) {
   const path = [];
   const seen = new Set();
-  let node = graph.leaves[Math.max(0, Math.min(lane, graph.leaves.length - 1))];
+  let node: ConversationNode | undefined = graph.leaves[Math.max(0, Math.min(lane, graph.leaves.length - 1))];
   while (node && !seen.has(node.id)) {
     seen.add(node.id);
     path.push(node);
@@ -14,15 +14,15 @@ export function singleConversationNodes(graph, lane) {
 
 // Single has no branch packing or connector geometry. Only the selected path
 // participates in measurement and layout; the session graph remains shared.
-export function layoutSingleConversation(graph, { width, viewportWidth, lane, heights = {}, composerHeights = {},
-  rowGap = CHAT_BLOCK_GAP, edgeGap = 24 }) {
+export function layoutSingleConversation(graph: ConversationGraph, { width, viewportWidth, lane, heights = {}, composerHeights = {},
+  rowGap = CHAT_BLOCK_GAP, edgeGap = 24 }: Omit<LayoutOptions, 'viewportHeight'>) {
   const focused = Math.max(0, Math.min(lane, graph.leaves.length - 1));
   const nodes = singleConversationNodes(graph, focused);
   const leaf = graph.leaves[focused];
   const inset = Math.max(edgeGap, (viewportWidth - width) / 2);
   const prefixHeight = Math.max(0, ...nodes.filter(node => node.entry.message?.role === 'system').map(node => heights[node.id] || 60));
-  const items = new Map();
-  let previous;
+  const items = new Map<string, LayoutPosition>();
+  let previous: LayoutPosition | undefined;
   for (const node of nodes) {
     const system = node.entry.message?.role === 'system';
     const hasPrompt = graph.prefix.get(node.id).captured || (node.entry.type === 'compaction' && node.entry.parentId === null

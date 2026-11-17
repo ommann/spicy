@@ -1,11 +1,14 @@
 import { api } from './api.ts';
 
+interface AgentChannel extends EventTarget { close(): void }
+interface AgentEventsOptions { onError: () => void; onOpen: () => void; onReset?: () => void; timeoutMs?: number }
+
 /** One oRPC SSE iterator per tab; reconnecting always obtains fresh snapshots. */
-export function createAgentEvents({ onError, onOpen, onReset = () => {}, timeoutMs = 45000 }) {
-  const channels = new Map();
-  let source;
-  let timer;
-  let retryTimer;
+export function createAgentEvents({ onError, onOpen, onReset = () => {}, timeoutMs = 45000 }: AgentEventsOptions) {
+  const channels = new Map<string, AgentChannel>();
+  let source: AbortController | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let revision = 0;
   let disposed = false;
   let retryMs = 500;
@@ -16,7 +19,7 @@ export function createAgentEvents({ onError, onOpen, onReset = () => {}, timeout
     retryTimer = setTimeout(reconnect, retryMs);
     retryMs = Math.min(10000, retryMs * 2);
   }
-  function arm(current) {
+  function arm(current: AbortController) {
     clearTimeout(timer);
     timer = setTimeout(() => {
       if (source !== current) return;
@@ -51,7 +54,7 @@ export function createAgentEvents({ onError, onOpen, onReset = () => {}, timeout
             onReset();
             return;
           }
-          if (envelope.type === 'agent') {
+          if (envelope.type === 'agent' && 'agentId' in envelope) {
             channels.get(envelope.agentId)?.dispatchEvent(new MessageEvent(envelope.event, { data: JSON.stringify(envelope.data) }));
           }
         }
@@ -70,10 +73,12 @@ export function createAgentEvents({ onError, onOpen, onReset = () => {}, timeout
     queueMicrotask(() => { if (revision === next && !disposed) reconnect(); });
   }
   return {
-    watch(id) {
-      if (channels.has(id)) return channels.get(id);
-      const channel = new EventTarget();
-      channel.close = () => { if (channels.get(id) === channel) { channels.delete(id); schedule(); } };
+    watch(id: string): AgentChannel {
+      const existing = channels.get(id);
+      if (existing) return existing;
+      const channel: AgentChannel = Object.assign(new EventTarget(), {
+        close() { if (channels.get(id) === channel) { channels.delete(id); schedule(); } },
+      });
       channels.set(id, channel);
       schedule();
       return channel;

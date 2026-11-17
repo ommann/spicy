@@ -2,15 +2,33 @@ import { SAVED_SYSTEM_PROMPT_ENTRY } from '../packages/coding-agent/src/core/sys
 import { createPrefixResolver, systemEntryForState } from './prefix-state.ts';
 import { diffLines, diffPrefixes } from './prefix-diff.ts';
 
+import type { PrefixState, Wire } from './trace-types.ts';
+
+export interface PromptSummary { key: string; number: number }
+export interface PromptVersion extends PromptSummary {
+  key: string;
+  number: number;
+  previousNumber?: number;
+  previousKey?: string;
+  priorityReason?: string;
+  full?: Wire;
+  unified?: Wire;
+  detail: Wire;
+}
+export interface SystemPromptCatalog<Version extends PromptSummary = PromptVersion> {
+  versions: Version[];
+  numberFor: (state: PrefixState | null | undefined) => number | undefined;
+}
+
 // Show all system instructions, including the available tool definitions.
-export function systemPromptText(state) {
+export function systemPromptText(state: Pick<PrefixState, 'content' | 'sections' | 'tools'>) {
   const content = typeof state.content === 'string' ? state.content
     : (state.content || []).filter(block => block.type === 'text').map(block => block.text).join('\n');
   const tools = state.tools.size ? `## Tool definitions\n\n${JSON.stringify([...state.tools.values()], null, 2)}` : '';
   return [content, ...state.sections.values(), tools].filter(text => text !== null && text.length > 0).join('\n\n');
 }
 
-export function promptDocument(before, after) {
+export function promptDocument(before: Pick<PrefixState, 'content' | 'sections' | 'tools'>, after: Pick<PrefixState, 'content' | 'sections' | 'tools'>) {
   const rows = diffLines(systemPromptText(before), systemPromptText(after));
   return [{ name: 'content', hunks: [{ rows }] }];
 }
@@ -18,9 +36,9 @@ export function promptDocument(before, after) {
 // Reply chunks change message bodies, not prompt history. Keep expensive prompt
 // serialization and diffs out of that hot path while tracking all parent links.
 export function createMemoizedSystemPromptCatalog() {
-  let previous = [];
-  let catalog;
-  return entries => {
+  let previous: unknown[][] = [];
+  let catalog: SystemPromptCatalog | undefined;
+  return (entries: Wire[]) => {
     const inputs = entries.map(entry => [entry.id, entry.parentId, entry.type,
       entry.message?.role, entry.message?.role === 'system' ? entry.message : undefined,
       entry.systemMessage, entry.systemPromptKey, entry.customType,
@@ -35,10 +53,12 @@ export function createMemoizedSystemPromptCatalog() {
 }
 
 // Number captured prompt states in recording order, independently of the active lane.
-export function createSystemPromptCatalog(entries, { details = true } = {}) {
+export function createSystemPromptCatalog(entries: Wire[], options: { details: false }): SystemPromptCatalog<PromptSummary>;
+export function createSystemPromptCatalog(entries: Wire[], options?: { details?: true }): SystemPromptCatalog;
+export function createSystemPromptCatalog(entries: Wire[], { details = true } = {}): SystemPromptCatalog<PromptSummary> {
   const prefix = createPrefixResolver(entries);
-  const numbers = new Map();
-  const versions = [];
+  const numbers = new Map<string, number>();
+  const versions: (PromptVersion | PromptSummary)[] = [];
   for (const recorded of entries) {
     const saved = recorded.type === 'custom' && recorded.customType === SAVED_SYSTEM_PROMPT_ENTRY;
     const entry = saved ? { ...recorded, parentId: null, systemPromptKey: recorded.id, message: {
@@ -55,7 +75,7 @@ export function createSystemPromptCatalog(entries, { details = true } = {}) {
     const previous = prefix.get(entry.parentId);
     const previousText = previous.captured ? systemPromptText(previous) : undefined;
     const previousKey = previous.promptKey ?? previousText;
-    const previousNumber = numbers.get(previousKey);
+    const previousNumber = previousKey === undefined ? undefined : numbers.get(previousKey);
     numbers.set(key, number);
     if (!details) {
       versions.push({ key, number });

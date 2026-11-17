@@ -1,17 +1,27 @@
-const savedMessages = new WeakMap();
-const streamProjections = new WeakMap();
-const leafProjections = new WeakMap();
+import type { Snapshot, Wire } from './types.ts';
+import type { ConversationGraph } from './conversation-model.ts';
+
+type Agent = Snapshot & { streamUserOnly?: boolean };
+const savedMessages = new WeakMap<Wire[], Set<string>>();
+const streamProjections = new WeakMap<Agent, {
+  entries: Wire[]; live: Wire[]; leafId: string | null; userOnly?: boolean; result: Wire[];
+}>();
+const leafProjections = new WeakMap<ConversationGraph, WeakMap<Agent, {
+  stream: Wire[]; leafId: string | null; visibleLeaf?: string;
+}>>();
 
 // Shared ancestors retain their IDs; only streamed messages need agent-local IDs.
-export function agentStreamEntries(agent) {
+export function agentStreamEntries(agent: Agent): Wire[] {
   const cached = streamProjections.get(agent);
   if (cached && cached.entries === agent.entries && cached.live === agent.live
     && cached.leafId === agent.leafId && cached.userOnly === agent.streamUserOnly) return cached.result;
   let parentId = agent.leafId;
   let saved = savedMessages.get(agent.entries);
   if (!saved) {
-    saved = new Set(agent.entries.filter(entry => Number.isFinite(entry.message?.timestamp))
-      .map(entry => `${entry.message.role}:${entry.message.timestamp}`));
+    saved = new Set(agent.entries.flatMap(entry => {
+      const message = entry.message;
+      return message && Number.isFinite(message.timestamp) ? [`${message.role}:${message.timestamp}`] : [];
+    }));
     savedMessages.set(agent.entries, saved);
   }
   const result = (agent.live || []).flatMap((message, index) => {
@@ -26,12 +36,12 @@ export function agentStreamEntries(agent) {
   return result;
 }
 
-export function mergeAgentEntries(agents, origins = {}) {
-  const entries = new Map();
+export function mergeAgentEntries(agents: Agent[], origins: Record<string, { baseline: string[]; draftId: string }> = {}) {
+  const entries = new Map<string, Wire>();
   // Keep each agent's branch in the same order when live entries become saved
   // entries, so simultaneous streams cannot exchange columns or input drafts.
   for (const agent of agents) {
-    const origin = origins[agent.agentId];
+    const origin = agent.agentId ? origins[agent.agentId] : undefined;
     let marked = false;
     for (const entry of [...agent.entries, ...agentStreamEntries(agent)]) {
       const startsBranch = origin && !marked && entry.message?.role === 'user' && !origin.baseline.includes(entry.id);
@@ -42,7 +52,7 @@ export function mergeAgentEntries(agents, origins = {}) {
   return [...entries.values()];
 }
 
-export function agentForLeaf(graph, agents, leafId, preferredId) {
+export function agentForLeaf(graph: ConversationGraph, agents: Agent[], leafId: string, preferredId?: string) {
   let leaves = leafProjections.get(graph);
   if (!leaves) leafProjections.set(graph, leaves = new WeakMap());
   const matches = agents.filter(agent => {
@@ -58,7 +68,7 @@ export function agentForLeaf(graph, agents, leafId, preferredId) {
   return matches.find(agent => agent.agentId === preferredId) ?? matches[0];
 }
 
-export function agentForEntry(agents, entryId, preferredId) {
+export function agentForEntry(agents: Agent[], entryId: string, preferredId?: string) {
   const matches = agents.filter(agent => agent.entries.some(entry => entry.id === entryId));
   return matches.find(agent => agent.agentId === preferredId) ?? matches[0];
 }

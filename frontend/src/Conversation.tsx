@@ -22,6 +22,8 @@ import type { AgentHealthStatus } from './AgentHealth';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import { createKeyboardShortcuts } from './keyboard-shortcuts';
 import type { Wire } from './types';
+import type { ConversationGraph, ConversationLane, LayoutOptions } from './conversation-model.ts';
+import { requiredMapValue } from '../../shared/required-map-value.ts';
 import type { PromptVersion } from './SystemPromptRoute';
 import type { SelectOption } from './SelectWithDialog';
 import { systemPromptText } from './system-prompts.ts';
@@ -43,13 +45,10 @@ interface Props {
   onMode: (mode: ConversationMode) => void;
   modeHref: (mode: ConversationMode) => string;
   viewState: ConversationViewState;
-  layout: (graph: Wire, options: {
-    mode: ConversationMode; width: number; viewportWidth: number; viewportHeight: number; lane: number;
-    heights: Record<string, number>; composerHeights: Record<string, number>; rowGap: number; columnGap: number; edgeGap: number;
-  }) => Wire;
+  layout: (graph: ConversationGraph, options: LayoutOptions & { mode: ConversationMode }) => Wire;
   children: (view: ConversationView) => JSX.Element;
-  graph: Wire;
-  lanes: Wire[];
+  graph: ConversationGraph;
+  lanes: ConversationLane[];
   drafts: Record<string, string>;
   onDraftChange: (key: string, text: string) => void;
   active: boolean;
@@ -231,7 +230,13 @@ function createConversation(props: Props, state: ConversationViewState, initialM
   }));
   const nodeIds = createMemo<string[]>(() => {
     const ids: string[] = mode() === 'focused' ? [...layout().items.keys()] : props.graph.ids;
-    return ids.filter(id => props.graph.nodes.get(id).entry.message?.role !== 'system');
+    return ids.filter(id => {
+      const { message } = requiredMapValue(props.graph.nodes, id).entry;
+      if (!message) {
+        return true;
+      }
+      return message.role !== 'system';
+    });
   }, [], { equals: (previous, next) => previous.length === next.length && previous.every((id, index) => id === next[index]) });
   const laneKeys = createMemo(() => mode() === 'focused' ? [lanes()[focused()].key as string] : lanes().map(lane => lane.key as string));
   // Grid lines retain the measured branch geometry used by connectors and scrolling.

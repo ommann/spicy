@@ -1,18 +1,41 @@
 import { createPrefixResolver } from './chat/prefix-state.ts';
 import { createSystemPromptCatalog, systemPromptText } from './system-prompts.ts';
 import { branchEntries } from './session-entries.ts';
+import { requiredMapValue } from '../../shared/required-map-value.ts';
+
+import type { Wire } from './types.ts';
+import type { PrefixState } from '../../shared/trace-types.ts';
+import type { PromptVersion, SystemPromptCatalog } from '../../shared/system-prompts.ts';
+
+export interface ConversationNode {
+  id: string; entry: Wire; parts: Wire[]; children: ConversationNode[]; anchors: string[];
+  isPrefixDelta: boolean; parent?: ConversationNode; first: number; last: number; depth: number; promptFork?: boolean;
+}
+export interface ConversationGraph {
+  raw: Map<string, Wire>; nodes: Map<string, ConversationNode>; roots: ConversationNode[];
+  leaves: ConversationNode[]; activeLeaf?: ConversationNode;
+  prefix: ReturnType<typeof createPrefixResolver>; prompts: SystemPromptCatalog;
+  ancestors: (id: string | null | undefined) => string[]; ids: string[]; forks: ConversationNode[];
+}
+export interface ConversationLane { key: string; leafId: string; path: string[] }
+export interface LayoutPosition { top: number; height: number; hidden: boolean; column: number; left: number; span: number; cardLeft: number }
+export interface LayoutOptions {
+  width: number; viewportWidth: number; viewportHeight: number; lane: number;
+  heights?: Record<string, number>; composerHeights?: Record<number, number>;
+  rowGap?: number; columnGap?: number; edgeGap?: number;
+}
 
 export const CHAT_BLOCK_GAP = 20;
 
 // Entries are immutable snapshots. Preserve parts for unchanged history so Solid
 // does not reconcile every historical card for each streamed token.
-const projectedParts = new WeakMap();
+const projectedParts = new WeakMap<Wire, { message?: Wire; summary: boolean; results: (Wire | undefined)[]; parts?: Wire[] }>();
 
-export function projectChatParts(entries) {
+export function projectChatParts(entries: Wire[]) {
   const summaries = new Set(entries.filter(entry => entry.type === 'branch_summary').map(entry => entry.fromId));
   const results = new Map(entries.filter(entry => entry.message?.role === 'toolResult').map(entry => [entry.message.toolCallId, entry.message]));
-  const parts = new Map();
-  const add = (entry, part) => {
+  const parts = new Map<string, Wire[]>();
+  const add = (entry: Wire, part: Wire) => {
     const group = parts.get(entry.id) || [];
     if (part.encrypted && group.at(-1)?.encrypted) return;
     group.push({ ...part, entryId: entry.id });
@@ -22,7 +45,7 @@ export function projectChatParts(entries) {
   for (const entry of entries) {
     const message = entry.message;
     const toolResults = message?.role === 'assistant'
-      ? (message.content || []).filter(block => block.type === 'toolCall').map(block => results.get(block.id)) : [];
+      ? (message.content || []).filter((block: Wire) => block.type === 'toolCall').map((block: Wire) => results.get(block.id)) : [];
     const summary = summaries.has(entry.id);
     const cached = projectedParts.get(entry);
     if (cached && cached.message === message && cached.summary === summary
@@ -69,7 +92,7 @@ export function projectChatParts(entries) {
   return parts;
 }
 
-export function createConversationGraph(entries, promptVersions) {
+export function createConversationGraph(entries: Wire[], promptVersions?: PromptVersion[]): ConversationGraph {
   // An empty conversation is a draft lane, rendered exactly like a branch draft.
   if (!projectChatParts(entries).size) return createConversationGraph([...entries, {
     id: 'empty-chat-draft', parentId: entries.at(-1)?.id || null, type: 'branch_draft', optimistic: true,
@@ -77,16 +100,16 @@ export function createConversationGraph(entries, promptVersions) {
   const raw = new Map(entries.filter(entry => entry.parentId !== undefined).map(entry => [entry.id, entry]));
   const parts = projectChatParts(entries);
   const prefix = createPrefixResolver(entries);
-  const prompts = promptVersions ? { versions: promptVersions, numberFor: state => state?.captured
+  const prompts = promptVersions ? { versions: promptVersions, numberFor: (state: PrefixState | null | undefined) => state?.captured
     ? promptVersions.find(version => version.key === (state.promptKey ?? systemPromptText(state)))?.number : undefined
   } : createSystemPromptCatalog(entries);
-  const nodes = new Map([...parts].filter(([id]) => raw.has(id)).map(([id, content]) => [id, {
-    id, entry: raw.get(id), parts: content, children: [], anchors: [],
-    isPrefixDelta: prefix.isDelta(raw.get(id)), parent: undefined,
+  const nodes = new Map<string, ConversationNode>([...parts].filter(([id]) => raw.has(id)).map(([id, content]) => [id, {
+    id, entry: requiredMapValue(raw, id), parts: content, children: [], anchors: [],
+    isPrefixDelta: prefix.isDelta(requiredMapValue(raw, id)), parent: undefined,
     first: 0, last: 0, depth: 0,
   }]));
-  const labels = new Map();
-  const toolOwners = new Map();
+  const labels = new Map<string, string>();
+  const toolOwners = new Map<string, string>();
 
   for (const entry of entries) {
     if (entry.type === 'label') {
@@ -100,7 +123,7 @@ export function createConversationGraph(entries, promptVersions) {
 
   for (const [id, label] of labels) {
     let target = raw.get(id);
-    if (target?.message?.role === 'toolResult') target = raw.get(toolOwners.get(target.message.toolCallId)) || target;
+    if (target?.message?.role === 'toolResult') target = raw.get(toolOwners.get(target.message.toolCallId) ?? '') || target;
     const seen = new Set();
     while (target && !nodes.has(target.id) && !seen.has(target.id)) {
       seen.add(target.id);
@@ -109,7 +132,7 @@ export function createConversationGraph(entries, promptVersions) {
     if (target) nodes.get(target.id)?.anchors.push(label);
   }
 
-  const roots = [];
+  const roots: ConversationNode[] = [];
   for (const node of nodes.values()) {
     let parentId = node.entry.parentId;
     const seen = new Set();
@@ -131,8 +154,8 @@ export function createConversationGraph(entries, promptVersions) {
     }
   }
 
-  const leaves = [];
-  function assign(node, depth) {
+  const leaves: ConversationNode[] = [];
+  function assign(node: ConversationNode, depth: number) {
     node.depth = depth;
     node.first = leaves.length;
     // A required tool-set update starts a new presentation lane. The real parent
@@ -147,14 +170,14 @@ export function createConversationGraph(entries, promptVersions) {
 
   const branch = branchEntries(entries.filter(entry => !entry.draftSourceId));
   const order = new Map(branch.map((entry, index) => [entry.id, index]));
-  const activeLeaf = leaves.filter(leaf => order.has(leaf.id)).sort((a, b) => order.get(b.id) - order.get(a.id))[0] || leaves.at(-1);
-  const ancestors = id => {
-    const path = [];
-    const seen = new Set();
+  const activeLeaf = leaves.filter(leaf => order.has(leaf.id)).sort((a, b) => requiredMapValue(order, b.id) - requiredMapValue(order, a.id))[0] || leaves.at(-1);
+  const ancestors = (id: string | null | undefined) => {
+    const path: string[] = [];
+    const seen = new Set<string>();
     while (id && raw.has(id) && !seen.has(id)) {
       seen.add(id);
       path.push(id);
-      id = raw.get(id).parentId;
+      id = requiredMapValue(raw, id).parentId;
     }
     return path;
   };
@@ -163,14 +186,14 @@ export function createConversationGraph(entries, promptVersions) {
     ids: [...nodes.keys()], forks: [...nodes.values()].filter(node => node.children.length > 1 || node.promptFork) };
 }
 
-export function matchConversationLanes(graph, previous = []) {
+export function matchConversationLanes(graph: ConversationGraph, previous: ConversationLane[] = []): ConversationLane[] {
   const used = new Set();
   const currentIds = new Set(graph.leaves.map(leaf => leaf.id));
   const lanes = graph.leaves.map(leaf => {
     const saved = previous.find(lane => lane.leafId === leaf.id);
     if (saved) used.add(saved.key);
     const path = graph.ancestors(leaf.id);
-    return { key: saved?.key, leafId: leaf.id, path: [...path, ...path.map(id => graph.raw.get(id)?.laneOriginId).filter(Boolean)] };
+    return { key: saved?.key ?? '', leafId: leaf.id, path: [...path, ...path.map(id => graph.raw.get(id)?.laneOriginId).filter((id): id is string => typeof id === 'string')] };
   });
 
   for (const lane of lanes) {
@@ -188,14 +211,35 @@ export function matchConversationLanes(graph, previous = []) {
   return lanes;
 }
 
-export function isUnstartedCompaction(graph, id) {
-  const path = graph.ancestors(id).map(entryId => graph.raw.get(entryId));
+export function isUnstartedCompaction(graph: ConversationGraph, id: string) {
+  const path = graph.ancestors(id).map(entryId => requiredMapValue(graph.raw, entryId));
   const root = path.at(-1);
-  return root?.type === 'compaction' && root.parentId === null
-    && !path.some(entry => ['user', 'assistant'].includes(entry.message?.role));
+  if (!root) {
+    return false;
+  }
+  if (root.type !== 'compaction') {
+    return false;
+  }
+  if (root.parentId !== null) {
+    return false;
+  }
+
+  for (const entry of path) {
+    const { message } = entry;
+    if (!message) {
+      continue;
+    }
+    if (message.role === 'user') {
+      return false;
+    }
+    if (message.role === 'assistant') {
+      return false;
+    }
+  }
+  return true;
 }
 
-export function continuationTarget(graph, id) {
+export function continuationTarget(graph: ConversationGraph, id: string) {
   const seen = new Set([id]);
   let target = id;
   while (true) {
@@ -206,20 +250,20 @@ export function continuationTarget(graph, id) {
   }
 }
 
-export function conversationNodeHeight(node, heights, rowGap) {
+export function conversationNodeHeight(node: ConversationNode, heights: Record<string, number>, rowGap: number) {
   if (node.entry.message?.role === 'system') return 0;
   return heights[node.id] || (node.entry.type === 'branch_draft' ? (node.entry.draftSourceId ? 60 : 120 + rowGap)
     : node.parts.reduce((sum, part) => sum + (part.kind === 'message' || part.kind === 'thinking' ? 44 : 60), 0));
 }
 
 // Tree-only packing, shared-card placement, and connector paths.
-export function layoutConversation(graph, { width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {},
-  rowGap = CHAT_BLOCK_GAP, columnGap = 48, edgeGap = 24 }) {
+export function layoutConversation(graph: ConversationGraph, { width, viewportWidth, viewportHeight, lane, heights = {}, composerHeights = {},
+  rowGap = CHAT_BLOCK_GAP, columnGap = 48, edgeGap = 24 }: LayoutOptions) {
   const inlineComposers = true;
   const focused = Math.max(0, Math.min(lane, graph.leaves.length - 1));
   const gap = columnGap;
   const inset = Math.max(edgeGap, viewportWidth / 2);
-  const pending = node => node.entry.type === 'branch_draft' && node.entry.draftSourceId;
+  const pending = (node: ConversationNode) => node.entry.type === 'branch_draft' && node.entry.draftSourceId;
   const committed = graph.leaves.filter(node => !pending(node));
   const drafts = graph.leaves.filter(pending);
   const starts = graph.leaves.map(node => {
@@ -228,9 +272,9 @@ export function layoutConversation(graph, { width, viewportWidth, viewportHeight
   });
   const anchor = pending(graph.leaves[focused]) ? committed.find(leaf => leaf.id === graph.leaves[focused].entry.draftAnchorId) : undefined;
   const historyFocus = anchor ? graph.leaves.indexOf(anchor) : pending(graph.leaves[focused])
-    ? graph.leaves.indexOf(committed.find(leaf => graph.ancestors(leaf.id).includes(graph.leaves[focused].entry.draftSourceId))) : focused;
+    ? graph.leaves.findIndex(leaf => committed.includes(leaf) && graph.ancestors(leaf.id).includes(graph.leaves[focused].entry.draftSourceId)) : focused;
   const totalWidth = inset * 2 + Math.max(0, graph.leaves.length * (width + gap) - gap);
-  const items = new Map();
+  const items = new Map<string, LayoutPosition>();
   const prefixHeight = Math.max(0, ...[...graph.nodes.values()].filter(node => node.entry.message?.role === 'system').map(node => heights[node.id] || 60));
 
   for (const node of [...graph.nodes.values()].sort((a, b) => a.depth - b.depth)) {
@@ -246,7 +290,8 @@ export function layoutConversation(graph, { width, viewportWidth, viewportHeight
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
     const hasPrompt = graph.prefix.get(node.id).captured || (node.entry.type === 'compaction' && node.entry.parentId === null
       && graph.leaves.slice(node.first, node.last + 1).some(leaf => graph.prefix.get(leaf.id).captured));
-    const top = system ? 0 : parent ? items.get(parent.id).top + items.get(parent.id).height + rowGap
+    const parentPosition = parent ? requiredMapValue(items, parent.id) : undefined;
+    const top = system ? 0 : parentPosition ? parentPosition.top + parentPosition.height + rowGap
       : hasPrompt ? prefixHeight + rowGap : 0;
     const height = conversationNodeHeight(node, heights, rowGap);
     const first = Math.min(...range);
@@ -256,24 +301,27 @@ export function layoutConversation(graph, { width, viewportWidth, viewportHeight
 
   const composers = graph.leaves.map((_, index) => {
     const bottom = Math.max(prefixHeight, ...[...graph.nodes.values()]
-      .filter(node => !items.get(node.id).hidden && node.first <= index && node.last >= index)
-      .map(node => items.get(node.id).top + items.get(node.id).height));
+      .filter(node => !requiredMapValue(items, node.id).hidden && node.first <= index && node.last >= index)
+      .map(node => {
+        const position = requiredMapValue(items, node.id);
+        return position.top + position.height;
+      }));
     return { left: inset + starts[index], top: bottom + rowGap, height: composerHeights[index] || 40 };
   });
   const height = Math.max(prefixHeight,
     ...(inlineComposers ? composers.map(composer => composer.top + composer.height) : []),
-    ...[...graph.nodes.values()].filter(node => !items.get(node.id).hidden).map(node => items.get(node.id).top + items.get(node.id).height))
+    ...[...items.values()].filter(position => !position.hidden).map(position => position.top + position.height))
     + Math.max(80, viewportHeight * .75);
   const paths = [];
 
   for (const node of graph.nodes.values()) {
-    const position = items.get(node.id);
+    const position = requiredMapValue(items, node.id);
     if (position.hidden || node.entry.message?.role === 'system') continue;
     let parent = node.parent;
     while (parent?.entry.message?.role === 'system') parent = parent.parent;
     if (!parent || (parent.children.length < 2 && !parent.promptFork)) continue;
 
-    const previous = items.get(parent.id);
+    const previous = requiredMapValue(items, parent.id);
     paths.push({ id: node.id, fork: parent.children.length > 1 || parent.promptFork,
       d: `M ${inset + starts[previous.column] + width / 2} ${previous.top + previous.height} V ${position.top - rowGap / 2} H ${inset + starts[position.column] + width / 2} V ${position.top}` });
   }

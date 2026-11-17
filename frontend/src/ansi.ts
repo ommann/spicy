@@ -1,10 +1,18 @@
+import type { JSX } from 'solid-js';
+
+interface AnsiState {
+  bold?: boolean; dim?: boolean; italic?: boolean; underline?: boolean;
+  inverse?: boolean; conceal?: boolean; strike?: boolean; fg?: string; bg?: string;
+}
+interface AnsiRun { text: string; style: JSX.CSSProperties }
+
 // Parse terminal SGR into data. Solid owns the resulting text and style elements.
 const colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
 const palette = [...colors, ...colors.map(color => `bright-${color}`)].map(color => `var(--ansi-${color})`);
 // Terminal controls are the input this tokenizer is specifically designed to parse.
 const control = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][\s\S]*?(?:\x07|\x1b\\)|\x1b[()][0-2A-Z]|\x1b[@-_]/g;
 
-function indexed(n) {
+function indexed(n: number) {
   if (n < 16) return palette[n];
   if (n < 232) {
     const levels = [0, 95, 135, 175, 215, 255];
@@ -17,9 +25,9 @@ function indexed(n) {
 }
 
 export function createAnsiTokenizer() {
-  let state = {};
+  let state: AnsiState = {};
 
-  function sgr(sequence) {
+  function sgr(sequence: string) {
     const values = sequence.slice(2, -1).replace(/:2::/g, ';2;').replaceAll(':', ';').split(';').map(value => Number(value || 0));
     for (let i = 0; i < values.length; i++) {
       const n = values[i];
@@ -56,12 +64,12 @@ export function createAnsiTokenizer() {
     }
   }
 
-  return value => {
-    const runs = [];
-    const append = text => {
+  return (value: string) => {
+    const runs: AnsiRun[] = [];
+    const append = (text: string) => {
       if (!text) return;
 
-      const style = {};
+      const style: JSX.CSSProperties = {};
       const fg = state.inverse ? state.bg || 'var(--background)' : state.fg;
       const bg = state.inverse ? state.fg || 'var(--text)' : state.bg;
       if (fg) style.color = fg;

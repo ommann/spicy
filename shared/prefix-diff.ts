@@ -1,5 +1,11 @@
+import type { PrefixState } from './trace-types.ts';
+
+export interface DiffRow { kind: string; text: string; oldLine?: number; newLine?: number }
+export interface DiffHunk { oldStart: number; newStart: number; oldCount: number; newCount: number; rows: DiffRow[] }
+export interface PrefixDiffFile { name: string; hunks: DiffHunk[] }
+
 // Small, dependency-free line diff. Limit quadratic work for very large replacements.
-export function diffLines(before, after) {
+export function diffLines(before: string, after: string) {
   const a = before === '' ? [] : before.split('\n');
   const b = after === '' ? [] : after.split('\n');
   let start = 0, end = 0;
@@ -33,8 +39,8 @@ export function diffLines(before, after) {
     return result;
   });
 }
-function hunks(rows, context = 2) {
-  const ranges = [];
+function hunks(rows: ReturnType<typeof diffLines>, context = 2) {
+  const ranges: { start: number; end: number }[] = [];
   rows.forEach((row, index) => {
     if (row.kind === 'context') return;
     const start = Math.max(0, index - context), end = Math.min(rows.length, index + context + 1);
@@ -49,9 +55,9 @@ function hunks(rows, context = 2) {
       newCount: selected.filter(r => r.kind !== 'remove').length, rows: selected};
   });
 }
-export function diffPrefixes(before, after, { fullContext = false } = {}) {
-  const files = [];
-  function compare(name, a, b) {
+export function diffPrefixes(before: PrefixState, after: PrefixState, { fullContext = false } = {}) {
+  const files: PrefixDiffFile[] = [];
+  function compare(name: string, a: string, b: string) {
     if (a === b && !fullContext) return;
     const rows = diffLines(a, b);
     if (!rows.length) return;
@@ -62,7 +68,7 @@ export function diffPrefixes(before, after, { fullContext = false } = {}) {
       rows,
     }] : hunks(rows)});
   }
-  const text = value => typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  const text = (value: unknown): string => typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? '';
   compare('content', text(before.content), text(after.content));
   for (const name of new Set([...before.sections.keys(), ...after.sections.keys()])) {
     compare(`sections.${name}`, before.sections.has(name) ? text(before.sections.get(name)) : '', after.sections.has(name) ? text(after.sections.get(name)) : '');

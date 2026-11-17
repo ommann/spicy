@@ -1,5 +1,7 @@
+import type { Wire } from './types.ts';
+
 /** RPC deltas have no cumulative message snapshot. Reconstruct by contentIndex. */
-export function applyRecord(messages, record) {
+export function applyRecord(messages: Wire[], record: Wire): Wire[] {
   if (record.type === 'bash_execution_start') return [...messages, {
     role: 'bashExecution', command: record.command, excludeFromContext: record.excludeFromContext,
     timestamp: record.timestamp, output: '', shellPending: true,

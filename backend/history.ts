@@ -8,6 +8,11 @@ import { prepareHistory } from './history-preview.ts';
 import { cachedPreviews } from './preview-cache.ts';
 import { withTreePreviews } from './tree-preview-cache.ts';
 
+type HistoryCard = ReturnType<typeof prepareHistory> & {
+  id: string; path: string; modified: number;
+  latest?: { text: string; user: boolean; href: string; title?: string };
+};
+
 type PreviewSession = Pick<SessionInfo, 'path' | 'urlId' | 'cwd' | 'parentSessionPath' | 'created' | 'modified'> & { revision?: number };
 
 /** Read saved histories without creating agents or resolving image attachments. */
@@ -47,7 +52,7 @@ async function buildHistoryCards(managed: string) {
     group.push(session);
     groups.set(key, group);
   }
-  return withTreePreviews(managed, cached => [...groups.values()].map(group => {
+  return withTreePreviews<HistoryCard>(managed, cached => [...groups.values()].map(group => {
     group.sort((a, b) => ancestry(a).length - ancestry(b).length || a.created.getTime() - b.created.getTime() || a.path.localeCompare(b.path));
     const signature = JSON.stringify([1, ...group.map(session => [session.path, session.revision,
       session.urlId, session.cwd, session.parentSessionPath, session.created.getTime()])]);

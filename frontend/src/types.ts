@@ -1,6 +1,7 @@
 // Pi allows extension-defined roles, blocks and entry fields. Keep unknown wire
 // fields at this boundary; UI topology and component props are explicitly typed.
-export type Wire = Record<string, any>;
+import type { Wire } from '../../shared/trace-types.ts';
+export type { Wire } from '../../shared/trace-types.ts';
 export interface Entry extends Wire { id: string; parentId: string | null; type: string; message?: Wire }
 export interface TreeNode { entry: Entry; parent: TreeNode | null; children: TreeNode[]; depth: number; column: number; span: number }
 export interface Session { id: string; name: string; modified: number; managed: boolean }
