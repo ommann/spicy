@@ -1,3 +1,4 @@
+import { loadUiOptions } from './ui-options';
 import ScrollableTextarea from './ScrollableTextarea';
 import { FileLinkCwdContext } from './file-link';
 import Input from './Input';
@@ -699,7 +700,10 @@ export default function App(props: ParentProps) {
       setSessionRoutingReady(true);
     }
   }
-  onMount(() => { void restoreBridge(); });
+  onMount(() => {
+    void loadUiOptions().catch(reportFailure);
+    void restoreBridge();
+  });
   onCleanup(() => {
     appLifecycle.abort();
     agentEvents.close();

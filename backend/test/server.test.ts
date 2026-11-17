@@ -48,7 +48,12 @@ test('local bridge protects mutation endpoints and supports live oRPC, fork and 
     assert.match(promptRoute.headers.get('content-type'), /text\/html/);
     assert.match(await promptRoute.text(), /<div id="root"><\/div>/);
     await assert.rejects(api.start({}), error => error.code === 'FORBIDDEN');
+    await assert.rejects(api.uiOptions.change({ codeLinewrap: true }), error => error.code === 'FORBIDDEN');
     token = info.token;
+    assert.equal((await api.uiOptions.get({})).codeLinewrap, false);
+    await api.uiOptions.change({ codeLinewrap: true, viewMode: 'focused' });
+    assert.equal((await api.uiOptions.get({})).codeLinewrap, true);
+    assert.equal((await api.uiOptions.get({})).viewMode, 'focused');
     const shellHeaders = { Origin: 'tauri://localhost', 'Sec-Fetch-Site': 'cross-site' };
     assert.equal((await fetch(`${base}/system-prompts/1`, { headers: shellHeaders })).status, 200);
     const bridgeInfo = await fetch(`${base}/rpc/info`, { method: 'POST', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ json: {} }) });

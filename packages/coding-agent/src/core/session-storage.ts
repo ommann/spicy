@@ -32,6 +32,11 @@ export const historyEntries = sqliteTable('history_entries', {
   uniqueIndex('history_entries_order').on(table.sessionPath, table.sequence),
   index('history_entries_parent').on(table.sessionPath, table.parentId)]);
 
+export const uiOptions = sqliteTable('ui_options', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
+
 export const branchLabels = sqliteTable('branch_labels', {
   key: text('key').primaryKey(),
   text: text('text').notNull(),
@@ -89,6 +94,7 @@ export function withDatabase<T>(directory: string, write: boolean, run: (db: Ret
     if (write) {
       connection.pragma('journal_mode = WAL');
       connection.pragma('synchronous = FULL');
+      connection.exec(`CREATE TABLE IF NOT EXISTS ui_options (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)`);
       connection.exec(`CREATE TABLE IF NOT EXISTS branch_labels (key TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, color TEXT NOT NULL)`);
       connection.exec(`CREATE TABLE IF NOT EXISTS usage_samples (
         account TEXT NOT NULL, observed_at INTEGER NOT NULL, window TEXT NOT NULL,

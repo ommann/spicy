@@ -1,9 +1,6 @@
-import { createSignal } from 'solid-js';
+import { uiOptions, setUiOption } from './ui-options';
 
-const [pasteImagePaths, updatePasteImagePaths] = createSignal(window.localStorage.getItem('spicy-paste-image-paths') === 'true');
-export { pasteImagePaths };
-
+export const pasteImagePaths = () => uiOptions().pasteImagePaths;
 export function setPasteImagePaths(value: boolean) {
-  updatePasteImagePaths(value);
-  window.localStorage.setItem('spicy-paste-image-paths', String(value));
+  setUiOption('pasteImagePaths', value);
 }

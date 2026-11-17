@@ -2,6 +2,13 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { SystemPromptPart } from '../packages/coding-agent/src/core/system-prompt-document.ts';
 
+export const uiOptionsInput = z.strictObject({
+  codeLinewrap: z.boolean().optional(),
+  chatArrowCursor: z.boolean().optional(),
+  pasteImagePaths: z.boolean().optional(),
+  viewMode: z.enum(['focused', 'side']).optional(),
+});
+
 const id = z.string().min(1);
 export const branchLabelInput = z.union([
   z.strictObject({ key: id, label: z.strictObject({ text: z.string().min(1), color: z.string().regex(/^[a-z]+$/i) }).optional() }),

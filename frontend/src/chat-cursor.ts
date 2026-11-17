@@ -1,16 +1,6 @@
-import { createSignal } from 'solid-js';
+import { uiOptions, setUiOption } from './ui-options';
 
-const storageKey = 'spicy.chat-arrow-cursor';
-function savedArrowCursor() {
-  try { return localStorage.getItem(storageKey) === 'true'; }
-  catch { return false; }
-}
-
-const [chatArrowCursor, updateChatArrowCursor] = createSignal(savedArrowCursor());
-export { chatArrowCursor };
-
+export const chatArrowCursor = () => uiOptions().chatArrowCursor;
 export function setChatArrowCursor(value: boolean) {
-  updateChatArrowCursor(value);
-  try { localStorage.setItem(storageKey, String(value)); }
-  catch { /* Storage may be unavailable. */ }
+  setUiOption('chatArrowCursor', value);
 }

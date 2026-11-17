@@ -1,16 +1,6 @@
-import { createSignal } from 'solid-js';
+import { uiOptions, setUiOption } from './ui-options';
 
-const storageKey = 'spicy.code-linewrap';
-function savedLinewrap() {
-  try { return localStorage.getItem(storageKey) === 'true'; }
-  catch { return false; }
-}
-
-const [codeLinewrap, updateCodeLinewrap] = createSignal(savedLinewrap());
-export { codeLinewrap };
-
+export const codeLinewrap = () => uiOptions().codeLinewrap;
 export function setCodeLinewrap(value: boolean) {
-  updateCodeLinewrap(value);
-  try { localStorage.setItem(storageKey, String(value)); }
-  catch { /* Storage may be unavailable. */ }
+  setUiOption('codeLinewrap', value);
 }

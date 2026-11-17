@@ -1,3 +1,5 @@
+import { readUiOptions, changeUiOptions } from './ui-options.ts';
+import { uiOptionsInput } from './inputs.ts';
 import { openEditor } from './open-editor.ts';
 import type { AgentRegistry } from './agents.ts';
 import type { LoginBridge } from './auth.ts';
@@ -29,6 +31,10 @@ export function createRouter({ agents, login, cwd, managed, token, signal: shutd
   return {
     openEditor: mutation.input(openEditorInput).handler(({ input }) => openEditor(input.cwd, input.path, input.line)),
     info: procedure.input(agentInput).handler(({ input }) => ({ token, ...operations.info(input) })),
+    uiOptions: {
+      get: procedure.input(emptyInput).handler(() => readUiOptions(managed)),
+      change: mutation.input(uiOptionsInput).handler(({ input }) => { changeUiOptions(managed, input); }),
+    },
     branchLabels: {
       list: procedure.input(emptyInput).handler(() => readBranchLabels(managed)),
       change: mutation.input(branchLabelInput).handler(({ input }) => { changeBranchLabel(managed, input); return readBranchLabels(managed); }),
