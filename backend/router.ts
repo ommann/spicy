@@ -1,5 +1,4 @@
 import { readUiOptions, changeUiOptions } from './ui-options.ts';
-import { uiOptionsInput, hiddenBranchInput } from './inputs.ts';
 import { readHiddenBranches, changeHiddenBranch } from './hidden-branches.ts';
 import { openEditor } from './open-editor.ts';
 import type { AgentRegistry } from './agents.ts';
@@ -9,7 +8,7 @@ import { os as rpc, ORPCError } from '@orpc/server';
 import { agentEvents } from './agent-events.ts';
 import { createOperations, OperationError } from './operations.ts';
 import { readBranchLabels, changeBranchLabel } from './branch-labels.ts';
-import { openEditorInput, branchLabelInput, agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
+import { uiOptionsInput, hiddenBranchInput, openEditorInput, branchLabelInput, agentInput, emptyInput, sessionsInput, sessionInput, eventsInput, createAgentInput, startInput, loginInput, loginReplyInput, loginCancelInput, uiInput, attachmentsInput, branchInput, commandInput } from './inputs.ts';
 
 export function createRouter({ agents, login, cwd, managed, token, signal: shutdownSignal }: { agents: AgentRegistry; login: LoginBridge; cwd: string; managed: string; token: string; signal?: AbortSignal }) {
   const operations = createOperations({ agents, cwd, managed });

@@ -5,10 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { historyCards } from '../history.ts';
-import { treePreviewCache, withDatabase } from '../../packages/coding-agent/src/core/session-storage.ts';
+import { treePreviewCache, withDatabase, writeStoredHistory, appendStoredEntry } from '../../packages/coding-agent/src/core/session-storage.ts';
 import { cachedPreviews } from '../preview-cache.ts';
 import { changeBranchLabel } from '../branch-labels.ts';
-import { writeStoredHistory, appendStoredEntry } from '../../packages/coding-agent/src/core/session-storage.ts';
 
 function setup(t) {
   const directory = mkdtempSync(join(tmpdir(), 'spicy-preview-cache-'));

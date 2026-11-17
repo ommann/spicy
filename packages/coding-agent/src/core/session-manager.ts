@@ -677,7 +677,7 @@ async function buildSessionInfo(
 	signal?: AbortSignal,
 ): Promise<SessionInfo | null> {
 	try {
-		return readStoredSessionInfo(filePath);
+		return readStoredSessionInfo(filePath) ?? null;
 	} catch {
 		signal?.throwIfAborted();
 		return null;

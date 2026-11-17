@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadEntriesFromFile } from '../src/core/session-manager.ts';
+import { writeStoredHistory } from '../src/core/session-storage.ts';
 import { ENV_AGENT_DIR } from "../src/config.ts";
 
 const cliPath = resolve(__dirname, "../src/cli.ts");
@@ -38,24 +39,20 @@ interface CliResult {
 
 function createSessionFile(projectDir: string, sessionFile: string): void {
 	const timestamp = new Date().toISOString();
-	writeFileSync(
-		sessionFile,
-		`${JSON.stringify({ type: "session", version: 3, id: "existing-session", timestamp, cwd: projectDir })}\n${JSON.stringify(
-			{
-				type: "message",
-				id: "assistant-1",
-				parentId: null,
-				timestamp,
-				message: {
-					role: "assistant",
-					content: [{ type: "text", text: "hello" }],
-					provider: "anthropic",
-					model: "claude-sonnet-4-5",
-					timestamp: Date.now(),
-				},
+	writeStoredHistory(sessionFile, [
+		{ type: "session", version: 3, id: "existing-session", timestamp, cwd: projectDir },
+		{
+			type: "message",
+			id: "user-1",
+			parentId: null,
+			timestamp,
+			message: {
+				role: "user",
+				content: "hello",
+				timestamp: Date.now(),
 			},
-		)}\n`,
-	);
+		},
+	]);
 }
 
 function readSessionInfoNames(sessionFile: string): string[] {
@@ -99,7 +96,7 @@ function setup(): CliDirs {
 	const dirs = {
 		agentDir: join(tempRoot, "agent"),
 		projectDir: join(tempRoot, "project"),
-		sessionFile: join(tempRoot, "session.jsonl"),
+		sessionFile: join(tempRoot, "session.session"),
 	};
 	mkdirSync(dirs.agentDir, { recursive: true });
 	mkdirSync(dirs.projectDir, { recursive: true });
