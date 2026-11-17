@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { createConversationGraph, layoutConversation } from '../src/conversation-model.ts';
 import { layoutSingleConversation } from '../src/single-conversation-model.ts';

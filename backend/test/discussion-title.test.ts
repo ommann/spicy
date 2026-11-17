@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { getDiscussionTitle } from '../../packages/coding-agent/src/core/discussion-title.ts';
 import register from '../tree-navigation.ts';

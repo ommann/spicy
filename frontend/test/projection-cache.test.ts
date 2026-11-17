@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { projectChatParts } from '../src/conversation-model.ts';
 import { agentStreamEntries } from '../src/agent-conversations.ts';

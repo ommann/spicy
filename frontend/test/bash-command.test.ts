@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { parseBashCommand } from '../src/bash-command.ts';
 import { applyRecord } from '../src/stream.ts';
 

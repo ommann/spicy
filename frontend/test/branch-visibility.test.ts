@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { createConversationGraph, layoutConversation, matchConversationLanes } from '../src/conversation-model.ts';
 import { filterConversationBranches, followHiddenLeaves } from '../src/branch-visibility-model.ts';

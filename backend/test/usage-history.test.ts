@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +10,7 @@ test('usage snapshots persist with isolated accounts and validated windows', t =
   const directory = mkdtempSync(join(tmpdir(), 'spicy-usage-'));
   const previous = process.env.SPICY_HISTORY_DB;
   process.env.SPICY_HISTORY_DB = join(directory, 'history.sqlite');
-  t.after(() => {
+  t.onTestFinished(() => {
     if (previous === undefined) delete process.env.SPICY_HISTORY_DB;
     else process.env.SPICY_HISTORY_DB = previous;
     rmSync(directory, { recursive: true, force: true });

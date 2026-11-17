@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,7 +9,7 @@ import { hiddenBranchInput } from '../inputs.ts';
 test('hidden branches persist, transfer, unhide and remain database-scoped', t => {
   const directory = mkdtempSync(join(tmpdir(), 'spicy-hidden-'));
   const previous = process.env.SPICY_HISTORY_DB;
-  t.after(() => {
+  t.onTestFinished(() => {
     if (previous === undefined) delete process.env.SPICY_HISTORY_DB;
     else process.env.SPICY_HISTORY_DB = previous;
     rmSync(directory, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { promptLabel } from '../src/prompt-numbers.ts';
 import { createSystemPromptCatalog } from '../src/system-prompts.ts';

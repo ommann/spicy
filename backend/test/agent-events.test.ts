@@ -1,9 +1,10 @@
-import test from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { agentEvents } from '../agent-events.ts';
 
 test('multiplexed subscriptions send fresh snapshots and clean up on disconnect', async t => {
-  t.mock.timers.enable({ apis: ['setInterval'] });
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  t.onTestFinished(() => vi.useRealTimers());
   let version = 2;
   const a = { id: 'a', clients: new Set(), payload: () => ({ agentId: 'a', version }) };
   const b = { id: 'b', clients: new Set(), payload: () => ({ agentId: 'b' }) };
@@ -15,14 +16,14 @@ test('multiplexed subscriptions send fresh snapshots and clean up on disconnect'
   assert.equal(b.clients.size, 1);
   [...b.clients][0].send('record', { type: 'agent_start' });
   assert.deepEqual((await stream.next()).value, { type: 'agent', agentId: 'b', event: 'record', data: { type: 'agent_start' } });
-  t.mock.timers.tick(15000);
+  vi.advanceTimersByTime(15000);
   assert.deepEqual((await stream.next()).value, { type: 'heartbeat' });
   const pending = stream.next();
   controller.abort();
   await assert.rejects(pending, error => error === controller.signal.reason);
   assert.equal(a.clients.size, 0);
   assert.equal(b.clients.size, 0);
-  t.mock.timers.tick(30000);
+  vi.advanceTimersByTime(30000);
   assert.equal((await stream.next()).done, true);
   version = 3;
   const reconnected = agentEvents([a]);

@@ -35,6 +35,18 @@ npm start
 
 Open http://localhost:5174.
 
+## Testing
+
+Vitest is the test runner for every workspace, with shared defaults in `vitest.base.ts`.
+
+```sh
+npm test                               # All workspace suites
+npm test --workspace=@spicy/backend     # Backend only
+npm test --workspace=@spicy/frontend    # Frontend only
+```
+
+Tests use the dot reporter; failures include full diagnostics. Manual browser checks remain separate (`npm run test:browser --workspace=@spicy/frontend`).
+
 ## Screenshots
 
 ![Spicy conversation tree view](showcase/images/tree.png)

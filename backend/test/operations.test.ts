@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -117,14 +117,14 @@ test('attachment operations write private files and reject invalid images withou
   } finally { await rm(managed, { recursive: true, force: true }); }
 });
 
-test('opening a session keeps its related family and rejects ambiguous URLs', async t => {
+test('opening a session keeps its related family and rejects ambiguous URLs', async () => {
   const sessions = [
     { path: '/tmp/root.jsonl', cwd: '/tmp', urlId: 'zhhupqw3' },
     { path: '/tmp/child.jsonl', cwd: '/tmp', parentSessionPath: '/tmp/root.jsonl' },
     { path: '/tmp/grandchild.jsonl', cwd: '/tmp', parentSessionPath: '/tmp/child.jsonl' },
     { path: '/tmp/unrelated.jsonl', cwd: '/tmp' },
   ];
-  t.mock.method(SessionManager, 'listAll', async () => sessions);
+  vi.spyOn(SessionManager, 'listAll').mockImplementation(async () => sessions);
   const opened = [];
   const agents = {
     agents: new Map(),

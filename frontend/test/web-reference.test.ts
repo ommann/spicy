@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { webReference } from '../src/web-reference.ts';
 
 test('opens explicit web URLs and common bare domains', () => {

@@ -1,11 +1,12 @@
-import test from 'node:test';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { createRpcFixture } from './rpc-fixture.ts';
 
 const flush = async () => { for (let i = 0; i < 80; i++) await Promise.resolve(); };
 
 test('agents share one oRPC stream, remove subscriptions, and recover stalled connections', async t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  t.onTestFinished(() => vi.useRealTimers());
   const fixture = createRpcFixture({});
   const previousFetch = globalThis.fetch;
   const previousWindow = globalThis.window;
@@ -26,17 +27,17 @@ test('agents share one oRPC stream, remove subscriptions, and recover stalled co
     fixture.streams.get('a').emit('snapshot', { version: 1 });
     await flush();
     assert.deepEqual(snapshot, { version: 1 });
-    t.mock.timers.tick(80);
+    vi.advanceTimersByTime(80);
     fixture.connections[0].emit({ type: 'heartbeat' });
     await flush();
-    t.mock.timers.tick(80);
+    vi.advanceTimersByTime(80);
     assert.equal(fixture.connections.length, 1, 'heartbeats keep the stream alive');
-    t.mock.timers.tick(21);
+    vi.advanceTimersByTime(21);
     await flush();
     assert.equal(errors, 1);
     assert.equal(fixture.connections[0].closed, true);
     assert.equal(fixture.connections.length, 1, 'retry respects the reconnect delay');
-    t.mock.timers.tick(500);
+    vi.advanceTimersByTime(500);
     await flush();
     assert.equal(fixture.connections.length, 2);
     fixture.connections[0].emit({ type: 'agent', agentId: 'a', event: 'snapshot', data: { version: 0 } });
@@ -53,7 +54,7 @@ test('agents share one oRPC stream, remove subscriptions, and recover stalled co
     await flush();
     assert.equal(resets, 1, 'backend restart requests session restoration');
     assert.equal(fixture.connections[2].closed, true);
-    t.mock.timers.tick(2000);
+    vi.advanceTimersByTime(2000);
     await flush();
     assert.equal(fixture.connections.length, 3, 'obsolete agent IDs are not endlessly reconnected');
     a.close();

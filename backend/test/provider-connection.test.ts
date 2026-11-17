@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { channel } from 'node:diagnostics_channel';
 import { createServer } from 'node:http';

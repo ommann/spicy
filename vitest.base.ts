@@ -15,6 +15,13 @@ export const workspaceSourcePaths = {
 } as const;
 
 export default defineConfig({
+	test: {
+		environment: "node",
+		testTimeout: 30000,
+		restoreMocks: true,
+		reporters: process.env.GITHUB_ACTIONS ? ["dot", "github-actions"] : ["dot"],
+		silent: "passed-only",
+	},
 	resolve: {
 		alias: [
 			{ find: /^@earendil-works\/pi-mcp$/, replacement: workspaceSourcePaths.mcpIndex },

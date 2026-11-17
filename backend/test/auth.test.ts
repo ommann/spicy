@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { LoginBridge } from '../auth.ts';
 import { SettingsManager } from '@earendil-works/pi-coding-agent';

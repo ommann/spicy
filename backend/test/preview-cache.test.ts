@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,7 @@ function setup(t) {
   const directory = mkdtempSync(join(tmpdir(), 'spicy-preview-cache-'));
   const previous = process.env.SPICY_HISTORY_DB;
   process.env.SPICY_HISTORY_DB = join(directory, 'history.sqlite');
-  t.after(() => {
+  t.onTestFinished(() => {
     if (previous === undefined) delete process.env.SPICY_HISTORY_DB;
     else process.env.SPICY_HISTORY_DB = previous;
     rmSync(directory, { recursive: true, force: true });

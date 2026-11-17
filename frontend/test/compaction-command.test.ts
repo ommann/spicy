@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { parseCompactionCommand } from '../src/compaction-command.ts';
 
 test('compact selects a method and keeps optional instructions', () => {

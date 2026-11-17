@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { applyRecord } from '../src/stream.ts';
 import { createPrefixResolver } from '../src/chat/prefix-state.ts';

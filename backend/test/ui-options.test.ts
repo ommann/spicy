@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,7 +10,7 @@ import { uiOptionsInput } from '../inputs.ts';
 test('UI preferences persist in the selected SQLite database and remain isolated', t => {
   const directory = mkdtempSync(join(tmpdir(), 'spicy-options-'));
   const previous = process.env.SPICY_HISTORY_DB;
-  t.after(() => {
+  t.onTestFinished(() => {
     if (previous === undefined) delete process.env.SPICY_HISTORY_DB;
     else process.env.SPICY_HISTORY_DB = previous;
     rmSync(directory, { recursive: true, force: true });

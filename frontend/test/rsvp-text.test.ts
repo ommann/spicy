@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { TextTokenizer } from '@rsvp-engine/core';
 import { rsvpText, rsvpTokens } from '../src/rsvp-text.ts';
