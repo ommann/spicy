@@ -114,18 +114,14 @@ test('short session URLs follow live sessions and reopen the same file after bac
     delete legacyHeader.urlId;
     await writeFile(legacyFile, JSON.stringify(legacyHeader) + contents.slice(contents.indexOf('\n')));
     const legacyListing = await api.sessions({ scope: 'all' });
-    const legacy = legacyListing.find(session => !session.urlId);
-    const openedLegacy = await api.agents.create({ openSessionId: legacy.id });
-    assert.equal(openedLegacy.state.sessionId, 'legacy-session');
-    assert.equal(openedLegacy.state.sessionFile, legacyFile);
-    assert.match(openedLegacy.state.sessionUrlId, /^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
-    assert.deepEqual(openedLegacy.entries, saved.entries);
+    assert.ok(!legacyListing.some(session => session.id === Buffer.from(legacyFile).toString('base64url')));
+    await assert.rejects(api.agents.create({ openSessionId: Buffer.from(legacyFile).toString('base64url') }), error => error.code === 'NOT_FOUND');
     await assert.rejects(api.agents.create({ sessionUrlId: urlId === 'aaaaaaaa' ? 'bbbbbbbb' : 'aaaaaaaa' }), error => error.code === 'NOT_FOUND');
     await assert.rejects(api.agents.create({ sessionUrlId: 'bad' }), error => error.code === 'BAD_REQUEST');
     const newline = contents.indexOf('\n');
     const header = { ...JSON.parse(contents.slice(0, newline)), id: 'duplicate-session' };
     await writeFile(path.join(managed, 'duplicate.jsonl'), JSON.stringify(header) + contents.slice(newline));
-    await assert.rejects(api.agents.create({ sessionUrlId: urlId }), error => error.code === 'CONFLICT');
+    assert.equal((await api.agents.create({ sessionUrlId: urlId })).agentId, reopened.agentId, 'Loose JSONL files do not introduce conflicting sessions');
     assert.equal(savedHistory(saved.state.sessionFile), contents);
   } finally {
     await stop();

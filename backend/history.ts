@@ -1,6 +1,5 @@
 import { SessionManager, type SessionInfo, type SessionEntry } from '../packages/coding-agent/src/core/session-manager.ts';
 import { eq } from 'drizzle-orm';
-import { getSessionsDir } from '../packages/coding-agent/src/config.ts';
 import { historySessions, sessionPreviewRevisions, withDatabase, readStoredHistory, readStoredPreview } from '../packages/coding-agent/src/core/session-storage.ts';
 import { getDiscussionTitle } from '../packages/coding-agent/src/core/discussion-title.ts';
 import path from 'node:path';
@@ -18,7 +17,7 @@ export function historyCards(managed: string) {
 
 async function buildHistoryCards(managed: string) {
   const labels = readBranchLabels(managed);
-  const roots = [path.resolve(getSessionsDir()), path.resolve(managed)];
+  const roots = [path.resolve(managed)];
   const sessions: PreviewSession[] = process.env.SPICY_HISTORY_DB
     ? (withDatabase(managed, false, db => db.select({ session: historySessions, revision: sessionPreviewRevisions.revision })
       .from(historySessions).leftJoin(sessionPreviewRevisions, eq(sessionPreviewRevisions.sessionPath, historySessions.path)).all()) ?? [])
@@ -26,8 +25,7 @@ async function buildHistoryCards(managed: string) {
       .map(({ session, revision }) => ({ path: session.path, urlId: session.urlId ?? undefined, cwd: session.cwd,
         parentSessionPath: session.parentSession ?? undefined, created: new Date(session.timestamp),
         modified: new Date(session.updatedAt), revision: revision ?? 0 }))
-    : [...new Map([...await SessionManager.listAll(), ...await SessionManager.listAll(managed)]
-      .map(session => [path.resolve(session.path), session])).values()];
+    : await SessionManager.listAll(managed);
   const byPath = new Map(sessions.map(session => [path.resolve(session.path), session]));
   function ancestry(session: PreviewSession) {
     const chain = [session];

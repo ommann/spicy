@@ -1,79 +1,22 @@
-import { writeFileSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { type SessionHeader, SessionManager } from "../src/core/session-manager.ts";
+import { join } from "node:path";
+import { expect, it } from "vitest";
+import { SessionManager } from "../src/core/session-manager.ts";
+import { assistantMsg } from "./utilities.ts";
 
-function createSessionFile(path: string): void {
-	const header: SessionHeader = {
-		type: "session",
-		id: "test-session",
-		version: 3,
-		timestamp: new Date(0).toISOString(),
-		cwd: "/tmp",
-	};
-	writeFileSync(path, `${JSON.stringify(header)}\n`, "utf8");
-
-	// SessionManager only persists once it has seen at least one assistant message.
-	// Add a minimal assistant entry so subsequent appends are persisted.
-	const mgr = SessionManager.open(path);
-	mgr.appendMessage({
-		role: "assistant",
-		content: [{ type: "text", text: "hi" }],
-		api: "openai-completions",
-		provider: "openai",
-		model: "test",
-		usage: {
-			input: 1,
-			output: 1,
-			cacheRead: 0,
-			cacheWrite: 0,
-			totalTokens: 2,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		},
-		stopReason: "stop",
-		timestamp: Date.now(),
-	});
-}
-
-describe("SessionInfo.modified", () => {
-	afterEach(() => {
-		vi.restoreAllMocks();
-	});
-
-	it("uses last user/assistant message timestamp instead of file mtime", async () => {
-		const filePath = join(tmpdir(), `pi-session-${Date.now()}-modified.jsonl`);
-		createSessionFile(filePath);
-
-		const before = await stat(filePath);
-		// Ensure the file mtime can differ from our message timestamp even on coarse filesystems.
-		await new Promise((r) => setTimeout(r, 10));
-
-		const mgr = SessionManager.open(filePath);
-		const msgTime = Date.now();
-		mgr.appendMessage({
-			role: "assistant",
-			content: [{ type: "text", text: "later" }],
-			api: "openai-completions",
-			provider: "openai",
-			model: "test",
-			usage: {
-				input: 1,
-				output: 1,
-				cacheRead: 0,
-				cacheWrite: 0,
-				totalTokens: 2,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-			},
-			stopReason: "stop",
-			timestamp: msgTime,
-		});
-
-		const sessions = await SessionManager.list("/tmp", dirname(filePath));
-		const s = sessions.find((x) => x.path === filePath);
-		expect(s).toBeDefined();
-		expect(s!.modified.getTime()).toBe(msgTime);
-		expect(s!.modified.getTime()).not.toBe(before.mtime.getTime());
-	});
+it("uses the last user/assistant timestamp rather than storage update time", async () => {
+ const directory = mkdtempSync(join(tmpdir(), "spicy-session-modified-"));
+ try {
+  const session = SessionManager.create(directory, directory);
+  session.appendMessage({ role: "user", content: "hello", timestamp: 1000 });
+  session.appendMessage({ ...assistantMsg("reply"), timestamp: 2000 });
+  session.appendCustomEntry("later metadata", {});
+  const sessions = await SessionManager.list(directory, directory);
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0].path).toBe(session.getSessionFile());
+  expect(sessions[0].modified.getTime()).toBe(2000);
+ } finally {
+  rmSync(directory, { recursive: true, force: true });
+ }
 });

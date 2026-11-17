@@ -34,8 +34,9 @@ test('unified launcher loads checkout dotenv and reloads it on restart', async (
       const child = spawn(process.execPath, [join(root, 'spicy.ts'), ...args], {
         cwd: root,
         env: { ...process.env, ...environment },
-        stdio: 'ignore',
+        stdio: ['ignore', 'ignore', 'pipe'],
       });
+      child.stderr.on('data', chunk => { child.startupError = (child.startupError || '') + chunk; });
       children.push(child);
       return child;
     }
@@ -50,7 +51,7 @@ test('unified launcher loads checkout dotenv and reloads it on restart', async (
         }
         await delay(25);
       }
-      assert.fail('Server did not start');
+      assert.fail(`Server did not start: ${children.find(child => child.pid === pid)?.startupError || ''}`);
     }
 
     const configuration = `SPICY_CODING_AGENT_DIR=${join(root, 'settings')}\nSPICY_CWD=${root}\nSPICY_HISTORY_DB=${join(root, 'history.sqlite')}\nSPICY_SESSION_DIR=${join(root, 'sessions')}\nPORT=15174\n`;

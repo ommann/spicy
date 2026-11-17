@@ -116,3 +116,4 @@ async function restartRecordedInstance() {
   // Replace this process: no extra launcher or signal-forwarding wrapper.
   const startupArgs = [...command.slice(entry + 1), ...args].filter(arg => arg !== '--restart');
   process.execve(executable, [executable, launcher, ...startupArgs], environment);
+}

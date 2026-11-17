@@ -1,8 +1,9 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SessionManager } from "../../src/core/session-manager.ts";
+import { writeStoredHistory } from "../../src/core/session-storage.ts";
 
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -98,17 +99,13 @@ describe("SessionManager.newSession with custom id", () => {
 	it("generates a UUIDv7 id when forking from another session file", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-session-manager-"));
 		const sourcePath = join(tempDir, "source.jsonl");
-		writeFileSync(
-			sourcePath,
-			`${[
-				JSON.stringify({
+		writeStoredHistory(sourcePath, [ {
 					type: "session",
 					version: 3,
 					id: "legacy-session-id",
 					timestamp: new Date().toISOString(),
 					cwd: tempDir,
-				}),
-				JSON.stringify({
+				}, {
 					type: "message",
 					id: "entry-1",
 					parentId: null,
@@ -130,10 +127,7 @@ describe("SessionManager.newSession with custom id", () => {
 						stopReason: "stop",
 						timestamp: Date.now(),
 					},
-				}),
-			].join("\n")}
-`,
-		);
+				}]);
 
 		const forked = SessionManager.forkFrom(sourcePath, tempDir, tempDir);
 		const header = forked.getHeader();
@@ -145,16 +139,13 @@ describe("SessionManager.newSession with custom id", () => {
 	it("uses the provided id when forking from another session file", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-session-manager-"));
 		const sourcePath = join(tempDir, "source.jsonl");
-		writeFileSync(
-			sourcePath,
-			`${JSON.stringify({
+		writeStoredHistory(sourcePath, [{
 				type: "session",
 				version: 3,
 				id: "source-session-id",
 				timestamp: new Date().toISOString(),
 				cwd: tempDir,
-			})}\n`,
-		);
+			}]);
 
 		const forked = SessionManager.forkFrom(sourcePath, tempDir, tempDir, { id: "forked-session-id" });
 		const header = forked.getHeader();

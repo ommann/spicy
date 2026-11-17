@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -45,27 +45,4 @@ describe("permanent session URL IDs", () => {
 		expect(readStoredHistory(file)).toEqual(original);
 	});
 
-	it("backfills a legacy header once, preserving transcript bytes, ancestry and mtime", () => {
-		const file = join(directory, "legacy.jsonl");
-		const header = {
-			type: "session",
-			version: 3,
-			id: "original-uuid",
-			timestamp: "2026-01-01T00:00:00.000Z",
-			cwd: directory,
-			parentSession: "/parent.jsonl",
-		};
-		const transcript =
-			'\n{ "type": "message", "id": "user-entry", "parentId": null, "timestamp": "2026-01-01T00:00:00.000Z", "message": {"role":"user","content":"Keep exact bytes","timestamp":1}}\n';
-		writeFileSync(file, JSON.stringify(header) + "\n" + transcript);
-		const mtime = statSync(file).mtimeMs;
-		const session = SessionManager.open(file, directory);
-		const updated = readFileSync(file, "utf8");
-		expect(updated.slice(updated.indexOf("\n") + 1)).toBe(transcript);
-		expect(session.getHeader()).toEqual({ ...header, urlId: session.getHeader()!.urlId });
-		expect(session.getHeader()!.urlId).toMatch(/^[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
-		expect(Math.abs(statSync(file).mtimeMs - mtime)).toBeLessThan(1);
-		expect(SessionManager.open(file, directory).getHeader()!.urlId).toBe(session.getHeader()!.urlId);
-		expect(readFileSync(file, "utf8")).toBe(updated);
-	});
 });

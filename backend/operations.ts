@@ -23,8 +23,7 @@ function fail(message: string, reason?: string): never { throw new OperationErro
 export function createOperations({ agents, cwd, managed }: { agents: AgentRegistry; cwd: string; managed: string }) {
   const getAgent = (input: { agentId?: string }) => agents.get(input.agentId);
   async function allSessions() {
-    return [...new Map([...await SessionManager.listAll(), ...await SessionManager.listAll(managed)]
-      .map(session => [path.resolve(session.path), session])).values()];
+    return SessionManager.listAll(managed);
   }
   async function openSessionView(session: Pick<SessionInfo, 'path' | 'cwd'>, sessions: SessionInfo[]) {
     const selectedPath = path.resolve(session.path);
@@ -70,10 +69,7 @@ export function createOperations({ agents, cwd, managed }: { agents: AgentRegist
     };
   }
   async function catalog(projectCwd = cwd) {
-    const directories = [{
-      directory: path.join(os.homedir(), '.pi/agent/sessions', `--${projectCwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`),
-      project: projectCwd, managed: false,
-    }, { directory: managed, project: projectCwd, managed: true }];
+    const directories = [{ directory: managed, project: projectCwd, managed: true }];
     const found = [];
     for (const location of directories) {
       for (const session of await SessionManager.list(location.project, location.directory)) {

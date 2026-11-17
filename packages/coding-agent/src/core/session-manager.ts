@@ -12,23 +12,13 @@ import {
 } from "@earendil-works/pi-ai";
 import { randomUUID } from "crypto";
 import {
-	closeSync,
-	createReadStream,
 	existsSync,
 	mkdirSync,
-	openSync,
-	readdirSync,
-	readSync,
-	type Stats,
-	statSync,
 } from "fs";
-import { readdir, stat } from "fs/promises";
 import { basename, join, resolve } from "path";
-import { createInterface } from "readline";
-import { StringDecoder } from "string_decoder";
 import { hydrateSessionEntry } from "./session-attachments.ts";
 import { appendStoredEntry, listStoredHistories, readStoredHeader, readStoredHistory, readStoredSessionInfo, writeStoredHistory } from "./session-storage.ts";
-import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
+import { getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import {
 	type BashExecutionMessage,
@@ -614,149 +604,28 @@ export function getDefaultSessionDir(cwd: string, agentDir: string = getDefaultA
 }
 
 function historyExists(path: string): boolean {
-	return !!readStoredHeader(path) || existsSync(path);
+	return !!readStoredHeader(path);
 }
 
 function historyPaths(directory: string): string[] {
-	const stored = listStoredHistories(directory).map(row => row.path);
-	const legacy = existsSync(directory) ? readdirSync(directory).filter(file => file.endsWith(".jsonl")).map(file => join(directory, file)) : [];
-	return [...new Set([...stored, ...legacy])];
-}
-
-const SESSION_READ_BUFFER_SIZE = 1024 * 1024;
-const SESSION_HEADER_READ_BUFFER_SIZE = 4096;
-/** Bound synchronous header discovery while allowing large cwd and custom metadata fields. */
-const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024;
-
-class SessionHeaderScanLimitError extends Error {
-	constructor(filePath: string) {
-		super(`Session header exceeds ${MAX_SESSION_HEADER_SCAN_BYTES}-byte scan limit: ${filePath}`);
-		this.name = "SessionHeaderScanLimitError";
-	}
-}
-
-function parseSessionEntryLine(line: string): FileEntry | null {
-	if (!line.trim()) return null;
-	try {
-		return JSON.parse(line) as FileEntry;
-	} catch {
-		// Skip malformed lines
-		return null;
-	}
+	return listStoredHistories(directory).map(row => row.path);
 }
 
 /** Exported for testing */
 export function loadEntriesFromFile(filePath: string): FileEntry[] {
-	const resolvedFilePath = normalizePath(filePath);
-	const stored = readStoredHistory(resolvedFilePath);
-	if (stored) return stored;
-	if (!existsSync(resolvedFilePath)) return [];
-
-	const entries: FileEntry[] = [];
-	let pending = "";
-	const fd = openSync(resolvedFilePath, "r");
-	try {
-		const decoder = new StringDecoder("utf8");
-		const buffer = Buffer.allocUnsafe(SESSION_READ_BUFFER_SIZE);
-
-		while (true) {
-			const bytesRead = readSync(fd, buffer, 0, buffer.length, null);
-			if (bytesRead === 0) break;
-
-			pending += decoder.write(buffer.subarray(0, bytesRead));
-			let lineStart = 0;
-			let newlineIndex = pending.indexOf("\n", lineStart);
-			while (newlineIndex !== -1) {
-				const entry = parseSessionEntryLine(pending.slice(lineStart, newlineIndex));
-				if (entry) entries.push(entry);
-				lineStart = newlineIndex + 1;
-				newlineIndex = pending.indexOf("\n", lineStart);
-			}
-			pending = pending.slice(lineStart);
-		}
-
-		pending += decoder.end();
-		const finalEntry = parseSessionEntryLine(pending);
-		if (finalEntry) entries.push(finalEntry);
-	} finally {
-		closeSync(fd);
-	}
-
-	// Validate session header before repairing the file.
-	if (entries.length === 0) return entries;
-	const header = entries[0];
-	if (header.type !== "session" || typeof (header as { id?: unknown }).id !== "string") {
-		return [];
-	}
-
-	return entries.map((entry) => hydrateSessionEntry(entry, resolvedFilePath));
-}
-
-/**
- * Inspect a physical line while searching for the first parsed session entry.
- * Blank and malformed lines are skipped to match loadEntriesFromFile().
- * Returns undefined to keep scanning, null for a parsed non-header entry, or the header.
- */
-function parseSessionHeaderCandidate(line: string): SessionHeader | null | undefined {
-	if (!line.trim()) return undefined;
-	const entry = parseSessionEntryLine(line);
-	if (!entry) return undefined;
-	if (entry.type !== "session" || typeof (entry as { id?: unknown }).id !== "string") return null;
-	return entry;
+	return readStoredHistory(normalizePath(filePath)) ?? [];
 }
 
 function readSessionHeader(filePath: string): SessionHeader | null {
-	const stored = readStoredHeader(filePath);
-	if (stored) return stored;
-	const fd = openSync(filePath, "r");
-	try {
-		const decoder = new StringDecoder("utf8");
-		const buffer = Buffer.allocUnsafe(SESSION_HEADER_READ_BUFFER_SIZE);
-		const lineChunks: string[] = [];
-		let scannedBytes = 0;
-
-		while (scannedBytes < MAX_SESSION_HEADER_SCAN_BYTES) {
-			const readLength = Math.min(buffer.length, MAX_SESSION_HEADER_SCAN_BYTES - scannedBytes);
-			const bytesRead = readSync(fd, buffer, 0, readLength, null);
-			if (bytesRead === 0) {
-				lineChunks.push(decoder.end());
-				return parseSessionHeaderCandidate(lineChunks.join("")) ?? null;
-			}
-			scannedBytes += bytesRead;
-
-			const chunk = decoder.write(buffer.subarray(0, bytesRead));
-			let lineStart = 0;
-			let newlineIndex = chunk.indexOf("\n", lineStart);
-			while (newlineIndex !== -1) {
-				lineChunks.push(chunk.slice(lineStart, newlineIndex));
-				const header = parseSessionHeaderCandidate(lineChunks.join(""));
-				if (header !== undefined) return header;
-				lineChunks.length = 0;
-				lineStart = newlineIndex + 1;
-				newlineIndex = chunk.indexOf("\n", lineStart);
-			}
-			lineChunks.push(chunk.slice(lineStart));
-		}
-
-		// Probe for EOF so a final header without a newline is allowed when it ends
-		// exactly at the scan limit. Any additional byte exceeds the bounded scan.
-		const probe = Buffer.allocUnsafe(1);
-		if (readSync(fd, probe, 0, probe.length, null) === 0) {
-			lineChunks.push(decoder.end());
-			return parseSessionHeaderCandidate(lineChunks.join("")) ?? null;
-		}
-		throw new SessionHeaderScanLimitError(filePath);
-	} finally {
-		closeSync(fd);
-	}
+	return readStoredHeader(filePath) ?? null;
 }
 
 function readSessionHeaderForDiscovery(filePath: string): SessionHeader | null {
 	try {
 		return readSessionHeader(filePath);
 	} catch {
-		// Discovery is best-effort: unreadable or oversized files are not sessions,
-		// and one corrupt file must not prevent other sessions from being found.
+		// Discovery is best-effort: one unreadable history must not prevent
+		// other sessions from being found.
 		return null;
 	}
 }
@@ -765,19 +634,9 @@ const reservedSessionUrlIds = new Set<string>();
 
 function allocateSessionUrlId(sessionDir?: string): string {
 	if (sessionDir) {
-		const directories = new Set([sessionDir]);
-		const root = getSessionsDir();
-		if (existsSync(root)) {
-			for (const entry of readdirSync(root, { withFileTypes: true })) {
-				if (entry.isDirectory()) directories.add(join(root, entry.name));
-			}
-		}
-		for (const directory of directories) {
-			if (!existsSync(directory)) continue;
-			for (const file of historyPaths(directory)) {
-				const header = readSessionHeaderForDiscovery(file);
-				if (header?.urlId) reservedSessionUrlIds.add(header.urlId);
-			}
+		for (const file of historyPaths(sessionDir)) {
+			const header = readSessionHeaderForDiscovery(file);
+			if (header?.urlId) reservedSessionUrlIds.add(header.urlId);
 		}
 	}
 	const id = createSessionUrlId(reservedSessionUrlIds);
@@ -799,10 +658,8 @@ export function findMostRecentSession(sessionDir: string, cwd?: string): string 
 	const resolvedSessionDir = normalizePath(sessionDir);
 	const resolvedCwd = cwd ? resolvePath(cwd) : undefined;
 	try {
-		const updated = new Map(listStoredHistories(resolvedSessionDir).map(row => [row.path, row.updatedAt]));
-		const files = historyPaths(resolvedSessionDir)
-			.map((path) => ({ path, mtime: updated.get(path) ?? statSync(path).mtimeMs }))
-			.sort((a, b) => b.mtime - a.mtime);
+		const files = listStoredHistories(resolvedSessionDir)
+			.sort((a, b) => b.updatedAt - a.updatedAt);
 
 		for (const { path } of files) {
 			const header = readSessionHeaderForDiscovery(path);
@@ -810,121 +667,17 @@ export function findMostRecentSession(sessionDir: string, cwd?: string): string 
 		}
 		return null;
 	} catch {
-		// Directory access and stat races make recent-session discovery unavailable.
+		// Recent-session discovery is best-effort when storage is unavailable.
 		return null;
 	}
-}
-
-function isMessageWithContent(message: AgentMessage): message is Message {
-	return typeof (message as Message).role === "string" && "content" in message;
-}
-
-function extractTextContent(message: Message): string {
-	const content = message.content;
-	if (typeof content === "string") {
-		return content;
-	}
-	return content
-		.filter((block): block is TextContent => block.type === "text")
-		.map((block) => block.text)
-		.join(" ");
-}
-
-function getMessageActivityTime(entry: SessionMessageEntry): number | undefined {
-	const message = entry.message;
-	if (!isMessageWithContent(message)) return undefined;
-	if (message.role !== "user" && message.role !== "assistant") return undefined;
-
-	const msgTimestamp = (message as { timestamp?: number }).timestamp;
-	if (typeof msgTimestamp === "number") {
-		return msgTimestamp;
-	}
-
-	const t = new Date(entry.timestamp).getTime();
-	return Number.isNaN(t) ? undefined : t;
 }
 
 async function buildSessionInfo(
 	filePath: string,
 	signal?: AbortSignal,
-	fileStats?: Stats,
 ): Promise<SessionInfo | null> {
 	try {
-		const storedInfo = readStoredSessionInfo(filePath);
-		if (storedInfo) return storedInfo;
-		const stats = fileStats ?? await stat(filePath);
-		let header: SessionHeader | null = null;
-		let messageCount = 0;
-		let firstMessage = "";
-		const allMessages: string[] = [];
-		let name: string | undefined;
-		let lastActivityTime: number | undefined;
-
-		const records: AsyncIterable<FileEntry | null> = (async function* () {
-			const rl = createInterface({ input: createReadStream(filePath, { encoding: "utf8", signal }), crlfDelay: Infinity });
-			for await (const line of rl) yield parseSessionEntryLine(line);
-		})();
-
-		for await (const entry of records) {
-			if (!entry) continue;
-
-			if (!header) {
-				if (entry.type !== "session") return null;
-				header = entry;
-				continue;
-			}
-
-			// Extract session name (use latest, including explicit clears)
-			if (entry.type === "session_info") {
-				name = entry.name?.trim() || undefined;
-			}
-
-			if (entry.type !== "message") continue;
-			messageCount++;
-
-			const activityTime = getMessageActivityTime(entry);
-			if (typeof activityTime === "number") {
-				lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
-			}
-
-			const message = entry.message;
-			if (!isMessageWithContent(message)) continue;
-			if (message.role !== "user" && message.role !== "assistant") continue;
-
-			const textContent = extractTextContent(message);
-			if (!textContent) continue;
-
-			allMessages.push(textContent);
-			if (!firstMessage && message.role === "user") {
-				firstMessage = textContent;
-			}
-		}
-
-		if (!header) return null;
-
-		const cwd = typeof header.cwd === "string" ? header.cwd : "";
-		const parentSessionPath = header.parentSession;
-		const headerTime = typeof header.timestamp === "string" ? new Date(header.timestamp).getTime() : NaN;
-		const modified =
-			typeof lastActivityTime === "number" && lastActivityTime > 0
-				? new Date(lastActivityTime)
-				: !Number.isNaN(headerTime)
-					? new Date(headerTime)
-					: stats?.mtime ?? new Date(header.timestamp);
-
-		return {
-			path: filePath,
-			id: header.id,
-			urlId: header.urlId,
-			cwd,
-			name,
-			parentSessionPath,
-			created: new Date(header.timestamp),
-			modified,
-			messageCount,
-			firstMessage: firstMessage || "(no messages)",
-			allMessagesText: allMessages.join(" "),
-		};
+		return readStoredSessionInfo(filePath);
 	} catch {
 		signal?.throwIfAborted();
 		return null;
@@ -939,13 +692,11 @@ export type SessionListProgress = (
 ) => void;
 
 const MAX_CONCURRENT_SESSION_INFO_LOADS = 10;
-const MAX_CONCURRENT_SESSION_DISCOVERY_LOADS = 64;
 const CURRENT_SESSION_LIST_PUBLISH_INTERVAL = 10;
 const ALL_SESSION_LIST_PUBLISH_INTERVAL = 100;
 
 interface SessionFileCandidate {
 	path: string;
-	stats?: Stats;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -980,7 +731,7 @@ function buildSessionInfosWithConcurrency(
 		files,
 		MAX_CONCURRENT_SESSION_INFO_LOADS,
 		async (file, index) => {
-			const info = await buildSessionInfo(file.path, signal, file.stats);
+			const info = await buildSessionInfo(file.path, signal);
 			onLoaded(info, index);
 			return info;
 		},
@@ -1078,22 +829,7 @@ export class SessionManager {
 		if (historyExists(this.sessionFile)) {
 			const entries = preloadedFileEntries ?? loadEntriesFromFile(this.sessionFile);
 
-			// If file was empty, initialize it with a valid session header. If it was
-			// non-empty but did not parse as a pi session, fail without modifying it.
-			if (entries.length === 0) {
-				const explicitPath = this.sessionFile;
-				if (statSync(explicitPath).size > 0) {
-					throw new Error(`Session file is not a valid ${APP_NAME} session: ${explicitPath}`);
-				}
-				this.newSession();
-				this.sessionFile = explicitPath;
-				this._rewriteFile();
-				this.flushed = true;
-				return;
-			}
-
 			this._loadEntries(entries);
-			if (!readStoredHeader(this.sessionFile)) this._rewriteFile();
 			this.flushed = true;
 		} else {
 			const explicitPath = this.sessionFile;
@@ -1837,24 +1573,11 @@ export class SessionManager {
 	 */
 	static open(path: string, sessionDir?: string, cwdOverride?: string): SessionManager {
 		const resolvedPath = resolvePath(path);
-		let header: SessionHeader | null = null;
-		let preloadedFileEntries: FileEntry[] | undefined;
-		if (cwdOverride === undefined && historyExists(resolvedPath)) {
-			try {
-				header = readSessionHeader(resolvedPath);
-			} catch (error) {
-				if (!(error instanceof SessionHeaderScanLimitError)) throw error;
-				// The bounded scan is only a discovery optimization. A full load remains
-				// authoritative for legacy files with very large headers or prefixes.
-				preloadedFileEntries = loadEntriesFromFile(resolvedPath);
-				const firstEntry = preloadedFileEntries[0];
-				header = firstEntry?.type === "session" ? firstEntry : null;
-			}
-		}
+		const header = cwdOverride === undefined ? readSessionHeader(resolvedPath) : null;
 		const cwd = cwdOverride ?? (header ? getSessionHeaderCwd(header) : undefined) ?? process.cwd();
 		// If no sessionDir provided, derive from file's parent directory
 		const dir = sessionDir ? normalizePath(sessionDir) : resolve(resolvedPath, "..");
-		return new SessionManager(cwd, dir, resolvedPath, true, undefined, preloadedFileEntries);
+		return new SessionManager(cwd, dir, resolvedPath, true);
 	}
 
 	/**
@@ -2014,41 +1737,8 @@ export class SessionManager {
 		const storedPaths = listStoredHistories(sessionsDir, true).map(row => row.path);
 
 		try {
-			const entries = existsSync(sessionsDir) ? await readdir(sessionsDir, { withFileTypes: true }) : [];
-			const dirs = entries
-				.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-				.map((entry) => join(sessionsDir, entry.name));
-
-			const dirFiles = await mapWithConcurrency(
-				dirs,
-				MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
-				async (dir) => {
-					try {
-						return historyPaths(dir);
-					} catch {
-						return [];
-					}
-				},
-				abortSignal,
-			);
-			const allFiles = [...new Set([...storedPaths, ...dirFiles.flat()])];
-			const candidates = await mapWithConcurrency(
-				allFiles,
-				MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
-				async (path): Promise<SessionFileCandidate> => {
-					try {
-						return { path, stats: readStoredHeader(path) ? undefined : await stat(path) };
-					} catch {
-						return { path };
-					}
-				},
-				abortSignal,
-			);
-			candidates.sort(
-				(a, b) =>
-					(b.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) - (a.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) ||
-					basename(b.path).localeCompare(basename(a.path)),
-			);
+			const candidates = storedPaths.map(path => ({ path }));
+			candidates.sort((a, b) => basename(b.path).localeCompare(basename(a.path)));
 
 			const totalFiles = candidates.length;
 			let loaded = 0;

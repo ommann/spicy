@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -51,24 +51,18 @@ describe("system prompt predecessors", () => {
 		expect(session.getEntry(first)).not.toHaveProperty("predecessorId");
 	});
 
-	it("persists new links and can reference legacy prompts without rewriting them", () => {
+	it("persists links to earlier prompts across reopening", () => {
 		const dir = mkdtempSync(join(tmpdir(), "spicy-prompt-predecessor-"));
 		try {
 			const session = SessionManager.create(dir, dir);
-			const first = session.appendMessage(prompt("Legacy instructions"));
+			const first = session.appendMessage(prompt("Earlier instructions"));
 			session.appendMessage(userMsg("Hello"));
-			const file = join(dir, 'legacy.jsonl');
-			const legacy = [session.getHeader(), ...session.getEntries()].map(entry => {
-				if (entry && 'predecessorId' in entry) delete entry.predecessorId;
-				return JSON.stringify(entry);
-			}).join('\n') + '\n';
-			writeFileSync(file, legacy);
+			const file = session.getSessionFile()!;
 			const loaded = SessionManager.open(file);
 			const second = loaded.appendMessage(prompt("New instructions"), first);
 			const reopened = SessionManager.open(file);
 			expect(reopened.getEntry(first)).not.toHaveProperty("predecessorId");
 			expect(reopened.getEntry(second)).toMatchObject({ predecessorId: first });
-			expect(readFileSync(file, "utf8")).toBe(legacy);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
