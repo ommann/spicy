@@ -99,10 +99,8 @@ export default function App(props: ParentProps) {
   const navigateView = (path: string) => navigate(viewHref(path));
   const openSystemPrompt = (id: string) => navigateView(`/system-prompts/${encodeURIComponent(id)}`);
 
-  let saved: { agents?: string[]; selected?: string } = {};
-  try { saved = JSON.parse(window.sessionStorage.getItem('pi-agent-view') || '{}'); } catch { /* Start with an empty selection. */ }
-  const [visibleAgentIds, setVisibleAgentIds] = createSignal<string[]>(Array.isArray(saved.agents) ? saved.agents.filter(id => typeof id === 'string') : []);
-  const [selectedAgentId, setSelectedAgentId] = createSignal(typeof saved.selected === 'string' ? saved.selected : '');
+  const [visibleAgentIds, setVisibleAgentIds] = createSignal<string[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = createSignal('');
   const [agentSnapshots, setAgentSnapshots] = createSignal<Record<string, Snapshot>>({});
   const [disconnectedStreams, setDisconnectedStreams] = createSignal<string[]>([]);
   const [bridgeCwd, setBridgeCwd] = createSignal('');
@@ -402,11 +400,6 @@ export default function App(props: ParentProps) {
     finally { setBusy(false); }
   }
 
-  createEffect(() => {
-    try { window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: visibleAgentIds(), selected: selectedAgentId() })); }
-    catch { /* The selection still works when browser storage is unavailable. */ }
-  });
-
   function openImage(image: PreviewImage) {
     setPreviewImage(image);
   }
@@ -678,21 +671,6 @@ export default function App(props: ParentProps) {
       setBridgeCwd(info.cwd);
       const agents = await api.agents.list({}, { signal: appLifecycle.signal });
       setAvailableAgents(agents);
-      // A copied link takes precedence over the tab's previous agent selection.
-      if (routeSessionId()) {
-        setVisibleAgentIds([]);
-        setSelectedAgentId('');
-        return;
-      }
-      const ids = visibleAgentIds().filter(id => agents.some(agent => agent.agentId === id));
-      setVisibleAgentIds(ids);
-      if (!ids.includes(selectedAgentId())) setSelectedAgentId(ids[0] || '');
-      const pending = [];
-      for (const id of ids) {
-        pending.push(loadInfo(id).then(accept));
-      }
-      await Promise.all(pending);
-      if (ids.length) setLive(true);
     } catch (failure) { reportFailure(failure); }
     finally {
       setBusy(false);

@@ -417,7 +417,7 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
 test('saving adds a persistent prompt to the viewer and leaves chat requests and entries alone', async () => {
   globalThis.localStorage = window.localStorage;
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['default'], selected: 'default' }));
-  const snapshot = { agentId: 'default', entries, leafId: 'user2', state: { sessionId: 'creator-test' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test', token: 'test' };
+  const snapshot = { agentId: 'default', entries, leafId: 'user2', state: { sessionId: 'creator-test', sessionUrlId: 'k7m3xqa9' }, live: [], dialogs: [], connected: true, running: false, cwd: '/test', token: 'test' };
   const before = JSON.stringify(snapshot.entries);
   const storageBefore = JSON.stringify(localStorage);
   const promptDocument = { version: 1, parts: [
@@ -426,12 +426,13 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
   ] };
   rpc = createRpcFixture({
     info: os.handler(() => snapshot),
-    agents: { list: os.handler(() => [snapshot]) },
+    agents: { list: os.handler(() => [snapshot]), create: os.handler(() => snapshot) },
     command: os.handler(({ input }) => {
       if (input.type === 'get_system_prompt_document') return {
         document: promptDocument,
         current: { content: 'Original instructions', sections: {}, toolsAdded: [] },
       };
+      if (input.type === 'get_available_models') return { models: [] };
       assert.equal(input.type, 'save_system_prompt');
       const prompt = { ...input.prompt, id: 'saved-prompt', output: renderSystemPromptDocument(input.prompt.document, input.prompt.excludedIds) };
       snapshot.entries = [...snapshot.entries, { id: prompt.id, type: 'custom', customType: SAVED_SYSTEM_PROMPT_ENTRY, parentId: snapshot.leafId, data: prompt }];
@@ -439,7 +440,7 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
     }),
   });
   const requests = rpc.requests;
-  let dispose = components.mountApp(root, '/system-prompt-creator');
+  let dispose = components.mountApp(root, '/b/k7m3xqa9/system-prompt-creator');
   try {
     for (let i = 0; i < 6; i++) await flush();
     const tools = [...root.querySelectorAll('.creator-switchboard label')].find(label => label.textContent.includes('Tool rules'));
@@ -461,11 +462,11 @@ test('saving adds a persistent prompt to the viewer and leaves chat requests and
     assert.deepEqual(saved.data.excludedIds, ['tools']);
     assert.doesNotMatch(saved.data.output.content, /Optional tool rules/);
     assert.equal(JSON.stringify(snapshot.entries.filter(entry => entry !== saved)), before, 'Existing chat entries remain untouched');
-    assert.deepEqual([...new Set(requests.filter(item => item.path === 'command').map(item => item.input.type))], ['get_system_prompt_document', 'save_system_prompt']);
+    assert.deepEqual([...new Set(requests.filter(item => item.path === 'command').map(item => item.input.type))], ['get_system_prompt_document', 'get_available_models', 'save_system_prompt']);
     assert.equal(requests.filter(item => item.input?.type === 'save_system_prompt').length, 1);
     assert.equal(JSON.stringify(localStorage), storageBefore, 'Saving does not use local storage');
     dispose();
-    dispose = components.mountApp(root, '/system-prompts');
+    dispose = components.mountApp(root, '/b/k7m3xqa9/system-prompts');
     for (let i = 0; i < 4; i++) await flush();
     assert.match(root.textContent, /Saved example/);
     assert.match(root.textContent, /Original instructions/);
@@ -488,10 +489,10 @@ test('chat references open the Solid view without creating a model request or mo
     connected: true, running: false, cwd: '/test/project', token: 'test' };
   rpc = createRpcFixture({
     info: os.handler(() => snapshot),
-    agents: { list: os.handler(() => [snapshot]) },
+    agents: { list: os.handler(() => [snapshot]), create: os.handler(() => snapshot) },
   });
   const requests = rpc.requests;
-  const dispose = components.mountApp(root, '/tree');
+  const dispose = components.mountApp(root, '/t/k7m3xqa9');
   try {
     await flush();
     await flush();
@@ -574,7 +575,7 @@ test('chat references open the Solid view without creating a model request or mo
     assert.equal(root.querySelector('.system-prompts-view'), null);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft');
     assert.equal(JSON.stringify(entries), before);
-    assert.ok(requests.every(request => ['info', 'agents/list', 'events', 'branchLabels/list'].includes(request.path)), 'Viewing prompts does not mutate the session');
+    assert.ok(requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list'].includes(request.path) || request.input?.type === 'get_available_models'), 'Viewing prompts does not mutate the session');
   } finally { dispose(); }
 });
 
@@ -746,6 +747,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
     agents: {
       list: os.handler(() => Object.values(snapshots)),
       create: os.handler(({ input }) => {
+        if (input.sessionUrlId) return { ...snapshots.left, relatedAgents: [snapshots.right] };
         requests.push(input);
         const source = snapshots[input.sourceAgentId];
         const index = source.entries.findIndex(entry => entry.id === input.entryId);
@@ -759,7 +761,7 @@ test('side-by-side chats send and stop independently while both agents stream', 
     }),
   });
   const streams = rpc.streams;
-  const dispose = components.mountApp(root, '/tree');
+  const dispose = components.mountApp(root, '/t/testchat');
   try {
     for (let i = 0; i < 8; i++) await flush();
     button(root, 'Options').click();
@@ -865,12 +867,13 @@ test('Single routes mount only one branch and composer while preserving shared s
   window.sessionStorage.setItem('pi-agent-view', JSON.stringify({ agents: ['left', 'right'], selected: 'left' }));
   rpc = createRpcFixture({
     info: os.handler(({ input }) => ({ ...snapshots[input.agentId || 'left'], token: 'test' })),
-    agents: { list: os.handler(() => Object.values(snapshots)) },
+    agents: { list: os.handler(() => Object.values(snapshots)),
+      create: os.handler(() => ({ ...snapshots.left, relatedAgents: [snapshots.right] })) },
   });
-  const dispose = components.mountApp(root, '/single');
+  const dispose = components.mountApp(root, '/b/testchat');
   try {
     for (let i = 0; i < 8; i++) await flush();
-    assert.equal(dispose.history.get(), '/single');
+    assert.equal(dispose.history.get(), '/b/testchat');
     assert.equal(root.querySelectorAll('.message-composer').length, 1);
     assert.ok(root.querySelector('.tree-node[data-entry-id="right-answer"]'));
     assert.equal(root.querySelector('.tree-node[data-entry-id="left-answer"]'), null);
@@ -942,7 +945,7 @@ test('Single routes mount only one branch and composer while preserving shared s
     assert.match(root.querySelector('#trace-viewport').textContent, /Right background streaming/);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep right draft');
     assert.ok(root.querySelector('.composer-attachments img'));
-    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'events', 'branchLabels/list'].includes(request.path)), 'View navigation sends no commands or prompts');
+    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list'].includes(request.path) || request.input?.type === 'get_available_models'), 'View navigation sends no commands or prompts');
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
@@ -957,7 +960,8 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
   const hidden = new Set();
   rpc = createRpcFixture({
     info: os.handler(({ input }) => ({ ...snapshots[input.agentId || 'left'], token: 'test' })),
-    agents: { list: os.handler(() => Object.values(snapshots)) },
+    agents: { list: os.handler(() => Object.values(snapshots)),
+      create: os.handler(() => ({ ...snapshots.left, relatedAgents: [snapshots.right] })) },
     hiddenBranches: {
       list: os.handler(() => [...hidden]),
       change: os.handler(({ input }) => {
@@ -967,7 +971,7 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
       }),
     },
   });
-  const dispose = components.mountApp(root, '/tree');
+  const dispose = components.mountApp(root, '/t/testchat');
   const stored = () => [...hidden];
   const hide = async id => {
     const input = root.querySelector(`.editor[data-leaf-id="${id}"] textarea`);
@@ -1032,7 +1036,7 @@ test('/hide cuts columns from the DOM, keeps needed shared cards, and reverses t
     assert.equal(root.querySelectorAll('.message-composer').length, 2);
     assert.ok(root.querySelector('.tree-node[data-entry-id="left-answer"]'));
     assert.ok(root.querySelector('.tree-node[data-entry-id="stream-right-0"]'));
-    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'events', 'branchLabels/list', 'uiOptions/get', 'hiddenBranches/list', 'hiddenBranches/change'].includes(request.path)), 'Hiding uses dedicated persistence endpoints');
+    assert.ok(rpc.requests.every(request => ['info', 'agents/list', 'agents/create', 'events', 'branchLabels/list', 'uiOptions/get', 'hiddenBranches/list', 'hiddenBranches/change'].includes(request.path) || request.input?.type === 'get_available_models'), 'Hiding uses dedicated persistence endpoints');
   } finally {
     try { await onlyHidden(false); }
     finally {
