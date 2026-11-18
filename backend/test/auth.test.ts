@@ -15,6 +15,13 @@ function fixture(login, loadSettings) {
   }), loadSettings);
 }
 
+test('model choices are available without starting an agent and expose only display metadata', async () => {
+  const bridge = new LoginBridge(async () => ({
+    getAvailable: async () => [{ provider: 'example', id: 'model', name: 'Example model', internal: 'not needed' }],
+  }));
+  assert.deepEqual(await bridge.models(), [{ provider: 'example', id: 'model', name: 'Example model' }]);
+});
+
 test('ChatGPT login receives a persistent installation ID and preserves existing settings', async () => {
   const root = await mkdtemp(join(tmpdir(), 'spicy-login-device-'));
   const directory = join(root, 'settings');

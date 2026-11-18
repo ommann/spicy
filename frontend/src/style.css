@@ -415,11 +415,14 @@
   opacity: 1;
 }
 
-.branch-dismiss {
-  position: absolute;
-  top: 1lh;
-  right: 1ch;
-  z-index: 2;
+.branch-draft:has(> .branch-dismiss) {
+  box-sizing: border-box;
+  padding: var(--block-padding);
+  text-align: right;
+}
+
+.text-action.branch-dismiss {
+  padding: 0;
 }
 
 .empty-placeholder {
@@ -794,6 +797,52 @@
   justify-content: space-between;
   gap: 1ch;
   cursor: pointer;
+}
+
+.branch-configuration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1ch;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding-inline: var(--chat-padding-inline);
+}
+
+.branch-configuration > .system-prompt-reference {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.branch-configuration > .branch-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 65%;
+}
+
+.branch-configuration > .branch-model > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-configuration .agent-health {
+  flex-shrink: 0;
+}
+
+.select-leading-option {
+  margin-bottom: var(--chat-row-gap);
+}
+
+.branch-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
 }
 
 .system-prompt-reference:focus-visible {

@@ -63,6 +63,7 @@ export function createRouter({ agents, login, cwd, managed, token, signal: shutd
       usageHistory: procedure.input(emptyInput).handler(() => login.usageHistory()),
       codexUsage: procedure.input(emptyInput).handler(({ signal }) => login.codexUsage(signal)),
       providers: procedure.input(emptyInput).handler(() => login.providers()),
+      models: procedure.input(emptyInput).handler(() => login.models()),
       state: procedure.input(emptyInput).handler(() => login.state()),
       login: mutation.input(loginInput).handler(({ input }) => login.start(input.providerId, input.type)),
       reply: mutation.input(loginReplyInput).handler(({ input }) => login.reply(input.id, input.promptId, input.value)),

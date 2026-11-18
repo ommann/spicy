@@ -63,6 +63,11 @@ interface Props {
   onSubmit: (text: string, leafId: string, images?: ImageAttachment[]) => Promise<boolean>;
   onBranch: (sourceId: string, anchorId?: string) => void;
   onDismissBranch: (id: string) => void;
+  model: (id: string) => { provider: string; id: string; name?: string } | undefined;
+  inheritedModel: (id: string) => { provider: string; id: string; name?: string } | undefined;
+  pendingModelKey?: (id: string) => string | undefined;
+  modelOptions: SelectOption[];
+  onSelectBranchModel: (id: string, value: string) => void;
   prompts: PromptVersion[];
   onSelectBranchPrompt: (id: string, key?: string) => void;
   pendingPromptKey?: (id: string) => string | undefined;
@@ -92,7 +97,8 @@ export interface ConversationView {
 }
 
 export function ConversationCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; promptTitle?: string; scrollTop: number; promptRowTop: number;
-  selection?: { value: string; options: SelectOption[]; onChange: (value: string) => void };
+  modelSelection?: { label: string; value: string; inheritedLabel: string; options: SelectOption[]; onChange: (value: string) => void };
+  selection?: { value: string; leadingOption?: SelectOption; options: SelectOption[]; onChange: (value: string) => void };
   registerSection: (id: string, element: HTMLElement) => () => void;
   width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
   let element!: HTMLElement;
@@ -115,15 +121,10 @@ export function ConversationCard(props: { id: string; node: Wire; position: Wire
     <Card ref={element} anchors={props.node.anchors} style={{ left: `${props.position.cardLeft}px`, width: `${props.width}px` }}>
       <Show when={props.node.entry.type === 'branch_draft'}>
         <SystemPromptPlaceholder number={props.promptNumber} title={props.promptTitle} stickyOffset={props.scrollTop - props.promptRowTop}
-          rowOffset={props.node.entry.draftSourceId ? props.promptRowTop - props.position.top : undefined} selection={props.selection} />
-        <Show when={props.node.entry.draftSourceId}>
-          <button class="text-action branch-dismiss" aria-label="Dismiss pending branch"
-            style={{ top: `calc(${props.promptRowTop - props.position.top}px + 1lh)`,
-              transform: `translateY(max(0px, calc(${props.scrollTop - props.promptRowTop}px + 1lh)))` }}
-            onClick={() => props.onDismiss(props.id)}>Dismiss</button>
-        </Show>
+          rowOffset={props.node.entry.draftSourceId ? props.promptRowTop - props.position.top : undefined} selection={props.selection} model={props.modelSelection} />
       </Show>
-      <Index each={content.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch} />}</Index>
+      <Index each={content.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch}
+        onDismiss={props.node.entry.draftSourceId ? () => props.onDismiss(props.id) : undefined} />}</Index>
     </Card>
   </article></SectionContext.Provider>;
 }

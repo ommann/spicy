@@ -17,15 +17,15 @@ export function ConversationPrompt(value: { view: ConversationView; index: numbe
       <Card><Show when={isUnstartedCompaction(props.graph, leaf().id)} fallback={
         <SystemPromptReference entryId={leaf().id} promptId={versionFor(leaf().id)?.full?.id || ''}
           title={versionFor(leaf().id)?.title} number={versionFor(leaf().id)?.number || 1}
-          health={props.health(leaf().id)} href={props.systemPromptHref(versionFor(leaf().id)?.full?.id || '')} />
+          model={props.model(leaf().id)?.name || props.model(leaf().id)?.id} health={props.health(leaf().id)} href={props.systemPromptHref(versionFor(leaf().id)?.full?.id || '')} />
       }>
         <SystemPromptPlaceholder
           number={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf().id)) ?? versionFor(leaf().id))?.number}
           title={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf().id)) ?? versionFor(leaf().id))?.title}
           selection={{
-            value: props.pendingPromptKey?.(leaf().id) ?? versionFor(leaf().id)?.key ?? '',
-            options: props.prompts.map(prompt => ({ value: prompt.key,
-              label: `${promptLabel(prompt.number, prompt.title)}${prompt.key === versionFor(leaf().id)?.key ? ' (inherited)' : ''}` })),
+            value: props.pendingPromptKey?.(leaf().id) ?? '',
+            leadingOption: { value: '', label: promptLabel(versionFor(leaf().id)?.number ?? 1, versionFor(leaf().id)?.title) },
+            options: props.prompts.map(prompt => ({ value: prompt.key, label: promptLabel(prompt.number, prompt.title) })),
             onChange: key => props.onSelectBranchPrompt(leaf().id, key === versionFor(leaf().id)?.key ? undefined : key),
           }} />
       </Show></Card>
@@ -43,9 +43,9 @@ export function ConversationNodes(value: { view: ConversationView }) {
     const node = () => requiredMapValue(props.graph.nodes, id);
     const inheritedKey = () => inheritedVersion(id)?.key;
     const selection = () => node().entry.type === 'branch_draft' && node().entry.draftSourceId ? {
-      value: node().entry.draftPromptKey ?? inheritedKey() ?? '',
-      options: props.prompts.map(prompt => ({ value: prompt.key,
-        label: `${promptLabel(prompt.number, prompt.title)}${prompt.key === inheritedKey() ? ' (inherited)' : ''}` })),
+      value: node().entry.draftPromptKey ?? '',
+      leadingOption: { value: '', label: promptLabel(inheritedVersion(id)?.number ?? 1, inheritedVersion(id)?.title) },
+      options: props.prompts.map(prompt => ({ value: prompt.key, label: promptLabel(prompt.number, prompt.title) })),
       onChange: (key: string) => props.onSelectBranchPrompt(id, key === inheritedKey() ? undefined : key),
     } : undefined;
     const promptRoot = () => props.graph.prefix.get(id).rootId;
@@ -53,6 +53,13 @@ export function ConversationNodes(value: { view: ConversationView }) {
       gridStyle={gridPlacement(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)}
       promptNumber={versionFor(id)?.number} promptTitle={versionFor(id)?.title} scrollTop={scroll().top}
       promptRowTop={layout().items.get(promptRoot())?.top ?? layout().promptTop ?? spacing().row} selection={selection()}
+      modelSelection={selection() ? {
+        label: props.model(id)?.name || props.model(id)?.id || 'Model',
+        value: props.pendingModelKey?.(id) ?? '',
+        inheritedLabel: props.inheritedModel(id)?.name || props.inheritedModel(id)?.id || 'Unknown model',
+        options: props.modelOptions,
+        onChange: value => props.onSelectBranchModel(id, value),
+      } : undefined}
       registerSection={registerSection} width={workingWidth()}
       onBranch={sourceId => props.onBranch(sourceId, props.graph.leaves[layout().items.get(id).column]?.id)} onDismiss={dismissBranch}
       measure={(key, element) => observe(key, element, 'node')} unmeasure={unobserve} />;

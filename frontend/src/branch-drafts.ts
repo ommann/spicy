@@ -1,7 +1,7 @@
 import type { Wire } from './types.ts';
 interface SentDraft { parentId: string | null; sentAt?: number; text?: string }
 
-// Pi may insert system-prefix changes between the branch point and the user message.
+// Pi may insert configuration changes between the branch point and the user message.
 // Those records belong to the committed branch, not a second optimistic branch.
 export function hasCommittedDraft(entries: Wire[], draft: SentDraft) {
   const sentAt = draft.sentAt;
@@ -19,7 +19,7 @@ export function hasCommittedDraft(entries: Wire[], draft: SentDraft) {
       if (seen.has(parentId)) return false;
       seen.add(parentId);
       const parent = byId.get(parentId);
-      if (parent?.message?.role !== 'system') return false;
+      if (!parent || (parent.message?.role !== 'system' && parent.type !== 'model_change' && parent.type !== 'thinking_level_change')) return false;
       parentId = parent.parentId;
     }
     return true;

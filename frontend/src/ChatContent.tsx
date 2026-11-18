@@ -324,7 +324,7 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
   </>;
 }
 
-export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequest; onBranch?: (id: string) => void }) {
+export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequest; onBranch?: (id: string) => void; onDismiss?: () => void }) {
   const rsvpTarget = useContext(RsvpTarget);
   const textBlocks = () => typeof props.part.content === 'string' ? props.part.content
     : (props.part.content || []).filter((block: Wire) => block.type === 'text');
@@ -334,7 +334,10 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
     <Match when={props.part.kind === 'error'}>
       <section ref={useContext(SectionContext)} class="message real-message notification-error" role="alert" data-entry-id={props.part.entryId}>{props.part.text}</section>
     </Match>
-    <Match when={props.part.kind === 'draft'}><section ref={useContext(SectionContext)} class="branch-draft" data-entry-id={props.part.entryId} /></Match>
+    <Match when={props.part.kind === 'draft'}><section ref={useContext(SectionContext)} class="branch-draft" data-entry-id={props.part.entryId}>
+      <Show when={props.onDismiss}><button class="text-action branch-dismiss" aria-label="Dismiss pending branch"
+        onClick={() => props.onDismiss?.()}>Dismiss</button></Show>
+    </section></Match>
     <Match when={props.part.kind === 'tool'}>
       <Show when={props.part.call.name === 'codemode' || props.part.call.name.endsWith('.codemode')}
         fallback={<Tool call={props.part.call} result={props.part.result} entryId={props.part.entryId} expandRequest={props.expandRequest} />}>

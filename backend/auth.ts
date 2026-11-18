@@ -39,6 +39,11 @@ export class LoginBridge {
     return this.runtimePromise;
   }
 
+  async models() {
+    const runtime = await this.runtime();
+    return (await runtime.getAvailable()).map(model => ({ provider: model.provider, id: model.id, name: model.name }));
+  }
+
   async providers() {
     const runtime = await this.runtime();
     const credentials = await runtime.listCredentials();

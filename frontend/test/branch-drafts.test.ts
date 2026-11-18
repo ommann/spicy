@@ -18,6 +18,16 @@ test('committed branch replaces its optimistic copy across system-prompt deltas'
   assert.equal(hasCommittedDraft(entries, { ...draft, parentId: 'other fork' }), false);
 });
 
+test('committed branches include model and thinking changes before the prompt', () => {
+  const entries = [
+    { id: 'model', parentId: 'fork', type: 'model_change', provider: 'test', modelId: 'new-model' },
+    { id: 'thinking', parentId: 'model', type: 'thinking_level_change', thinkingLevel: 'high' },
+    { id: 'system', parentId: 'thinking', message: { role: 'system', content: 'New instructions' } },
+    user('system'),
+  ];
+  assert.equal(hasCommittedDraft(entries, draft), true);
+});
+
 test('other conversation messages are not transparent branch ancestors', () => {
   const entries = [
     { id: 'reply', parentId: 'fork', message: { role: 'assistant', content: [] } },

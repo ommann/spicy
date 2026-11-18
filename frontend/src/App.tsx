@@ -1,4 +1,5 @@
 import { loadUiOptions } from './ui-options';
+import { inheritedBranchModel } from './branch-model';
 import ScrollableTextarea from './ScrollableTextarea';
 import { FileLinkCwdContext } from './file-link';
 import Input from './Input';
@@ -85,6 +86,7 @@ interface DraftBranch {
   anchorId?: string;
   prompt?: { key: string; content: string; sections: Record<string, string>; promptBuilder?: SystemPromptBuilder };
   parentId: string | null;
+  model?: { provider: string; id: string; name?: string };
   text?: string;
   sentAt?: number;
 }
@@ -236,6 +238,12 @@ export default function App(props: ParentProps) {
     const source = actualEntries().find(entry => entry.id === sourceId && entry.message?.role === 'user');
     if (!source) return;
 
+    const sourceAgent = agentForEntry(visibleAgents(), sourceId, selectedAgentId());
+    setModels([]);
+    const availableModels = sourceAgent?.connected
+      ? api.command({ agentId: sourceAgent.agentId, type: 'get_available_models' }, rpcOptions).then(available => available.models || [])
+      : api.auth.models({});
+    void availableModels.then(setModels).catch(reportFailure);
     const key = branchKey();
     const drafts = draftBranches()[key] || [];
     const existing = drafts.find(draft => draft.sourceId === sourceId && draft.text === undefined);
@@ -527,14 +535,17 @@ export default function App(props: ParentProps) {
     finally { setBusy(false); }
   }
 
-  async function selectModel(value: string) {
-    const model = models().find(model => `${model.provider}/${model.id}` === value);
-    if (!model) return;
-    setBusy(true);
-    try {
-      await api.command({ agentId: selectedAgentId() || undefined, type: 'set_model', provider: model.provider, modelId: model.id }, rpcOptions);
-    } catch (failure) { reportFailure(failure); }
-    finally { setBusy(false); }
+  function branchModel(id: string): { provider: string; id: string; name?: string } | undefined {
+    const draft = (draftBranches()[branchKey()] || []).find(item => item.id === id);
+    if (draft?.model) return draft.model;
+    return inheritedBranchModel(actualEntries(), draft ? draft.parentId : id);
+  }
+
+  function selectBranchModel(id: string, value: string) {
+    const model = models().find(item => `${item.provider}/${item.id}` === value);
+    const key = branchKey();
+    setDraftBranches(previous => ({ ...previous, [key]: (previous[key] || []).map(draft =>
+      draft.id === id && draft.text === undefined ? { ...draft, model: model ? { provider: model.provider, id: model.id, name: model.name } : undefined } : draft) }));
   }
 
   async function replyToDialog(dialog: Wire, response: UiReply) {
@@ -613,6 +624,9 @@ export default function App(props: ParentProps) {
         if (targetId) setFocusRequest(previous => ({ id: targetId, revision: (previous?.revision || 0) + 1 }));
         if (draft) setDraftBranches(previous => ({ ...previous, [key]: previous[key].filter(item => item.id !== draft.id) }));
       } else {
+        if (draft?.model) {
+          await api.command({ agentId: agent.agentId, type: 'set_model', provider: draft.model.provider, modelId: draft.model.id }, rpcOptions);
+        }
         const prompt = draft?.prompt ?? pendingPrompts()[leafId];
         const systemPrompt = { choice: 'current', ...(prompt ? { selected: prompt } : {}) };
         await api.command({ agentId: agent.agentId, type: 'prompt', message, images, systemPrompt,
@@ -767,6 +781,15 @@ export default function App(props: ParentProps) {
             running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt} pendingPromptKey={id => pendingPrompts()[id]?.key}
+            model={branchModel} modelOptions={models().map(model => ({ value: `${model.provider}/${model.id}`, label: `${model.provider}/${model.name || model.id}` }))}
+            inheritedModel={id => {
+              const draft = (draftBranches()[branchKey()] || []).find(item => item.id === id);
+              return inheritedBranchModel(actualEntries(), draft ? draft.parentId : id);
+            }}
+            pendingModelKey={id => {
+              const model = (draftBranches()[branchKey()] || []).find(draft => draft.id === id)?.model;
+              return model ? `${model.provider}/${model.id}` : undefined;
+            }} onSelectBranchModel={selectBranchModel}
             systemPromptHref={id => viewHref(`/system-prompts/${encodeURIComponent(id)}`)} onImage={openImage} onAbort={abort}
             onOptions={openOptions} />
           </Show>
@@ -860,21 +883,6 @@ export default function App(props: ParentProps) {
               onChange={forkFromEntry}
             />
           </label>
-          <Show when={models().length}>
-            <label>
-              Model{" "}
-              <SelectWithDialog
-                label="Model"
-                disabled={busy() || snapshot().running}
-                value={`${snapshot().state?.model?.provider}/${snapshot().state?.model?.id}`}
-                options={models().map(model => ({
-                  value: `${model.provider}/${model.id}`,
-                  label: `${model.provider}/${model.name || model.id}`,
-                }))}
-                onChange={selectModel}
-              />
-            </label>
-          </Show>
         </Show>
       </Dialog>
       <For each={extensionDialogs()}>

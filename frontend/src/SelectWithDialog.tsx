@@ -1,4 +1,4 @@
-import { For, createSignal, type JSX } from 'solid-js';
+import { For, Show, createSignal, type JSX } from 'solid-js';
 import ScrollArea from './ScrollArea';
 import Dialog from './Dialog';
 
@@ -11,6 +11,7 @@ export default function SelectWithDialog(props: {
   label: string;
   value: string;
   options: SelectOption[];
+  leadingOption?: SelectOption;
   onChange: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -20,7 +21,7 @@ export default function SelectWithDialog(props: {
 }) {
   let dialog!: HTMLDialogElement;
   const [open, setOpen] = createSignal(false);
-  const selected = () => props.options.find(option => option.value === props.value)?.label ?? props.placeholder ?? 'Choose';
+  const selected = () => (props.leadingOption?.value === props.value ? props.leadingOption : props.options.find(option => option.value === props.value))?.label ?? props.placeholder ?? 'Choose';
   function show() {
     if (props.disabled) return;
     dialog.showModal();
@@ -48,6 +49,10 @@ export default function SelectWithDialog(props: {
     <Dialog ref={dialog} class="chat-dialog select-dialog" title={props.label} onClose={() => setOpen(false)}>
       <ScrollArea class="select-options" vertical>
         <div role="listbox" aria-label={props.label} onKeyDown={navigate}>
+          <Show when={props.leadingOption}>{option => <div class="select-leading-option">
+            <button type="button" class="select-choice" role="option" aria-selected={option().value === props.value}
+              onClick={() => choose(option().value)}>{option().label}</button>
+          </div>}</Show>
           <For each={props.options}>{option => <button type="button" class="select-choice" role="option"
             aria-selected={option.value === props.value} onClick={() => choose(option.value)}>{option.label}</button>}</For>
         </div>

@@ -7,6 +7,7 @@ interface Props {
   promptId: string;
   number: number;
   title?: string;
+  model?: string;
   health: AgentHealthStatus;
   href: string;
 }
@@ -16,7 +17,7 @@ export default function SystemPromptReference(props: Props) {
     <A href={props.href} class="message system-message system-prompt-reference"
       data-entry-id={props.entryId} data-system-prompt={props.number}>
       <span>{promptLabel(props.number, props.title)}</span>
-      <AgentHealth status={props.health} />
+      <span class="branch-model"><span>{props.model || 'Unknown model'}</span><AgentHealth status={props.health} /></span>
     </A>
   );
 }
