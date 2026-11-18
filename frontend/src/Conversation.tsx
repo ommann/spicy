@@ -56,7 +56,6 @@ interface Props {
   health: (leafId: string) => AgentHealthStatus;
   contextUsage?: (leafId: string) => ContextWindowUsage | null | undefined;
   busy: (leafId: string) => boolean;
-  onFocusLeaf: (leafId: string) => void;
   focusRequest?: { id: string; revision: number };
   notification: { message: string; isError: boolean };
   onReady: (controller: ConversationController | undefined) => void;
@@ -222,10 +221,6 @@ function createConversation(props: Props, state: ConversationViewState, initialM
     return (key ? props.prompts.find(prompt => prompt.key === key) : undefined) ?? inheritedVersion(id);
   }
   const focused = () => Math.max(0, Math.min(selectedLane(), lanes().length - 1));
-  // Tree hover only chooses where shared history is drawn. Selecting its agent
-  // also changes the session URL, so only the explicit single view commits it.
-  createEffect(on(() => props.active && mode() === 'focused' ? lanes()[focused()]?.leafId : undefined,
-    id => { if (id) props.onFocusLeaf(id); }));
   const maxWidth = () => Math.max(480, dimensions().width - spacing().edge * 2);
   const workingWidth = () => mode() === 'focused' && focusedFitsWindow() ? maxWidth() : widths[mode()];
   const layout = createMemo(() => props.layout(props.graph, {

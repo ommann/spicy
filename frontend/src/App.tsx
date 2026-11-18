@@ -533,11 +533,6 @@ export default function App(props: ParentProps) {
     return agent.providerConnection || 'ready';
   }
 
-  function focusLeaf(leafId: string) {
-    const agent = leafAgent(leafId);
-    if (agent?.agentId) setSelectedAgentId(agent.agentId);
-  }
-
   function leafBusy(leafId: string) {
     return sending().includes(leafId) || sending().includes(leafAgent(leafId)?.agentId || '');
   }
@@ -817,7 +812,7 @@ export default function App(props: ParentProps) {
             modeHref={mode => viewHref(chatViewPath(mode))}
             onMode={mode => navigateView(chatViewPath(mode))}
             drafts={composerState().drafts} onDraftChange={composerState().setDraft}
-            running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
+            running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt} pendingPromptKey={id => pendingPrompts()[id]?.key}
             model={branchModel} modelOptions={modelOptions()} thinkingSelection={branchThinking}
