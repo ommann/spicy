@@ -32,7 +32,6 @@ import {
 import { convertMcpResult, createMcpResultSchema, createMcpToolName } from "../src/extensions/mcp/tools.ts";
 
 // Config values are resolved at connect time, so the literal reference must survive loading.
-// biome-ignore lint/suspicious/noTemplateCurlyInString: literal config value reference
 const TOKEN_HEADER = "Bearer ${TOKEN}";
 
 describe("MCP config", () => {
