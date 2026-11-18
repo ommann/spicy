@@ -19,6 +19,14 @@ test('branch and tree URLs round-trip, omitting duplicate focus IDs', () => {
   assert.equal(sessionPath('/b/k7m3xqa9/system-prompts/entry', 'v8n4zrc2'), '/b/v8n4zrc2/system-prompts/entry');
 });
 
+test('Sessions URLs preserve the chat ID across navigation', () => {
+  const path = sessionPath('/sessions', 'k7m3xqa9');
+  assert.equal(path, '/b/k7m3xqa9/sessions');
+  assert.equal(sessionUrlIdFromPath(path), 'k7m3xqa9');
+  assert.equal(sessionViewPath(path), '/sessions');
+  assert.equal(sessionPath('/single', sessionUrlIdFromPath(path)), '/b/k7m3xqa9');
+});
+
 test('session URL parsing keeps legacy routes and rejects other ID alphabets', () => {
   assert.equal(sessionUrlIdFromPath('/k7m3xqa9'), 'k7m3xqa9');
   assert.equal(sessionViewPath('/k7m3xqa9'), '/');

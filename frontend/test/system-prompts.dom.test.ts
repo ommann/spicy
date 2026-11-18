@@ -369,20 +369,12 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
     dialog.dispatchEvent(shortcut);
     assert.equal(shortcut.defaultPrevented, false, 'Ctrl+O is left to the browser');
     assert.doesNotMatch(dialog.textContent, /ctrl\+o|more lines|total,|to expand/i);
-    const disclosure = dialog.querySelector('.collapse-toggle');
-    assert.equal(disclosure.textContent, 'Show less');
-    disclosure.click();
-    await flush();
-    assert.equal(disclosure.textContent, 'Show more');
-    assert.equal(disclosure.getAttribute('aria-expanded'), 'false');
-    disclosure.click();
-    await flush();
-    assert.equal(disclosure.getAttribute('aria-expanded'), 'true');
+    assert.equal(dialog.querySelector('.collapse-toggle'), null);
     const cards = dialog.querySelectorAll('[data-system-prompt-version]');
     assert.equal(dialog.querySelectorAll('.diff-document-view').length, 2);
     assert.ok(dialog.querySelector('.diff-line-number'));
     assert.equal(dialog.querySelector('[role="main"] .collapse-toggle'), null);
-    assert.equal(dialog.querySelectorAll('nav .collapse-toggle').length, 1);
+    assert.equal(dialog.querySelectorAll('nav .collapse-toggle').length, 0);
     assert.equal(cards[0].querySelector('.diff-add'), null);
     assert.equal(cards[0].querySelector('.diff-remove'), null);
     assert.equal(cards[1].querySelector('.system-delta'), null);
@@ -414,7 +406,7 @@ test('Solid prompt view reuses canonical cards, focuses selected version and sup
     await flush();
     assert.equal(cards[0].hidden, true);
     assert.equal(cards[1].hidden, false);
-    button(dialog, 'Tree').click();
+    toggleMode();
     await flush();
     assert.equal(cards[0].hidden, false);
     const hover = new window.MouseEvent('pointermove', { bubbles: true, clientX: 10 });
@@ -552,7 +544,7 @@ test('chat references open the Solid view without creating a model request or mo
     assert.ok(reference, `Chat contains numbered prompt references: ${root.textContent}`);
     assert.equal(reference.tagName, 'A');
     assert.equal(reference.getAttribute('href'), '/b/k7m3xqa9/system-prompts/system2');
-    for (const label of ['Sessions', 'Chat', 'System prompts', 'Editor', 'Single', 'Tree']) {
+    for (const label of ['Sessions', 'S-Prompts', 'Editor', 'Single', 'Tree']) {
       const link = button(root, label);
       assert.equal(link?.tagName, 'A', `${label} is a native navigation link`);
       assert.ok(link.getAttribute('href'));
@@ -575,7 +567,7 @@ test('chat references open the Solid view without creating a model request or mo
     assert.ok(dialog);
     assert.equal(dispose.history.get(), '/b/k7m3xqa9/system-prompts/system2');
     assert.match(dialog.textContent, /Original instructions/);
-    button(root, 'Chat').click();
+    button(root, 'Tree').click();
     await flush();
     assert.equal(root.querySelector('.system-prompts-view'), null);
     assert.equal(root.querySelector('.editor textarea').value, 'Keep this draft', 'Returning to Chat preserves the unsent draft');
@@ -613,7 +605,7 @@ test('session URLs override tab selection, preserve deep links and restore on br
     assert.ok(root.querySelector('.system-prompts-view'));
     assert.deepEqual(requests.filter(item => item.path === 'agents/create').map(item => item.input.sessionUrlId), ['k7m3xqa9']);
     assert.ok(!requests.some(item => item.path === 'info' && item.input.agentId === 'stale'));
-    button(root, 'Chat').click();
+    button(root, 'Tree').click();
     await flush();
     assert.equal(dispose.history.get(), '/t/k7m3xqa9');
     dispose.history.set({ value: '/v8n4zrc2' });
@@ -689,6 +681,79 @@ test('Sessions shows history cards, filters projects and links to saved chats wi
   } finally { dispose(); window.sessionStorage.removeItem('pi-agent-view'); }
 });
 
+test('startup opens the latest existing chat and Sessions keeps its ID', async () => {
+  const empty = { entries: [], leafId: null, state: null, live: [], dialogs: [], connected: false, running: false, cwd: '/work/spicy', token: 'test' };
+  rpc = createRpcFixture({
+    info: os.handler(() => empty),
+    sessions: os.handler(() => [
+      { id: 'older', urlId: 'v8n4zrc2', cwd: '/work/spicy', name: 'Older', modified: 1 },
+      { id: 'latest', urlId: 'k7m3xqa9', cwd: '/work/spicy', name: 'Latest', modified: 2 },
+    ]),
+    agents: {
+      list: os.handler(() => []),
+      create: os.handler(({ input }) => ({ ...empty, agentId: 'existing',
+        state: { sessionId: 'existing', sessionUrlId: input.sessionUrlId } })),
+    },
+  });
+  const dispose = components.mountApp(root, '/');
+  try {
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(dispose.history.get(), '/b/k7m3xqa9');
+    button(root, 'Sessions').click();
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(dispose.history.get(), '/b/k7m3xqa9/sessions');
+    assert.equal(button(root, 'Single').getAttribute('href'), '/b/k7m3xqa9');
+    assert.equal(button(root, 'Tree').getAttribute('href'), '/t/k7m3xqa9');
+    assert.deepEqual(rpc.requests.filter(request => request.path === 'agents/create').map(request => request.input), [{ sessionUrlId: 'k7m3xqa9' }]);
+    assert.ok(!rpc.requests.some(request => request.path === 'command'));
+  } finally { dispose(); }
+});
+
+test('Sessions folder picker changes the fresh chat folder without opening a chat', async () => {
+  const empty = { entries: [], leafId: null, state: null, live: [], dialogs: [], connected: false, running: false, cwd: '/work/spicy', token: 'test' };
+  let createdCwd;
+  rpc = createRpcFixture({
+    info: os.handler(() => empty),
+    sessions: os.handler(() => [{ id: 'old', cwd: '/work/other', name: 'Other', modified: 1 }]),
+    agents: {
+      list: os.handler(() => []),
+      create: os.handler(({ input }) => {
+        createdCwd = input.cwd;
+        return { ...empty, cwd: input.cwd, agentId: 'fresh', connected: true,
+          state: { sessionId: 'fresh', sessionUrlId: 'k7m3xqa9' } };
+      }),
+    },
+    command: os.handler(() => ({ disposition: 'started' })),
+  });
+  const dispose = components.mountApp(root, '/');
+  try {
+    for (let i = 0; i < 6; i++) await flush();
+    assert.equal(root.querySelector('.tree-title').textContent, '/work/spicy');
+    for (const label of ['Single', 'Tree', 'S-Prompts', 'Editor']) {
+      const item = [...root.querySelectorAll('.state-toggle')].find(item => item.textContent === label);
+      assert.equal(item.getAttribute('aria-disabled'), 'true');
+      assert.equal(item.tagName, 'SPAN');
+    }
+    root.querySelector('.tree-title').click();
+    for (let i = 0; i < 6; i++) await flush();
+    const path = root.querySelector('[aria-label="Project directory"]');
+    path.value = '/work/other';
+    path.dispatchEvent(new window.Event('input', { bubbles: true }));
+    path.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    assert.equal(dispose.history.get(), '/');
+    assert.equal(createdCwd, undefined);
+    assert.equal(root.querySelector('.tree-title').textContent, '/work/other');
+    const input = root.querySelector('.startup-empty-chat textarea');
+    input.value = 'Hello';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    for (let i = 0; i < 8; i++) await flush();
+    assert.equal(createdCwd, '/work/other');
+    assert.equal(root.querySelector('.tree-title').textContent, '/work/other');
+  } finally { dispose(); }
+});
+
 test('Sessions composer keeps failed drafts, opens focused chat on success and opens the prompt editor', async () => {
   window.sessionStorage.removeItem('pi-agent-view');
   let fail = true;
@@ -736,7 +801,7 @@ test('Sessions composer keeps failed drafts, opens focused chat on success and o
     assert.equal(button(root, 'Single').getAttribute('aria-current'), 'page');
     button(root, 'Sessions').click();
     for (let i = 0; i < 6; i++) await flush();
-    assert.equal(dispose.history.get(), '/');
+    assert.equal(dispose.history.get(), '/b/k7m3xqa9/sessions');
     input = root.querySelector('.startup-empty-chat textarea');
     assert.equal(input.value, '');
     input.value = 'Keep while editing';
@@ -854,9 +919,9 @@ test('side-by-side chats send and stop independently while both agents stream', 
     const forkDraft = root.querySelector('.editor[data-leaf-id="stream-fork-1"] textarea');
     forkDraft.value = 'Keep fork draft';
     forkDraft.dispatchEvent(new window.Event('input', { bubbles: true }));
-    button(root, 'System prompts').click();
+    button(root, 'S-Prompts').click();
     await flush();
-    button(root, 'Chat').click();
+    button(root, 'Tree').click();
     await flush();
     rightInput = root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea');
     assert.equal(rightInput.value, 'Keep right draft', 'Streaming agent keeps its draft across routes');

@@ -72,6 +72,7 @@ export function mountApp(root: HTMLElement, path = '/chat') {
     <Route path="/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/system-prompt-creator" component={SystemPromptCreator} />
     <Route path="/b/:branchId" component={SingleChatRoute} />
+    <Route path="/b/:branchId/sessions" component={SessionsRoute} />
     <Route path="/t/:treeId/:branchId?" component={TreeChatRoute} />
     <Route path="/b/:branchId/system-prompts/:id?" component={SystemPromptRoute} />
     <Route path="/b/:branchId/system-prompt-creator" component={SystemPromptCreator} />

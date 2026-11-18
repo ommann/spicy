@@ -24,11 +24,12 @@ export default function Sessions(props: {
   onProjectQuery: (value: string) => void;
   onSubmit: (images?: import('./image-attachments').ImageAttachment[]) => void | boolean | Promise<boolean>;
   onEditPrompt: () => void;
+  onOptions: () => void;
   busy: boolean;
   notification: { message: string; isError: boolean };
 }) {
   return <div class="sessions-view">
-    <Navigation />
+    <Navigation options={<button type="button" onClick={props.onOptions}>Options</button>} />
     <ScrollArea class="startup-session-scroll" vertical>
       <main class="startup-sessions" aria-label="Sessions">
         <section class="startup-empty-chat" aria-label="New chat">

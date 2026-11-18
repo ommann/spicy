@@ -16,7 +16,7 @@
 }
 
 .startup-sessions {
-  padding: 2.5ch;
+  padding: 2.5ch 2ch;
 }
 
 .startup-empty-chat {
@@ -24,11 +24,6 @@
   gap: var(--chat-row-gap);
   width: 100%;
   margin-bottom: 2lh;
-}
-
-.startup-empty-chat .message-composer,
-.startup-empty-chat .editor {
-  margin: 0;
 }
 
 .startup-searches {

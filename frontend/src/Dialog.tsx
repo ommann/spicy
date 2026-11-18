@@ -29,9 +29,9 @@ export default function Dialog(props: DialogProps) {
     element = node;
     if (typeof local.ref === 'function') local.ref(node);
   }}>
-    <Show when={local.title}>
+    <Show when={local.title || local.closeLabel}>
       <div class="chat-dialog-heading">
-        <span>{local.title}</span>
+        <Show when={local.title}><span>{local.title}</span></Show>
         <button type="button" onClick={() => closeModal(element)}>{local.closeLabel ?? 'Close'}</button>
       </div>
     </Show>

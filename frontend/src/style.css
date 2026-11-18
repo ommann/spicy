@@ -306,19 +306,34 @@
 }
 
 .app-toolbar button {
-  padding: 0 1ch;
+  padding: 0;
 }
 
 .app-toolbar > .tree-title {
   margin-right: 0;
 }
 
-.app-toolbar-actions {
+.app-toolbar-right {
   margin-left: auto;
-  display: grid;
+  display: flex;
   align-items: center;
-  justify-self: end;
-  min-width: 0;
+  gap: 2ch;
+}
+
+.app-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 2ch;
+}
+
+.app-toolbar-right .view-switch .view-switch,
+.app-toolbar-right .view-switch .tree-toolbar {
+  display: contents;
+}
+
+.app-toolbar-right .view-switch .state-toggle {
+  padding: 0 1ch;
+  white-space: nowrap;
 }
 
 .app-toolbar .tree-toolbar {
@@ -439,6 +454,7 @@
 }
 
 .branch-draft {
+  box-sizing: border-box;
   min-height: var(--chat-placeholder-height);
   border: 1px dashed var(--focus-border);
 }
@@ -451,6 +467,41 @@
   background: var(--background);
   color: var(--text);
   font: inherit;
+}
+
+.project-dialog {
+  width: min(900px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+}
+
+.project-folders > .scroll-area-viewport {
+  height: min(45dvh, 420px);
+}
+
+.project-dialog .project-folder {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-folder:is(:hover, :focus-visible, [aria-selected="true"]) {
+  color: var(--select-active-text);
+  background: var(--select-active-background);
+}
+
+.project-folders-empty {
+  padding: 12px;
+  color: var(--muted);
+}
+
+.project-dialog .chat-actions {
+  flex-wrap: wrap;
 }
 
 .chat-dialog::backdrop {

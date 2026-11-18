@@ -716,7 +716,7 @@ function createConversation(props: Props, state: ConversationViewState, initialM
           images={viewState.images[key] || []} onImagesChange={images => setViewState('images', key, images)}
           label={index() ? `Message draft (not sent), branch ${index() + 1}` : 'Message draft (not sent)'}
           class={inline() ? 'inline-composer' : undefined} hidden={mode() === 'focused' && index() !== focused()}
-          style={{ width: `${workingWidth()}px`, 'margin-left': '0',
+          style={{ width: `${workingWidth()}px`,
             left: `${inline() ? layout().composers[index()]?.left || 0 : layout().inset - scroll().left}px`,
             top: inline() ? `${layout().composers[index()]?.top || 0}px` : '0px' }}
           onFocus={() => selectLane(index(), false)} onSubmit={images => submit(key, lane().leafId, images)}

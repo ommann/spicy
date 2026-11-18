@@ -9,10 +9,10 @@ export default function Navigation(props: { children?: JSX.Element; options?: JS
   const [usageOpen, setUsageOpen] = createSignal(false);
   return <Show when={props.active !== false}>
     <header class="tree-toolbar app-toolbar" aria-label="Application navigation">
-      {links()}
-      <button type="button" onClick={() => setUsageOpen(true)}>Usage</button>
-      {props.options}
-      <div class="app-toolbar-actions">{props.children}</div>
+      {links(props.children, <>
+        <button type="button" onClick={() => setUsageOpen(true)}>Usage</button>
+        {props.options}
+      </>)}
       <Show when={usageOpen()}><Usage onClose={() => setUsageOpen(false)} /></Show>
     </header>
   </Show>;

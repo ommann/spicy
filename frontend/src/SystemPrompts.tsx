@@ -6,7 +6,6 @@ import SystemPromptPlaceholder from './SystemPromptPlaceholder';
 import Card from './Card';
 import ColumnToolbar from './ColumnToolbar';
 import { viewMode as mode, setViewMode as setMode } from './view-mode';
-import CollapseToggle from './CollapseToggle';
 import Checkbox from './Checkbox';
 import Dialog from './Dialog';
 import CodeLinewrapOption from './CodeLinewrapOption';
@@ -76,7 +75,6 @@ export default function SystemPrompts(props: Props) {
       onKeyDown={interaction.keydown}>
       <ColumnToolbar label="System prompt navigation" hasContent={props.versions.length > 0} mode={mode()}
         onMode={changeMode}
-        actions={<CollapseToggle expanded={expanded()} onToggle={() => setExpanded(value => !value)} />}
         onOptions={() => optionsDialog.showModal()}>
         {null}
       </ColumnToolbar>

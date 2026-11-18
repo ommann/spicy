@@ -1,6 +1,6 @@
 .message-composer {
   position: relative;
-  margin: 0 1ch;
+  margin: 0;
   padding-inline: 0.25ch;
 }
 .message-composer .editor textarea,
@@ -11,7 +11,6 @@
 .composer-row > .message-composer {
   position: absolute;
   top: 0;
-  margin-right: 0;
 }
 .editor:has(.composer-context) textarea,
 .editor:has(.composer-context) .composer-measure {

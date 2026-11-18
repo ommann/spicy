@@ -6,6 +6,7 @@ import Input from './Input';
 import Login from './Login';
 import { ChatRouteContext } from './ChatRoute';
 import Sessions, { SessionsRouteContext } from './Sessions';
+import ScrollArea from './ScrollArea';
 import { chatViewPath, setViewMode } from './view-mode';
 import { Dynamic } from 'solid-js/web';
 import { createConversationViewState, type ConversationViewState } from './conversation-view-state';
@@ -39,7 +40,6 @@ import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from "./
 import { promptLabel } from './prompt-numbers';
 import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
 import type { Snapshot, Wire } from "./types";
-import { branchEntries } from './session-entries.ts';
 import ImagePreview, { type PreviewImage } from './ImagePreview';
 import ToolApps from './ToolApps';
 import { api, type UiReply } from './api';
@@ -99,7 +99,7 @@ export default function App(props: ParentProps) {
   const routeSessionId = createMemo(() => sessionUrlIdFromPath(location.pathname));
   const viewPath = () => sessionViewPath(location.pathname);
   const [treeId, setTreeId] = createSignal<string>();
-  const viewHref = (path: string) => sessionPath(path, snapshot().state?.sessionUrlId || routeSessionId(), treeId());
+  const viewHref = (path: string) => sessionPath(path, routeSessionId(), treeId());
   const navigateView = (path: string) => navigate(viewHref(path));
   const openSystemPrompt = (id: string) => navigateView(`/system-prompts/${encodeURIComponent(id)}`);
 
@@ -110,6 +110,19 @@ export default function App(props: ParentProps) {
   const [bridgeCwd, setBridgeCwd] = createSignal('');
   const [availableAgents, setAvailableAgents] = createSignal<Wire[]>([]);
   const [projectCwd, setProjectCwd] = createSignal('');
+  const [homeCwd, setHomeCwd] = createSignal('');
+  const [recentProjects, setRecentProjects] = createSignal<string[]>([]);
+  const projectPaths = () => [...new Set([bridgeCwd(), ...recentProjects(), ...availableAgents().map(agent => agent.cwd)])]
+    .filter(cwd => cwd && cwd.toLowerCase().includes(projectCwd().trim().toLowerCase()));
+  function chooseProject(cwd: string) {
+    if (isSessionsPage()) {
+      setHomeCwd(cwd);
+      homeAgent = undefined;
+      chatDialog.close();
+    } else void start(undefined, cwd);
+  }
+  const isSessionsPage = () => location.pathname === '/' || viewPath() === '/sessions';
+  const displayedCwd = () => isSessionsPage() ? homeCwd() || bridgeCwd() : sessionCwd();
   const [sending, setSending] = createSignal<string[]>([]);
   const visibleAgents = createMemo(() => visibleAgentIds().map(id => agentSnapshots()[id]).filter((value): value is Snapshot => !!value));
   const snapshot = createMemo(() => agentSnapshots()[selectedAgentId()] ?? { ...empty, cwd: bridgeCwd() });
@@ -412,11 +425,16 @@ export default function App(props: ParentProps) {
   }
 
   async function openChat() {
-    setProjectCwd(sessionCwd());
+    setProjectCwd('');
     chatDialog.showModal();
+    const folderInput = chatDialog.querySelector<HTMLInputElement>('[aria-label="Project directory"]');
+    folderInput?.focus();
+    folderInput?.select();
     setBusy(true);
     try {
       setAvailableAgents(await api.agents.list({}, { signal: appLifecycle.signal }));
+      const sessions = await api.sessions({ scope: 'all' }, { signal: appLifecycle.signal });
+      setRecentProjects([...new Set(sessions.map(session => session.cwd))]);
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
@@ -462,7 +480,7 @@ export default function App(props: ParentProps) {
   async function prepareHomeChat() {
     await bridgeReady;
     if (!homeAgent) {
-      homeAgentPending ??= api.agents.create({ cwd: sessionCwd() || bridgeCwd() }, rpcOptions);
+      homeAgentPending ??= api.agents.create({ cwd: homeCwd() || bridgeCwd() }, rpcOptions);
       try { homeAgent = await homeAgentPending; }
       finally { homeAgentPending = undefined; }
     }
@@ -501,7 +519,7 @@ export default function App(props: ParentProps) {
     try {
       const agent = await prepareHomeChat();
       showAgent(agent, true);
-      navigateView('/system-prompt-creator');
+      navigate(sessionPath('/system-prompt-creator', agent.state?.sessionUrlId));
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
@@ -518,8 +536,6 @@ export default function App(props: ParentProps) {
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
-
-  async function newSession() { await start(); }
 
   function leafAgent(leafId: string) {
     return agentForLeaf(graph(), visibleAgents(), leafId, selectedAgentId()) as Snapshot | undefined;
@@ -546,21 +562,6 @@ export default function App(props: ParentProps) {
       if (id === selectedAgentId()) conversation?.setDraft([...(queue.steering || []), ...(queue.followUp || [])].join('\n'));
       await api.command({ agentId: id, type: 'abort_bash' }, rpcOptions);
       await api.command({ agentId: id, type: 'abort' }, rpcOptions);
-    } catch (failure) { reportFailure(failure); }
-    finally { setBusy(false); }
-  }
-
-  async function forkFromEntry(entryId: string) {
-    if (!entryId) return;
-    const agentId = selectedAgentId();
-    setBusy(true);
-    try {
-      const result = await api.command({ type: 'fork', agentId, entryId }, rpcOptions);
-      if (!result.cancelled) {
-        accept(await loadInfo(agentId));
-        conversation?.setDraft(result.text || '');
-      }
-      chatDialog.close();
     } catch (failure) { reportFailure(failure); }
     finally { setBusy(false); }
   }
@@ -718,6 +719,11 @@ export default function App(props: ParentProps) {
       setBridgeCwd(info.cwd);
       const agents = await api.agents.list({}, { signal: appLifecycle.signal });
       setAvailableAgents(agents);
+      if (location.pathname === '/') {
+        const sessions = await api.sessions({ scope: 'all' }, { signal: appLifecycle.signal });
+        const latest = sessions.filter(session => session.urlId).sort((a, b) => b.modified - a.modified)[0];
+        if (latest?.urlId && location.pathname === '/') navigate(`/b/${latest.urlId}`, { replace: true });
+      }
     } catch (failure) { reportFailure(failure); }
     finally {
       setBusy(false);
@@ -741,15 +747,29 @@ export default function App(props: ParentProps) {
       '--code-overflow-wrap': codeLinewrap() ? 'anywhere' : 'normal',
       '--code-content-width': codeLinewrap() ? '100%' : 'max-content',
     }}>
-      <NavigationLinksContext.Provider value={() => <>
-        <button class="tree-title" onClick={openChat}>{sessionCwd()}</button>
-        <div class="view-switch" role="group" aria-label="Views">
-          <A class="state-toggle" href="/" end aria-current={location.pathname === '/' ? 'page' : undefined}>Sessions</A>
-          <A class="state-toggle" href={sessionPath(chatViewPath(), selectedSessionUrlId(), treeId())} aria-current={location.pathname !== '/' && ['/', '/chat', '/single', '/tree'].includes(viewPath()) ? 'page' : undefined}>Chat</A>
-          <A class="state-toggle" href={viewHref('/system-prompts')} aria-current={viewPath().startsWith('/system-prompts') ? 'page' : undefined}>System prompts</A>
-          <A class="state-toggle" href={viewHref('/system-prompt-creator')} aria-current={viewPath() === '/system-prompt-creator' ? 'page' : undefined}>Editor</A>
+      <NavigationLinksContext.Provider value={(navigation, controls) => <>
+        <Show when={isSessionsPage()} fallback={<span class="tree-title">{sessionCwd()}</span>}>
+          <button class="tree-title" onClick={openChat}>{displayedCwd()}</button>
+        </Show>
+        <div class="app-toolbar-right">
+        <div class="app-toolbar-controls">
+          <Login ready={bridgeReady} options={rpcOptions} />
+          {controls}
         </div>
-        <Login ready={bridgeReady} options={rpcOptions} />
+        <div class="view-switch" role="group" aria-label="Views">
+          <A class="state-toggle" href={routeSessionId() ? viewHref('/sessions') : '/'} aria-current={isSessionsPage() ? 'page' : undefined}>Sessions</A>
+          <For each={[
+            { label: 'S-Prompts', path: '/system-prompts', active: () => viewPath().startsWith('/system-prompts') },
+            { label: 'Editor', path: '/system-prompt-creator', active: () => viewPath() === '/system-prompt-creator' },
+            { label: 'Single', path: '/single', active: () => viewPath() === '/single' },
+            { label: 'Tree', path: '/tree', active: () => viewPath() === '/tree' },
+          ]}>{item => <Show when={routeSessionId()} fallback={<span class="state-toggle" aria-disabled="true">{item.label}</span>}>
+            <A class="state-toggle" href={viewHref(item.path)} aria-current={item.active() ? 'page' : undefined}
+              onClick={() => { if (item.path === '/single' || item.path === '/tree') setViewMode(item.path === '/single' ? 'focused' : 'side'); }}>{item.label}</A>
+          </Show>}</For>
+          {navigation}
+        </div>
+        </div>
       </>}>
       <SystemPromptCreatorContext.Provider value={{
         load: async () => {
@@ -796,7 +816,7 @@ export default function App(props: ParentProps) {
           thinking={{ value: homeThinking() || homeInitialThinking(), options: thinkingOptions(homeModel()), onChange: setHomeThinking }}
           draft={homeDraft()} onDraft={setHomeDraft} projectQuery={projectQuery()} onProjectQuery={setProjectQuery}
           onSubmit={sendHomeChat}
-          onEditPrompt={editHomePrompt} busy={busy()} notification={notification()} />; }}>
+          onEditPrompt={editHomePrompt} onOptions={openOptions} busy={busy()} notification={notification()} />; }}>
         <ChatRouteContext.Provider value={route => {
           onCleanup(() => { conversation = undefined; });
           return <Show when={composerScope()} keyed>{_sessionKey => (
@@ -862,62 +882,27 @@ export default function App(props: ParentProps) {
       </Dialog>
       <Dialog
         ref={chatDialog}
-        class="chat-dialog"
-        aria-label="Pi chat controls"
+        class="chat-dialog project-dialog"
+        title="Project folder"
       >
-        <div class="chat-dialog-heading">
-          <span>Pi chat</span>
-          <button onClick={() => chatDialog.close()}>Close</button>
-        </div>
-        <label>Agent
-          <SelectWithDialog label="Agent" value={selectedAgentId()} placeholder="Choose a running agent"
-            options={availableAgents().map(agent => ({ value: agent.agentId,
-              label: `${agent.cwd} — ${agent.agentId.slice(0, 8)}${agent.running ? ' (working)' : agent.connected ? '' : ' (disconnected)'}` }))}
-            disabled={busy()} onChange={chooseAgent} />
-        </label>
-        <label>Project directory
-          <Input aria-label="Project directory" value={projectCwd()} onInput={event => setProjectCwd(event.currentTarget.value)} />
-        </label>
-        <div class="chat-actions">
-          <button disabled={busy() || !projectCwd().trim()} onClick={() => start(undefined, projectCwd().trim())}>Open project</button>
-          <button disabled={busy()} onClick={newSession}>New session</button>
-          <Show when={snapshot().connected}>
-                <button disabled={busy()} onClick={() => abort()}>
-                  Stop agent
-                </button>
-                <button
-                  disabled={busy()}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      await api.stop({ agentId: selectedAgentId() || undefined }, rpcOptions);
-                      chatDialog.close();
-                    } catch (failure) { reportFailure(failure); }
-                    finally { setBusy(false); }
-                  }}
-                >
-                  Disconnect
-                </button>
-          </Show>
-        </div>
-        <Show when={live() && snapshot().connected}>
-          <label>
-            Fork from{" "}
-            <SelectWithDialog
-              label="Fork from user message"
-              value=""
-              placeholder="Choose message"
-              options={branchEntries(viewEntries()).filter(
-                (entry: Wire) => entry.message?.role === "user" && !entry.id.startsWith("stream-"),
-              ).map((entry: Wire) => ({
-                value: entry.id,
-                label: typeof entry.message.content === "string" ? entry.message.content.slice(0, 100) : entry.id,
-              }))}
-              disabled={busy() || snapshot().running}
-              onChange={forkFromEntry}
-            />
-          </label>
-        </Show>
+        <Input class="startup-search" aria-label="Project directory" placeholder="Project path" value={projectCwd()} onInput={event => setProjectCwd(event.currentTarget.value)}
+          onKeyDown={event => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              const typed = projectCwd().trim();
+              const cwd = projectPaths().find(path => path === typed) || projectPaths()[0] || (typed.startsWith('/') ? typed : '');
+              if (cwd && !busy()) chooseProject(cwd);
+            }
+            if (event.key === 'Escape' && projectCwd()) { event.preventDefault(); event.stopPropagation(); setProjectCwd(''); }
+          }} />
+        <ScrollArea class="project-folders" vertical>
+          <div role="listbox" aria-label="Project folders">
+            <For each={projectPaths()} fallback={<p class="project-folders-empty">No matching folders</p>}>
+              {cwd => <button type="button" role="option" aria-selected={projectCwd() === cwd}
+                class="project-folder" disabled={busy()} onClick={() => chooseProject(cwd)}>{cwd}</button>}
+            </For>
+          </div>
+        </ScrollArea>
       </Dialog>
       <For each={extensionDialogs()}>
         {(dialog) => (
