@@ -138,6 +138,7 @@
   overflow-wrap: anywhere;
 }
 
+.tool-body pre.source-code,
 .tool-body pre.syntax-highlighted:not([data-language='markdown']),
 .codemode-code,
 .diff-view .diff-source,

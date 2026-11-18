@@ -183,6 +183,7 @@ function CodemodeTool(props: { call: Wire; result?: Wire; entryId: string; expan
 const languages: Record<string, string> = { kt: 'kotlin', kts: 'kotlin', js: 'javascript', mjs: 'javascript', cjs: 'javascript', ts: 'typescript', tsx: 'typescript', jsx: 'javascript', py: 'python', rs: 'rust', c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', hpp: 'cpp', json: 'json', sh: 'bash', nix: 'nix', css: 'css', html: 'xml', xml: 'xml', yaml: 'yaml', yml: 'yaml', md: 'markdown', toml: 'ini', cmake: 'cmake' };
 
 function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest?: ExpansionRequest }) {
+  const [searchPreviewOpen, setSearchPreviewOpen] = createSignal(false);
   const [expanded, setExpanded] = createSignal(false);
   const [pretty, setPretty] = createSignal<string>();
   const [formatting, setFormatting] = createSignal(false);
@@ -205,6 +206,12 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
     <button type="button" class="collapse-toggle" disabled={formatting()} onClick={togglePretty}>{pretty() ? 'Original' : 'Prettify'}</button>
     <Show when={formatError()}><span role="status">{formatError()}</span></Show>
   </Show>;
+  const toolActions = () => <>
+    {prettifyAction()}
+    <Show when={props.result?.details?.searchPreviews?.length}>
+      <button type="button" class="collapse-toggle" aria-expanded={searchPreviewOpen()} onClick={() => setSearchPreviewOpen(value => !value)}>{searchPreviewOpen() ? 'Original' : 'Delta preview'}</button>
+    </Show>
+  </>;
 
   createEffect(on(() => props.expandRequest, value => { if (value) setExpanded(value.open); }));
   const args = () => props.call.arguments || {};
@@ -252,10 +259,16 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
     </div>
     <Show when={!compactRead()}>
       <Show when={editDiff().length} fallback={
-        <ExpandableContent measureKey={text()} initialOpen={expanded()} expandRequest={props.expandRequest} bodyClass="tool-body" actions={prettifyAction()}>
-          <For each={output().filter((block: Wire) => block.type === 'text')}>{block =>
-            <TerminalText text={block.text} language={props.call.name === 'read' || props.call.name === 'write' ? language() : undefined} />
-          }</For>
+        <ExpandableContent measureKey={searchPreviewOpen() ? props.result?.details?.searchPreviews : text()} initialOpen={expanded()} expandRequest={props.expandRequest} bodyClass="tool-body" actions={toolActions()}>
+          <Show when={searchPreviewOpen()} fallback={
+            <For each={output().filter((block: Wire) => block.type === 'text')}>{block =>
+              <TerminalText class={isBash() ? 'source-code' : undefined} text={block.text} language={props.call.name === 'read' || props.call.name === 'write' ? language() : undefined} />
+            }</For>
+          }>
+            <For each={props.result?.details?.searchPreviews || []}>{preview =>
+              <TerminalText class="source-code" text={preview.output} />
+            }</For>
+          </Show>
         </ExpandableContent>
       }><DiffView files={editDiff()} editorPath={args().path} preview expandRequest={props.expandRequest} /></Show>
     </Show>

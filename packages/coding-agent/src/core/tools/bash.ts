@@ -15,6 +15,7 @@ import {
 } from "../../utils/shell.ts";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
+import { createRgPreview, type SearchPreview } from "./rg-preview.ts";
 
 const BASH_UPDATE_THROTTLE_MS = 100;
 
@@ -66,6 +67,7 @@ const bashOutputSchema = Type.Object({
 export type BashToolOutput = Static<typeof bashOutputSchema>;
 
 export interface BashToolDetails {
+	searchPreviews?: SearchPreview[];
 	truncation?: TruncationResult;
 	fullOutputPath?: string;
 }
@@ -255,7 +257,10 @@ export function createShellToolDefinition(
 			onUpdate?,
 			ctx?: ExtensionContext,
 		) {
-			const resolvedCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
+			const preview = config.name === "bash" && !options?.operations ? await createRgPreview() : undefined;
+			let searchPreviews: SearchPreview[] = [];
+			const originalCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
+			const resolvedCommand = preview ? `${preview.prefix}\n${originalCommand}` : originalCommand;
 			const spawnContext = resolveSpawnContext(
 				resolvedCommand,
 				ctx?.cwd || cwd,
@@ -328,9 +333,9 @@ export function createShellToolDefinition(
 			const formatOutput = (snapshot: Awaited<ReturnType<typeof finishOutput>>, emptyText = "(no output)") => {
 				const truncation = snapshot.truncation;
 				let text = snapshot.content || emptyText;
-				let details: BashToolDetails | undefined;
+				let details: BashToolDetails | undefined = searchPreviews.length ? { searchPreviews } : undefined;
 				if (truncation.truncated) {
-					details = { truncation, fullOutputPath: snapshot.fullOutputPath };
+					details = { ...details, truncation, fullOutputPath: snapshot.fullOutputPath };
 					const startLine = truncation.totalLines - truncation.outputLines + 1;
 					const endLine = truncation.totalLines;
 					if (truncation.lastLinePartial) {
@@ -358,6 +363,7 @@ export function createShellToolDefinition(
 						env: spawnContext.env,
 					});
 					exitCode = result.exitCode;
+					if (preview) searchPreviews = await preview.finish();
 				} catch (err) {
 					const snapshot = await finishOutput();
 					const { text } = formatOutput(snapshot, "");
@@ -397,6 +403,7 @@ export function createShellToolDefinition(
 				}
 				return { content: [{ type: "text", text: outputText }], details, structuredContent };
 			} finally {
+				await preview?.finish();
 				clearUpdateTimer();
 			}
 		},
