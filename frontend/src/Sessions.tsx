@@ -2,7 +2,8 @@ import { Show, createContext, useContext, type Component } from 'solid-js';
 import Navigation from './Navigation';
 import MessageComposer from './MessageComposer';
 import Input from './Input';
-import AgentHealth from './AgentHealth';
+import SystemPromptPlaceholder from './SystemPromptPlaceholder';
+import type { ComponentProps } from 'solid-js';
 import ScrollArea from './ScrollArea';
 import SessionHistory from './SessionHistory';
 import './sessions.css';
@@ -15,6 +16,8 @@ export function SessionsRoute() {
 }
 
 export default function Sessions(props: {
+  model?: ComponentProps<typeof SystemPromptPlaceholder>['model'];
+  thinking?: ComponentProps<typeof SystemPromptPlaceholder>['thinking'];
   draft: string;
   onDraft: (value: string) => void;
   projectQuery: string;
@@ -29,7 +32,7 @@ export default function Sessions(props: {
     <ScrollArea class="startup-session-scroll" vertical>
       <main class="startup-sessions" aria-label="Sessions">
         <section class="startup-empty-chat" aria-label="New chat">
-          <button class="branch-draft system-prompt-reference empty-placeholder" aria-label="Edit system prompt" disabled={props.busy} onClick={() => props.onEditPrompt()}><span>#1</span><AgentHealth placeholder /></button>
+          <SystemPromptPlaceholder model={props.model} thinking={props.thinking} onEditPrompt={() => { if (!props.busy) props.onEditPrompt(); }} />
           <section class="branch-draft" />
           <MessageComposer value={props.draft} onChange={props.onDraft} onSubmit={props.onSubmit} busy={props.busy} />
         </section>

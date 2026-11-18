@@ -214,6 +214,7 @@ export {
 	type ModelScopeDiagnostic,
 	type ResolveCliModelResult,
 	type ResolveModelScopeResult,
+	findInitialModel,
 	resolveCliModel,
 	resolveModelScopeWithDiagnostics,
 	type ScopedModel,

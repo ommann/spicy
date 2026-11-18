@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { getCodexUsage } from './codex-usage.ts';
 import { readUsage, saveUsage, usageAccount } from './usage-history.ts';
-import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
+import { clampThinkingLevel } from '@earendil-works/pi-ai/compat';
+import { findInitialModel, ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 
 type Interaction = Parameters<ModelRuntime['login']>[2];
 type AuthPrompt = Parameters<Interaction['prompt']>[0];
@@ -24,7 +25,7 @@ export class LoginBridge {
   declare flow: LoginFlow | undefined;
 
   constructor(
-    loadRuntime = () => ModelRuntime.create({ refreshOnCreate: false, allowModelNetwork: false }),
+    loadRuntime = () => ModelRuntime.create({ allowModelNetwork: true, modelRefreshTimeoutMs: 5_000 }),
     loadSettings = () => SettingsManager.create(process.env.SPICY_CWD || process.cwd()),
   ) {
     this.loadRuntime = loadRuntime;
@@ -42,6 +43,17 @@ export class LoginBridge {
   async models() {
     const runtime = await this.runtime();
     return (await runtime.getAvailable()).map(model => ({ provider: model.provider, id: model.id, name: model.name }));
+  }
+
+  async modelSelection() {
+    const runtime = await this.runtime();
+    const settings = this.settings ??= this.loadSettings();
+    const result = await findInitialModel({ scopedModels: [], isContinuing: false,
+      defaultProvider: settings.getDefaultProvider(), defaultModelId: settings.getDefaultModel(),
+      defaultThinkingLevel: settings.getDefaultThinkingLevel(), modelThinkingLevels: settings.getAllModelThinkingLevels(), modelRuntime: runtime });
+    const model = result.model;
+    const level = model ? clampThinkingLevel(model, settings.getModelThinkingLevel(model.provider, model.id) ?? settings.getDefaultThinkingLevel() ?? 'medium') : 'off';
+    return { model, thinkingLevel: level, models: await runtime.getAvailable() };
   }
 
   async providers() {

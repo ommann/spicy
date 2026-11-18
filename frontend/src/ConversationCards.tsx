@@ -1,4 +1,5 @@
 import { For, Show } from 'solid-js';
+import { modelLabel } from './branch-model';
 import Card from './Card';
 import { ConversationCard, type ConversationView } from './Conversation';
 import SystemPromptReference from './SystemPromptReference';
@@ -17,9 +18,9 @@ export function ConversationPrompt(value: { view: ConversationView; index: numbe
       <Card><Show when={isUnstartedCompaction(props.graph, leaf().id)} fallback={
         <SystemPromptReference entryId={leaf().id} promptId={versionFor(leaf().id)?.full?.id || ''}
           title={versionFor(leaf().id)?.title} number={versionFor(leaf().id)?.number || 1}
-          model={props.model(leaf().id)?.name || props.model(leaf().id)?.id} health={props.health(leaf().id)} href={props.systemPromptHref(versionFor(leaf().id)?.full?.id || '')} />
+          model={modelLabel(props.model(leaf().id))} health={props.health(leaf().id)} href={props.systemPromptHref(versionFor(leaf().id)?.full?.id || '')} />
       }>
-        <SystemPromptPlaceholder
+        <SystemPromptPlaceholder editPromptHref={props.systemPromptHref('')}
           number={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf().id)) ?? versionFor(leaf().id))?.number}
           title={(props.prompts.find(prompt => prompt.key === props.pendingPromptKey?.(leaf().id)) ?? versionFor(leaf().id))?.title}
           selection={{
@@ -49,14 +50,15 @@ export function ConversationNodes(value: { view: ConversationView }) {
       onChange: (key: string) => props.onSelectBranchPrompt(id, key === inheritedKey() ? undefined : key),
     } : undefined;
     const promptRoot = () => props.graph.prefix.get(id).rootId;
-    return <ConversationCard id={id} node={node()} position={layout().items.get(id)}
+    return <ConversationCard editPromptHref={props.systemPromptHref('')} id={id} node={node()} position={layout().items.get(id)}
       gridStyle={gridPlacement(layout().items.get(id).left, layout().items.get(id).top, layout().items.get(id).span)}
       promptNumber={versionFor(id)?.number} promptTitle={versionFor(id)?.title} scrollTop={scroll().top}
       promptRowTop={layout().items.get(promptRoot())?.top ?? layout().promptTop ?? spacing().row} selection={selection()}
+      thinkingSelection={selection() ? props.thinkingSelection?.(id) : undefined}
       modelSelection={selection() ? {
-        label: props.model(id)?.name || props.model(id)?.id || 'Model',
+        label: props.model(id)?.name || props.model(id)?.id || '...',
         value: props.pendingModelKey?.(id) ?? '',
-        inheritedLabel: props.inheritedModel(id)?.name || props.inheritedModel(id)?.id || 'Unknown model',
+        leadingOption: { value: '', label: props.inheritedModel(id)?.name || props.inheritedModel(id)?.id || 'Unknown model' },
         options: props.modelOptions,
         onChange: value => props.onSelectBranchModel(id, value),
       } : undefined}

@@ -13,6 +13,7 @@ export default function SelectWithDialog(props: {
   options: SelectOption[];
   leadingOption?: SelectOption;
   onChange: (value: string) => void;
+  onOpen?: () => void;
   disabled?: boolean;
   placeholder?: string;
   class?: string;
@@ -24,6 +25,7 @@ export default function SelectWithDialog(props: {
   const selected = () => (props.leadingOption?.value === props.value ? props.leadingOption : props.options.find(option => option.value === props.value))?.label ?? props.placeholder ?? 'Choose';
   function show() {
     if (props.disabled) return;
+    props.onOpen?.();
     dialog.showModal();
     setOpen(true);
     (dialog.querySelector<HTMLButtonElement>('[aria-selected="true"]')

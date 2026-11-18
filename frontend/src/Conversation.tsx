@@ -19,7 +19,7 @@ import './branch-labels.css';
 import type { ContextWindowUsage } from './context-window';
 import ScrollBar from './ScrollBar';
 import type { AgentHealthStatus } from './AgentHealth';
-import SystemPromptPlaceholder from './SystemPromptPlaceholder';
+import SystemPromptPlaceholder, { type PlaceholderSelection } from './SystemPromptPlaceholder';
 import { createKeyboardShortcuts } from './keyboard-shortcuts';
 import type { Wire } from './types';
 import type { ConversationGraph, ConversationLane, LayoutOptions } from './conversation-model.ts';
@@ -63,9 +63,10 @@ interface Props {
   onSubmit: (text: string, leafId: string, images?: ImageAttachment[]) => Promise<boolean>;
   onBranch: (sourceId: string, anchorId?: string) => void;
   onDismissBranch: (id: string) => void;
-  model: (id: string) => { provider: string; id: string; name?: string } | undefined;
+  model: (id: string) => { provider: string; id: string; name?: string; thinkingLevel?: string } | undefined;
   inheritedModel: (id: string) => { provider: string; id: string; name?: string } | undefined;
   pendingModelKey?: (id: string) => string | undefined;
+  thinkingSelection?: (id: string) => { value: string; options: SelectOption[]; onChange: (value: string) => void };
   modelOptions: SelectOption[];
   onSelectBranchModel: (id: string, value: string) => void;
   prompts: PromptVersion[];
@@ -97,8 +98,10 @@ export interface ConversationView {
 }
 
 export function ConversationCard(props: { id: string; node: Wire; position: Wire; gridStyle: JSX.CSSProperties; promptNumber?: number; promptTitle?: string; scrollTop: number; promptRowTop: number;
-  modelSelection?: { label: string; value: string; inheritedLabel: string; options: SelectOption[]; onChange: (value: string) => void };
-  selection?: { value: string; leadingOption?: SelectOption; options: SelectOption[]; onChange: (value: string) => void };
+  editPromptHref?: string;
+  thinkingSelection?: PlaceholderSelection;
+  modelSelection?: PlaceholderSelection;
+  selection?: PlaceholderSelection;
   registerSection: (id: string, element: HTMLElement) => () => void;
   width: number; onBranch: (id: string) => void; onDismiss: (id: string) => void; measure: (id: string, element: Element) => void; unmeasure: (element: Element) => void }) {
   let element!: HTMLElement;
@@ -120,8 +123,8 @@ export function ConversationCard(props: { id: string; node: Wire; position: Wire
     hidden={props.position.hidden} style={{ ...props.gridStyle, width: `${props.position.span}px` }}>
     <Card ref={element} anchors={props.node.anchors} style={{ left: `${props.position.cardLeft}px`, width: `${props.width}px` }}>
       <Show when={props.node.entry.type === 'branch_draft'}>
-        <SystemPromptPlaceholder number={props.promptNumber} title={props.promptTitle} stickyOffset={props.scrollTop - props.promptRowTop}
-          rowOffset={props.node.entry.draftSourceId ? props.promptRowTop - props.position.top : undefined} selection={props.selection} model={props.modelSelection} />
+        <SystemPromptPlaceholder editPromptHref={props.editPromptHref} number={props.promptNumber} title={props.promptTitle} stickyOffset={props.scrollTop - props.promptRowTop}
+          rowOffset={props.node.entry.draftSourceId ? props.promptRowTop - props.position.top : undefined} selection={props.selection} model={props.modelSelection} thinking={props.thinkingSelection} />
       </Show>
       <Index each={content.parts}>{part => <ChatEntryPart part={part()} onBranch={props.onBranch}
         onDismiss={props.node.entry.draftSourceId ? () => props.onDismiss(props.id) : undefined} />}</Index>

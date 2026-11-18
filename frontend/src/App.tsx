@@ -1,5 +1,5 @@
 import { loadUiOptions } from './ui-options';
-import { inheritedBranchModel } from './branch-model';
+import { inheritedBranchModel, inheritedThinkingLevel, type BranchModel } from './branch-model';
 import ScrollableTextarea from './ScrollableTextarea';
 import { FileLinkCwdContext } from './file-link';
 import Input from './Input';
@@ -80,12 +80,14 @@ const empty: Snapshot = {
  * The pure conversation model retains the established branch geometry.
  * Source text stays source text; syntax highlighting does not render Markdown.
  */
+type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 interface DraftBranch {
   id: string;
   sourceId: string;
   anchorId?: string;
   prompt?: { key: string; content: string; sections: Record<string, string>; promptBuilder?: SystemPromptBuilder };
   parentId: string | null;
+  thinkingLevel?: string;
   model?: { provider: string; id: string; name?: string };
   text?: string;
   sentAt?: number;
@@ -133,6 +135,33 @@ export default function App(props: ParentProps) {
   const [pendingPrompts, setPendingPrompts] = createSignal<Record<string, DraftBranch['prompt']>>({});
   const [projectQuery, setProjectQuery] = createSignal('');
   let homeAgent: Snapshot | undefined;
+  let homeAgentPending: Promise<Snapshot> | undefined;
+  const [homeModel, setHomeModel] = createSignal<Wire>();
+  const [homeThinking, setHomeThinking] = createSignal('');
+  const [homeInitialModel, setHomeInitialModel] = createSignal<Wire>();
+  const [homeInitialThinking, setHomeInitialThinking] = createSignal('');
+  const modelOptions = () => models().map(model => ({ value: `${model.provider}/${model.id}`, label: `${model.provider}/${model.name || model.id}` }));
+  function thinkingOptions(model?: Wire) {
+    const levels = model?.thinkingLevelMap ? Object.keys(model.thinkingLevelMap).filter(level => model.thinkingLevelMap[level] !== null)
+      : model?.reasoning ? ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] : [];
+    return levels.map(value => ({ value, label: value }));
+  }
+  function branchThinking(id: string) {
+    const draft = (draftBranches()[branchKey()] || []).find(item => item.id === id);
+    const selected = branchModel(id);
+    return { value: draft?.thinkingLevel ?? selected?.thinkingLevel ?? '', label: draft?.thinkingLevel ?? selected?.thinkingLevel, options: thinkingOptions(models().find(model => model.provider === selected?.provider && model.id === selected?.id)),
+      onChange: (value: string) => setDraftBranches(previous => ({ ...previous, [branchKey()]: (previous[branchKey()] || []).map(item => item.id === id ? { ...item, thinkingLevel: value || undefined } : item) })) };
+  }
+  async function loadHomeModels() {
+    try {
+      await bridgeReady;
+      const selection = await api.auth.modelSelection({}, rpcOptions);
+      setModels([...(selection.models || [])]);
+      setHomeInitialModel(selection.model);
+      setHomeInitialThinking(selection.thinkingLevel);
+      setHomeModel(previous => previous ?? selection.model);
+    } catch (failure) { reportFailure(failure); }
+  }
   const openFocusedChat = () => navigate(sessionPath(chatViewPath(), selectedSessionUrlId(), treeId()));
 
   let chatDialog!: HTMLDialogElement;
@@ -432,8 +461,12 @@ export default function App(props: ParentProps) {
 
   async function prepareHomeChat() {
     await bridgeReady;
-    if (!homeAgent) homeAgent = await api.agents.create({ cwd: sessionCwd() || bridgeCwd() }, rpcOptions);
-    return homeAgent!;
+    if (!homeAgent) {
+      homeAgentPending ??= api.agents.create({ cwd: sessionCwd() || bridgeCwd() }, rpcOptions);
+      try { homeAgent = await homeAgentPending; }
+      finally { homeAgentPending = undefined; }
+    }
+    return homeAgent;
   }
 
   async function sendHomeChat(images: import('./image-attachments').ImageAttachment[] = []) {
@@ -443,6 +476,8 @@ export default function App(props: ParentProps) {
     try {
       const bash = parseBashCommand(message, images.length > 0);
       const agent = await prepareHomeChat();
+      if (!bash && homeModel()) await api.command({ agentId: agent.agentId, type: 'set_model', provider: homeModel()!.provider, modelId: homeModel()!.id }, rpcOptions);
+      if (!bash && homeThinking()) await api.command({ agentId: agent.agentId, type: 'set_thinking_level', level: homeThinking() as ThinkingLevel }, rpcOptions);
       if (bash) {
         showAgent(agent, true);
         setViewMode('focused');
@@ -535,17 +570,18 @@ export default function App(props: ParentProps) {
     finally { setBusy(false); }
   }
 
-  function branchModel(id: string): { provider: string; id: string; name?: string } | undefined {
+  function branchModel(id: string): BranchModel | undefined {
     const draft = (draftBranches()[branchKey()] || []).find(item => item.id === id);
-    if (draft?.model) return draft.model;
-    return inheritedBranchModel(actualEntries(), draft ? draft.parentId : id);
+    const parentId = draft ? draft.parentId : id;
+    const model = draft?.model ?? inheritedBranchModel(actualEntries(), parentId);
+    return model ? { ...model, thinkingLevel: draft?.thinkingLevel ?? inheritedThinkingLevel(actualEntries(), parentId) } : undefined;
   }
 
   function selectBranchModel(id: string, value: string) {
     const model = models().find(item => `${item.provider}/${item.id}` === value);
     const key = branchKey();
     setDraftBranches(previous => ({ ...previous, [key]: (previous[key] || []).map(draft =>
-      draft.id === id && draft.text === undefined ? { ...draft, model: model ? { provider: model.provider, id: model.id, name: model.name } : undefined } : draft) }));
+      draft.id === id && draft.text === undefined ? { ...draft, thinkingLevel: undefined, model: model ? { provider: model.provider, id: model.id, name: model.name } : undefined } : draft) }));
   }
 
   async function replyToDialog(dialog: Wire, response: UiReply) {
@@ -627,6 +663,7 @@ export default function App(props: ParentProps) {
         if (draft?.model) {
           await api.command({ agentId: agent.agentId, type: 'set_model', provider: draft.model.provider, modelId: draft.model.id }, rpcOptions);
         }
+        if (draft?.thinkingLevel) await api.command({ agentId: agent.agentId, type: 'set_thinking_level', level: draft.thinkingLevel as ThinkingLevel }, rpcOptions);
         const prompt = draft?.prompt ?? pendingPrompts()[leafId];
         const systemPrompt = { choice: 'current', ...(prompt ? { selected: prompt } : {}) };
         await api.command({ agentId: agent.agentId, type: 'prompt', message, images, systemPrompt,
@@ -759,10 +796,12 @@ export default function App(props: ParentProps) {
       <FileLinkCwdContext.Provider value={sessionCwd}>
       <SystemPromptContext.Provider value={systemPrompts}>
         <ToolApps sessionKey={branchKey()}>
-        <SessionsRouteContext.Provider value={() => <Sessions
+        <SessionsRouteContext.Provider value={() => { onMount(() => { void loadHomeModels(); }); return <Sessions
+          model={{ label: homeModel()?.name || homeModel()?.id || '...', value: homeModel() ? `${homeModel()!.provider}/${homeModel()!.id}` : '', leadingOption: { value: '', label: homeInitialModel()?.name || homeInitialModel()?.id || '...' }, options: modelOptions(), onOpen: () => { void loadHomeModels(); }, onChange: value => { setHomeModel(models().find(model => `${model.provider}/${model.id}` === value)); setHomeThinking(''); } }}
+          thinking={{ value: homeThinking() || homeInitialThinking(), options: thinkingOptions(homeModel()), onChange: setHomeThinking }}
           draft={homeDraft()} onDraft={setHomeDraft} projectQuery={projectQuery()} onProjectQuery={setProjectQuery}
           onSubmit={sendHomeChat}
-          onEditPrompt={editHomePrompt} busy={busy()} notification={notification()} />}>
+          onEditPrompt={editHomePrompt} busy={busy()} notification={notification()} />; }}>
         <ChatRouteContext.Provider value={route => {
           onCleanup(() => { conversation = undefined; });
           return <Show when={composerScope()} keyed>{_sessionKey => (
@@ -781,7 +820,7 @@ export default function App(props: ParentProps) {
             running={id => !!leafAgent(id)?.running} health={agentHealth} contextUsage={id => leafAgent(id)?.state?.contextUsage} busy={leafBusy} onFocusLeaf={focusLeaf} focusRequest={focusRequest()} notification={notification()}
             onReady={value => { conversation = value; }} onSubmit={send} onBranch={createBranch} onDismissBranch={dismissBranch}
             prompts={systemPrompts()} onSelectBranchPrompt={selectBranchPrompt} pendingPromptKey={id => pendingPrompts()[id]?.key}
-            model={branchModel} modelOptions={models().map(model => ({ value: `${model.provider}/${model.id}`, label: `${model.provider}/${model.name || model.id}` }))}
+            model={branchModel} modelOptions={modelOptions()} thinkingSelection={branchThinking}
             inheritedModel={id => {
               const draft = (draftBranches()[branchKey()] || []).find(item => item.id === id);
               return inheritedBranchModel(actualEntries(), draft ? draft.parentId : id);

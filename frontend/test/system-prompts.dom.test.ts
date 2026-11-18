@@ -662,6 +662,13 @@ test('Sessions shows history cards, filters projects and links to saved chats wi
     assert.equal(root.querySelectorAll('.startup-empty-chat .branch-draft').length, 2);
     assert.ok(root.querySelector('.startup-empty-chat .editor textarea'));
     assert.equal(requests.filter(request => request.path === 'histories').length, 1);
+    assert.ok(root.querySelector('.startup-empty-chat .branch-configuration'), 'Sessions uses the branch placeholder layout');
+    assert.ok(root.querySelector('.startup-empty-chat [aria-label^="Select branch model:"]'), 'Sessions exposes the model chooser');
+    assert.ok(root.querySelector('.startup-empty-chat [aria-label^="Thinking level:"]'), 'Sessions exposes the thinking chooser');
+    const modelControl = root.querySelector('.startup-empty-chat .branch-model');
+    assert.ok(modelControl.querySelector('.branch-thinking').textContent.startsWith('('), 'Thinking is parenthesized beside the model');
+    assert.ok(modelControl.lastElementChild.classList.contains('agent-health'), 'Health indicator follows model and thinking');
+    assert.ok(!modelControl.textContent.includes('Default'), 'Do not show default placeholders');
     assert.ok(!requests.some(request => request.path === 'agents/create'), 'Listing saved history does not create agents');
     assert.ok(!requests.some(request => request.path === 'command' || request.path === 'start'), 'Listing does not send prompts');
     const path = root.querySelector('[aria-label="Search project paths"]');

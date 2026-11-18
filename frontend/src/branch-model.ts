@@ -1,6 +1,23 @@
 import type { Wire } from './types.ts';
 
-export interface BranchModel { provider: string; id: string; name?: string }
+export interface BranchModel { provider: string; id: string; name?: string; thinkingLevel?: string }
+
+export function modelLabel(model?: BranchModel): string | undefined {
+  if (!model) return undefined;
+  return `${model.name || model.id}${model.thinkingLevel ? ` (${model.thinkingLevel})` : ''}`;
+}
+
+export function inheritedThinkingLevel(entries: Wire[], id: string | null): string | undefined {
+  const byId = new Map(entries.map(entry => [entry.id, entry]));
+  const seen = new Set<string>();
+  let entry = id ? byId.get(id) : undefined;
+  while (entry && !seen.has(entry.id)) {
+    seen.add(entry.id);
+    if (entry.type === 'thinking_level_change') return entry.thinkingLevel;
+    entry = byId.get(entry.parentId);
+  }
+  return undefined;
+}
 
 // Follow ancestry, never array order: concurrent branches can use different models.
 export function inheritedBranchModel(entries: Wire[], id: string | null): BranchModel | undefined {
