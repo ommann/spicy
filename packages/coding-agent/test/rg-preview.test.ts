@@ -8,12 +8,17 @@ import { createRgPreview } from '../src/core/tools/rg-preview.ts';
 const directories: string[] = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 
-async function run(command: string) {
+async function run(command: string, slowStdinCapture = false) {
 	const directory = await mkdtemp(join(tmpdir(), 'rg-preview-test-'));
 	directories.push(directory);
 	// Echo delta's JSON input to make the side channel deterministic without delta installed.
 	await writeFile(join(directory, 'delta'), '#!/bin/sh\ncat\n');
 	await chmod(join(directory, 'delta'), 0o755);
+	if (slowStdinCapture) {
+		const tee = spawnSync('bash', ['-c', 'command -v tee'], { encoding: 'utf8' }).stdout.trim();
+		await writeFile(join(directory, 'tee'), `#!/bin/sh\nsleep 0.1\nexec '${tee.replaceAll("'", "'\\''")}' "$@"\n`);
+		await chmod(join(directory, 'tee'), 0o755);
+	}
 	await writeFile(join(directory, 'sample.ts'), 'const needle = 1;\nconst other = 2;\nconst needleAgain = 3;\n');
 	const env = { ...process.env, PATH: `${directory}:${process.env.PATH}` };
 	const original = spawnSync('bash', ['-c', command], { cwd: directory, env, encoding: 'utf8' });
@@ -33,6 +38,11 @@ async function run(command: string) {
 describe('rg search preview side channel', () => {
 	it('preserves file search output and records JSON separately', async () => {
 		const previews = await run("rg -n needle sample.ts");
+		expect(previews).toHaveLength(1);
+		expect(previews[0].output).toContain('"type":"match"');
+	});
+	it('records file searches before background stdin capture starts', async () => {
+		const previews = await run('rg -n needle sample.ts', true);
 		expect(previews).toHaveLength(1);
 		expect(previews[0].output).toContain('"type":"match"');
 	});

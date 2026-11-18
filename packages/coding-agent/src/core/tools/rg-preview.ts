@@ -15,6 +15,8 @@ rg() {
   printf '%q ' rg "$@" > "$preview_dir/command"
   # Preserve ripgrep's automatic stdin detection for terminals and files.
   if [ -p /dev/stdin ] || [ -S /dev/stdin ]; then
+    # File searches may return before the background capture starts.
+    : > "$preview_dir/stdin"
     if command rg "$@" < <(head -c 1048577 | tee "$preview_dir/stdin"; cat); then
       preview_status=0
     else
