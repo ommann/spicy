@@ -18,11 +18,14 @@ test('usage snapshots persist with isolated accounts and validated windows', t =
   const account = usageAccount('usage-test');
   saveUsage(account, { rate_limit: { primary_window: { used_percent: 20, reset_at: 100 }, secondary_window: { used_percent: 30, reset_at: 200 } } }, 1000);
   saveUsage(account, { rate_limit: { primary_window: { used_percent: 40, reset_at: 100 }, secondary_window: { used_percent: -1, reset_at: 200 } } }, 2000);
-  // Unstarted windows report moving resets at 100% remaining; do not persist them.
+  // Persist idle/reset windows too, so fresh zero usage supersedes the old window.
   saveUsage(account, { rate_limit: { primary_window: { used_percent: 0, reset_at: 300 }, secondary_window: { used_percent: 0, reset_at: 400 } } }, 3000);
   saveUsage(account, { rate_limit: { primary_window: { used_percent: 0, reset_at: 500 }, secondary_window: { used_percent: 0.1, reset_at: 400 } } }, 4000);
-  assert.equal(readUsage(account).length, 4);
-  assert.equal(readUsage(account).at(-1)?.usedPercent, 0.1);
+  assert.equal(readUsage(account).length, 7);
+  assert.deepEqual(readUsage(account).filter(sample => sample.window === '5-hour').at(-1), {
+    observedAt: 4000, window: '5-hour', usedPercent: 0, resetAt: 500000,
+  });
+  assert.equal(readUsage(account).filter(sample => sample.window === 'weekly').at(-1)?.usedPercent, 0.1);
   assert.deepEqual(readUsage(usageAccount('other-account')), []);
   assert.equal(readUsage(account)[2]?.usedPercent, 40);
 });

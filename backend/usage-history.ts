@@ -15,7 +15,7 @@ export function saveUsage(account: string, usage: unknown, observedAt = Date.now
     const value = record(limits[key]);
     const usedPercent = value.used_percent;
     const resetAt = value.reset_at;
-    if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent) || usedPercent <= 0 || usedPercent > 100
+    if (typeof usedPercent !== 'number' || !Number.isFinite(usedPercent) || usedPercent < 0 || usedPercent > 100
       || typeof resetAt !== 'number' || !Number.isFinite(resetAt)) continue;
     samples.push({ observedAt, window: usageWindow, usedPercent, resetAt: resetAt * 1000 });
   }
