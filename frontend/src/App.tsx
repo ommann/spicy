@@ -340,13 +340,29 @@ export default function App(props: ParentProps) {
 
   function accept(value: Snapshot) {
     if (value.agentId) {
+      // A priority system-prompt revision can fork behind the current turn.
+      // Follow the agent, not the now-inactive lane that retains the old leaf.
+      const state = composerState();
+      const previousLane = composerLanes().find(lane => leafAgent(lane.leafId)?.agentId === value.agentId);
+      const follow = previousLane && (state.view[0].selectedKey === previousLane.key
+        || (!state.view[0].selectedKey && shownLanes()[0]?.key === previousLane.key));
       setAgentSnapshots(previous => ({ ...previous, [value.agentId!]: value }));
+      if (follow) {
+        const nextLane = composerLanes().find(lane => leafAgent(lane.leafId)?.agentId === value.agentId);
+        if (nextLane && nextLane.key !== previousLane.key) {
+          state.setDraft(nextLane.key, state.drafts[previousLane.key] || '');
+          state.setDraft(previousLane.key, '');
+          state.view[1]('selectedKey', nextLane.key);
+          setFocusRequest(previous => ({ id: nextLane.leafId, revision: (previous?.revision || 0) + 1 }));
+        }
+      }
       if (value.connected) watchAgent(value.agentId);
     }
   }
 
   function updateAgent(id: string, update: (previous: Snapshot) => Snapshot) {
-    setAgentSnapshots(previous => previous[id] ? { ...previous, [id]: update(previous[id]) } : previous);
+    const previous = agentSnapshots()[id];
+    if (previous) accept(update(previous));
   }
 
   function loadInfo(id = selectedAgentId()) {
