@@ -9,6 +9,7 @@ import EditorLink from './EditorLink';
 import { parseFileReference } from './file-reference';
 import { webReference } from './web-reference';
 import { showBoldSyntax, showItalicSyntax, showInlineCodeSyntax } from './formatting-syntax';
+import { sentenceLines } from './sentence-lines';
 
 type SourceChunk = { text: string; language?: string; code?: boolean; table?: Tokens.Table };
 
@@ -82,7 +83,7 @@ function HighlightedText(props: { text: string; language?: string }) {
   </Show>;
 }
 
-export default function SourceText(props: { text: string; language?: string }) {
+export default function SourceText(props: { text: string; language?: string; sentenceLines?: boolean }) {
   const chunks = createMemo(() => {
     if (props.language !== 'markdown') return [{ text: props.text, language: props.language }];
 
@@ -125,7 +126,7 @@ export default function SourceText(props: { text: string; language?: string }) {
       <Index each={chunks()}>{chunk => <Show when={chunk().table} fallback={<Show when={props.language === 'markdown' && chunk().language !== 'markdown'}
         fallback={<Show when={props.language === 'markdown' && !chunk().code}
           fallback={<HighlightedText text={chunk().text} language={chunk().language} />}>
-          <MarkdownText text={chunk().text} />
+          <MarkdownText text={props.sentenceLines ? sentenceLines(chunk().text) : chunk().text} />
         </Show>}>
         <ScrollArea contentClass="source-code"><HighlightedText text={chunk().text} language={chunk().language} /></ScrollArea>
       </Show>}>

@@ -2,7 +2,7 @@ import { For, Index, Show, batch, createEffect, createMemo, createSignal, on, on
 import { createStore, reconcile } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import Card from './Card';
-import RsvpReader, { RsvpTarget } from './RsvpReader';
+import RsvpReader, { RsvpTarget, type HoveredReadingTarget } from './RsvpReader';
 import type { ImageAttachment } from './image-attachments';
 import { createColumnInteraction } from './column-interaction';
 import { ImageContext, SectionContext } from './conversation-dom';
@@ -624,14 +624,23 @@ function createConversation(props: Props, state: ConversationViewState, initialM
   const view: ConversationView = { props, nodeIds, focused, layout, spacing, gridPlacement, workingWidth, scroll,
     inheritedVersion, versionFor, registerSection, observe, unobserve, dismissBranch };
 
-  const [readingTarget, setReadingTarget] = createSignal<(() => string)>();
+  const [readingTarget, setReadingTarget] = createSignal<HoveredReadingTarget>();
+  const hoveredTarget = () => {
+    const target = readingTarget();
+    return target?.element.matches(':hover') ? target : undefined;
+  };
+  createKeyboardShortcuts({
+    enabled: () => props.active && !!hoveredTarget()?.toggleSentenceLines,
+    codes: ['KeyL'],
+    onKey: () => hoveredTarget()?.toggleSentenceLines?.(),
+  });
   const canvas = <ImageContext.Provider value={openImage}><div class="canvas-scroll-shell" classList={{ 'no-horizontal': !layout().hasHorizontal }}>
     <main ref={viewport} id="trace-viewport" class="transcript" aria-label={mode() === 'focused' ? 'Conversation — selected branch' : 'Conversation tree — scroll vertically through time, horizontally between branches'}
       classList={{ 'pan-ready': interaction.space(), panning: interaction.dragging() }}
       {...interaction.handlers}>
       <div ref={stage} class="tree-stage" style={{ width: `${layout().width}px`, height: `${layout().height}px`,
         'grid-template-columns': tracks().columns, 'grid-template-rows': tracks().rows }}>
-        <RsvpTarget.Provider value={text => setReadingTarget(() => text)}>{props.children(view)}</RsvpTarget.Provider>
+        <RsvpTarget.Provider value={setReadingTarget}>{props.children(view)}</RsvpTarget.Provider>
       </div>
     </main>
       <ScrollBar vertical position={scroll().top} client={dimensions().height} extent={Math.max(scroll().height, layout().height)}
@@ -666,7 +675,7 @@ function createConversation(props: Props, state: ConversationViewState, initialM
     onKeyDown={keydown} onKeyUp={release} onBlur={event => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) blur();
     }}>
-    <RsvpReader active={props.active} latest={latestReadingText} target={() => readingTarget()?.() || ''} />
+    <RsvpReader active={props.active} latest={latestReadingText} target={() => hoveredTarget()?.text() || ''} />
     <span class="layout-spacing" ref={spacingProbe} aria-hidden="true" />
     <ChatToolbar active={props.active} mode={mode()} notification={props.notification}
       onOptions={props.onOptions} onMode={changeMode}

@@ -341,7 +341,8 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
   const rsvpTarget = useContext(RsvpTarget);
   const textBlocks = () => typeof props.part.content === 'string' ? props.part.content
     : (props.part.content || []).filter((block: Wire) => block.type === 'text');
-  const responseBody = () => props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" />;
+  const [lineMode, setLineMode] = createSignal(false);
+  const responseBody = () => props.part.eos ? props.part.text : <SourceText text={props.part.text} language="markdown" sentenceLines={lineMode()} />;
 
   return <Switch>
     <Match when={props.part.kind === 'error'}>
@@ -370,11 +371,15 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
     <Match when={props.part.kind === 'thinking'}><ThinkingBlock part={props.part} /></Match>
     <Match when={['message', 'summary'].includes(props.part.kind)}>
       <section ref={useContext(SectionContext)} class="message real-message"
-        onPointerEnter={() => rsvpTarget?.(() => props.part.text || '')} onPointerLeave={() => rsvpTarget?.()}
+        onPointerEnter={event => rsvpTarget?.({
+          element: event.currentTarget,
+          text: () => props.part.text || '',
+          toggleSentenceLines: props.part.eos ? undefined : () => setLineMode(value => !value),
+        })} onPointerLeave={() => rsvpTarget?.()}
         classList={{ 'summary-content': props.part.kind === 'summary' || props.part.summary }}
         style={props.part.eos ? { color: 'var(--muted)' } : undefined} data-entry-id={props.part.entryId}>
         <Show when={props.part.kind === 'message'} fallback={
-          <ExpandableContent measureKey={props.part.text} initialOpen={props.part.kind === 'summary' || props.part.summary} expandRequest={props.expandRequest}>
+          <ExpandableContent measureKey={lineMode() ? `lines:${props.part.text}` : props.part.text} initialOpen={props.part.kind === 'summary' || props.part.summary} expandRequest={props.expandRequest}>
             {responseBody()}
           </ExpandableContent>
         }>{responseBody()}</Show>

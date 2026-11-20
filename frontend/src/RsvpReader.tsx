@@ -6,7 +6,13 @@ import { createKeyboardShortcuts } from './keyboard-shortcuts';
 import { rsvpConfig as config } from './rsvp-config';
 import './rsvp-reader.css';
 
-export const RsvpTarget = createContext<(text?: () => string) => void>();
+export type HoveredReadingTarget = {
+  element: HTMLElement;
+  text: () => string;
+  toggleSentenceLines?: () => void;
+};
+
+export const RsvpTarget = createContext<(target?: HoveredReadingTarget) => void>();
 
 export default function RsvpReader(props: { active: boolean; latest: () => string; target: () => string }) {
   const [open, setOpen] = createSignal(false);
