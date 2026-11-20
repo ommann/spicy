@@ -10,7 +10,7 @@ import ScrollArea from './ScrollArea';
 import { chatViewPath, setViewMode } from './view-mode';
 import { Dynamic } from 'solid-js/web';
 import { createConversationViewState, type ConversationViewState } from './conversation-view-state';
-import { sessionPath, sessionUrlIdFromPath, sessionViewPath } from './session-urls';
+import { sessionPath, sessionUrlIdFromPath, sessionViewPath, treeUrlIdFromPath } from './session-urls';
 import {
   For,
   Show,
@@ -835,8 +835,13 @@ export default function App(props: ParentProps) {
           onEditPrompt={editHomePrompt} onOptions={openOptions} busy={busy()} notification={notification()} />; }}>
         <ChatRouteContext.Provider value={route => {
           onCleanup(() => { conversation = undefined; });
+          // Selecting a new branch changes the agent, not the tree URL's family.
+          const matchesRoute = () => {
+            const rootId = route.mode === 'side' ? treeUrlIdFromPath(location.pathname) : undefined;
+            return rootId ? rootId === treeId() : !routeSessionId() || selectedSessionUrlId() === routeSessionId();
+          };
           return <Show when={composerScope()} keyed>{_sessionKey => (
-          <Show when={selectedSessionUrlId() && (!routeSessionId() || selectedSessionUrlId() === routeSessionId()) && shownLanes().length} fallback={
+          <Show when={selectedSessionUrlId() && matchesRoute() && shownLanes().length} fallback={
             <div class="spicy-host" classList={{ 'single-mode': route.mode === 'focused' }}>
               <ChatToolbar active mode={route.mode} notification={notification()} onOptions={openOptions}
                 modeHref={mode => viewHref(chatViewPath(mode))}

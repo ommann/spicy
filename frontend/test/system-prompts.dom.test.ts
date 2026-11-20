@@ -836,7 +836,8 @@ test('side-by-side chats send and stop independently while both agents stream', 
         requests.push(input);
         const source = snapshots[input.sourceAgentId];
         const index = source.entries.findIndex(entry => entry.id === input.entryId);
-        snapshots.fork = { ...makeAgent('fork'), entries: source.entries.slice(0, index), leafId: source.entries[index].parentId };
+        snapshots.fork = { ...makeAgent('fork'), state: { sessionId: 'fork', sessionUrlId: 'forkchat' },
+          entries: source.entries.slice(0, index), leafId: source.entries[index].parentId };
         return snapshots.fork;
       }),
     },
@@ -898,6 +899,8 @@ test('side-by-side chats send and stop independently while both agents stream', 
     let rightInput = root.querySelector('.editor[data-leaf-id="stream-right-1"] textarea');
     rightInput.value = 'Keep right draft';
     rightInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const tree = root.querySelector('main[aria-label^="Conversation tree"]');
+    assert.ok(tree);
     root.querySelector('[data-entry-id="left-user"] [aria-label="New branch"]').click();
     await flush();
     const forkInput = root.querySelector('.editor[data-leaf-id^="draft-"] textarea');
@@ -908,6 +911,8 @@ test('side-by-side chats send and stop independently while both agents stream', 
     for (let i = 0; i < 4; i++) await flush();
     assert.equal(requests.find(request => request.sourceAgentId)?.sourceAgentId, 'left');
     assert.equal(requests.filter(request => request.type === 'prompt').at(-1).agentId, 'fork');
+    assert.equal(dispose.history.get(), '/t/testchat');
+    assert.equal(root.querySelector('main[aria-label^="Conversation tree"]'), tree, 'Selecting the fork keeps the tree mounted');
     streams.get('fork').emit('record', { type: 'agent_start' });
     streams.get('fork').emit('record', { type: 'message_start', message: { role: 'user', content: 'Independent fork', timestamp: Date.now() + 1 } });
     streams.get('fork').emit('record', { type: 'message_start', message: { role: 'assistant', content: [{ type: 'text', text: 'Fork streaming' }], timestamp: Date.now() + 2, stopReason: 'pending' } });
