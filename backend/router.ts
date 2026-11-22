@@ -1,3 +1,5 @@
+import { showcaseViewSchema } from '../shared/showcase-view.ts';
+import { saveShowcaseView } from './showcase-views.ts';
 import { readUiOptions, changeUiOptions } from './ui-options.ts';
 import { readHiddenBranches, changeHiddenBranch } from './hidden-branches.ts';
 import { openEditor } from './open-editor.ts';
@@ -30,7 +32,13 @@ export function createRouter({ agents, login, cwd, managed, token, signal: shutd
   });
   return {
     openEditor: mutation.input(openEditorInput).handler(({ input }) => openEditor(input.cwd, input.path, input.line)),
-    info: procedure.input(agentInput).handler(({ input }) => ({ token, ...operations.info(input) })),
+    info: procedure.input(agentInput).handler(({ input }) => ({ token, showcase: process.env.SPICY_SHOWCASE === '1', ...operations.info(input) })),
+    showcaseViews: {
+      save: mutation.input(showcaseViewSchema).handler(({ input }) => {
+        if (process.env.SPICY_SHOWCASE !== '1') throw new ORPCError('FORBIDDEN', { message: 'Showcase mode is not enabled' });
+        saveShowcaseView(managed, input);
+      }),
+    },
     hiddenBranches: {
       list: procedure.input(emptyInput).handler(() => readHiddenBranches(managed)),
       change: mutation.input(hiddenBranchInput).handler(({ input }) => { changeHiddenBranch(managed, input); }),

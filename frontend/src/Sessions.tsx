@@ -1,9 +1,8 @@
-import { Show, createContext, useContext, type Component } from 'solid-js';
+import { Show, createContext, useContext, type Component, type ComponentProps } from 'solid-js';
 import Navigation from './Navigation';
 import MessageComposer from './MessageComposer';
 import Input from './Input';
 import SystemPromptPlaceholder from './SystemPromptPlaceholder';
-import type { ComponentProps } from 'solid-js';
 import ScrollArea from './ScrollArea';
 import SessionHistory from './SessionHistory';
 import './sessions.css';

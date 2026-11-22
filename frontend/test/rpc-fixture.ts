@@ -7,6 +7,9 @@ export function createRpcFixture(router) {
   const connections = [];
   const streams = new Map();
   const lifetime = new AbortController();
+  // A real fetch keeps its request alive while the response streams. The in-process
+  // transport must do the same so Node does not collect the request's abort forwarding.
+  const activeRequests = new Set<Request>();
   const recorded = os.use(({ path, next }, input) => {
     requests.push({ path: path.join('/'), input });
     return next();
@@ -37,10 +40,14 @@ export function createRpcFixture(router) {
   return {
     requests, connections, streams,
     async fetch(request) {
+      if (request.url.endsWith('/events') && !request.signal.aborted) {
+        activeRequests.add(request);
+        request.signal.addEventListener('abort', () => activeRequests.delete(request), { once: true });
+      }
       const result = await handler.handle(request, { prefix: '/rpc' });
       if (!result.matched) throw new Error(`Unexpected RPC request: ${request.url}`);
       return result.response;
     },
-    close() { lifetime.abort(); },
+    close() { lifetime.abort(); activeRequests.clear(); },
   };
 }

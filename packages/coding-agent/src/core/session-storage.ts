@@ -41,6 +41,11 @@ export const uiOptions = sqliteTable('ui_options', {
   value: text('value').notNull(),
 });
 
+export const showcaseViews = sqliteTable('showcase_views', {
+  name: text('name').primaryKey().notNull(),
+  payload: text('payload').notNull(),
+});
+
 export const branchLabels = sqliteTable('branch_labels', {
   key: text('key').primaryKey(),
   text: text('text').notNull(),
@@ -100,6 +105,7 @@ export function withDatabase<T>(directory: string, write: boolean, run: (db: Ret
       connection.pragma('synchronous = FULL');
       connection.exec(`CREATE TABLE IF NOT EXISTS hidden_branches (leaf_id TEXT PRIMARY KEY NOT NULL)`);
       connection.exec(`CREATE TABLE IF NOT EXISTS ui_options (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)`);
+      connection.exec(`CREATE TABLE IF NOT EXISTS showcase_views (name TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL)`);
       connection.exec(`CREATE TABLE IF NOT EXISTS branch_labels (key TEXT PRIMARY KEY NOT NULL, text TEXT NOT NULL, color TEXT NOT NULL)`);
       connection.exec(`CREATE TABLE IF NOT EXISTS usage_samples (
         account TEXT NOT NULL, observed_at INTEGER NOT NULL, window TEXT NOT NULL,

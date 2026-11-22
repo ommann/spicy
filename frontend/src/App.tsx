@@ -1,16 +1,4 @@
-import { loadUiOptions } from './ui-options';
-import { inheritedBranchModel, inheritedThinkingLevel, type BranchModel } from './branch-model';
-import ScrollableTextarea from './ScrollableTextarea';
-import { FileLinkCwdContext } from './file-link';
-import Input from './Input';
-import Login from './Login';
-import { ChatRouteContext } from './ChatRoute';
-import Sessions, { SessionsRouteContext } from './Sessions';
-import ScrollArea from './ScrollArea';
-import { chatViewPath, setViewMode } from './view-mode';
-import { Dynamic } from 'solid-js/web';
-import { createConversationViewState, type ConversationViewState } from './conversation-view-state';
-import { sessionPath, sessionUrlIdFromPath, sessionViewPath, treeUrlIdFromPath } from './session-urls';
+import { A, useLocation, useNavigate } from '@solidjs/router';
 import {
   For,
   Show,
@@ -23,46 +11,59 @@ import {
   onMount,
   type ParentProps,
 } from "solid-js";
-import { A, useLocation, useNavigate } from '@solidjs/router';
 import { createStore } from 'solid-js/store';
-import Dialog from './Dialog';
-import SelectWithDialog from './SelectWithDialog';
-import { type ConversationController, type ViewOptions } from './Conversation';
-import SingleConversation from './SingleConversation';
-import TreeConversation from './TreeConversation';
-import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes, type ConversationLane } from './conversation-model.ts';
-import { applyRecord } from "./stream.ts";
-import { traceRecord } from './stream-timing';
-import { createAgentEvents } from './agent-events.ts';
+import { Dynamic } from 'solid-js/web';
+
+import { SAVED_SYSTEM_PROMPT_ENTRY, type SystemPromptBuilder, systemPromptDocumentFromState, systemPromptOutputMatches, systemPromptBuilderForOutput } from '../../packages/coding-agent/src/core/system-prompt-document';
 import { agentForEntry, agentForLeaf, mergeAgentEntries } from './agent-conversations.ts';
-import { hasCommittedDraft } from "./branch-drafts.ts";
-import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from "./system-prompts.ts";
-import { promptLabel } from './prompt-numbers';
-import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
-import type { Snapshot, Wire } from "./types";
-import ImagePreview, { type PreviewImage } from './ImagePreview';
-import ToolApps from './ToolApps';
+import { createAgentEvents } from './agent-events.ts';
+import type { AgentHealthStatus } from './AgentHealth';
 import { api, type UiReply } from './api';
-import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
-import CodeLinewrapOption from './CodeLinewrapOption';
-import StreamingContentOption from './StreamingContentOption';
-import ThinkingOptions from './ThinkingOptions';
-import HiddenBranchesOption from './HiddenBranchesOption';
-import { parseCompactionCommand } from './compaction-command.ts';
 import { parseBashCommand } from './bash-command.ts';
+import { hasCommittedDraft } from "./branch-drafts.ts";
 import { transferBranchLabel } from './branch-labels';
+import { inheritedBranchModel, inheritedThinkingLevel, type BranchModel } from './branch-model';
 import { createBranchVisibility, showOnlyHiddenBranches } from './branch-visibility';
 import { filterConversationBranches } from './branch-visibility-model.ts';
-import ChatToolbar from './ChatToolbar';
-import ImagePasteOption from './ImagePasteOption';
-import SyntaxOptions from './SyntaxOptions';
-import CursorOption from './CursorOption';
 import { chatArrowCursor } from './chat-cursor';
-import { streamingContent } from './streaming-content';
-import type { AgentHealthStatus } from './AgentHealth';
+import { ChatRouteContext } from './ChatRoute';
+import ChatToolbar from './ChatToolbar';
 import { codeLinewrap } from './code-linewrap';
+import CodeLinewrapOption from './CodeLinewrapOption';
+import { parseCompactionCommand } from './compaction-command.ts';
+import { type ConversationController, type ViewOptions } from './Conversation';
+import { createConversationGraph, continuationTarget, isUnstartedCompaction, matchConversationLanes, type ConversationLane } from './conversation-model.ts';
+import { createConversationViewState, type ConversationViewState } from './conversation-view-state';
+import CursorOption from './CursorOption';
+import Dialog from './Dialog';
+import { FileLinkCwdContext } from './file-link';
+import HiddenBranchesOption from './HiddenBranchesOption';
+import ImagePasteOption from './ImagePasteOption';
+import ImagePreview, { type PreviewImage } from './ImagePreview';
+import Input from './Input';
+import Login from './Login';
 import { NavigationLinksContext } from './navigation-context';
-import { SAVED_SYSTEM_PROMPT_ENTRY, type SystemPromptBuilder, systemPromptDocumentFromState, systemPromptOutputMatches, systemPromptBuilderForOutput } from '../../packages/coding-agent/src/core/system-prompt-document';
+import { promptLabel } from './prompt-numbers';
+import ScrollableTextarea from './ScrollableTextarea';
+import ScrollArea from './ScrollArea';
+import SelectWithDialog from './SelectWithDialog';
+import { sessionPath, sessionUrlIdFromPath, sessionViewPath, treeUrlIdFromPath } from './session-urls';
+import Sessions, { SessionsRouteContext } from './Sessions';
+import SingleConversation from './SingleConversation';
+import { traceRecord } from './stream-timing';
+import { applyRecord } from "./stream.ts";
+import { streamingContent } from './streaming-content';
+import StreamingContentOption from './StreamingContentOption';
+import SyntaxOptions from './SyntaxOptions';
+import { createMemoizedSystemPromptCatalog, createSystemPromptCatalog } from "./system-prompts.ts";
+import { SystemPromptCreatorContext, type CreatedPrompt, type PromptDocumentSnapshot } from './SystemPromptCreatorContext';
+import { SystemPromptContext, type PromptVersion } from './SystemPromptRoute';
+import ThinkingOptions from './ThinkingOptions';
+import ToolApps from './ToolApps';
+import TreeConversation from './TreeConversation';
+import type { Snapshot, Wire } from "./types";
+import { loadUiOptions } from './ui-options';
+import { chatViewPath, setViewMode } from './view-mode';
 
 const empty: Snapshot = {
   entries: [],
@@ -183,6 +184,7 @@ export default function App(props: ParentProps) {
 
   const appLifecycle = new AbortController();
   let token = "";
+  const [showcase, setShowcase] = createSignal(false);
   let markBridgeReady!: () => void;
   const bridgeReady = new Promise<void>(resolve => { markBridgeReady = resolve; });
   const streams = new Map<string, EventTarget & { close: () => void }>();
@@ -191,7 +193,9 @@ export default function App(props: ParentProps) {
       const urlId = routeSessionId() || selectedSessionUrlId();
       if (!urlId) return;
       void (async () => {
-        token = (await api.info({}, { signal: appLifecycle.signal })).token;
+        const info = await api.info({}, { signal: appLifecycle.signal });
+        token = info.token;
+        setShowcase(info.showcase);
         await openSessionUrl(urlId, () => appLifecycle.signal.aborted);
       })().catch(reportFailure);
     },
@@ -732,6 +736,7 @@ export default function App(props: ParentProps) {
     try {
       const info = await api.info({}, { signal: appLifecycle.signal });
       token = info.token;
+      setShowcase(info.showcase);
       setBridgeCwd(info.cwd);
       const agents = await api.agents.list({}, { signal: appLifecycle.signal });
       setAvailableAgents(agents);
@@ -866,7 +871,7 @@ export default function App(props: ParentProps) {
               return model ? `${model.provider}/${model.id}` : undefined;
             }} onSelectBranchModel={selectBranchModel}
             systemPromptHref={id => viewHref(`/system-prompts/${encodeURIComponent(id)}`)} onImage={openImage} onAbort={abort}
-            onOptions={openOptions} />
+            onOptions={openOptions} showcaseToken={showcase() ? () => token : undefined} />
           </Show>
         )}</Show>;
         }}>

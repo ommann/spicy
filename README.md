@@ -49,7 +49,7 @@ Tests use the dot reporter; failures include full diagnostics. Manual browser ch
 
 ## Screenshots
 
-![Spicy conversation tree view](showcase/images/tree.png)
+![Spicy conversation tree view](showcase/images/tree-view.png)
 
 ![Spicy single conversation view](showcase/images/single.png)
 

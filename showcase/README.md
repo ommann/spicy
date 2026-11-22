@@ -10,7 +10,7 @@
 
 ## Tree
 
-![Conversation tree](images/tree.png)
+![Conversation tree](images/tree-view.png)
 
 ## System prompts
 

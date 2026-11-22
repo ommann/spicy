@@ -1,4 +1,4 @@
-import { test, afterEach } from 'vitest';
+import { test, afterEach, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { os, ORPCError } from '@orpc/server';
@@ -940,8 +940,8 @@ test('side-by-side chats send and stop independently while both agents stream', 
     const streaming = [...root.querySelectorAll('[aria-label="Options"] label')].find(label => label.textContent.includes('Show streaming content'))?.querySelector('input');
     if (streaming?.checked) streaming.click();
     dispose();
-    await flush();
-    assert.ok([...streams.values()].every(stream => stream.closed));
+    // oRPC propagates cancellation asynchronously; one animation frame is not a teardown barrier.
+    await vi.waitFor(() => assert.deepEqual(rpc.connections.filter(connection => !connection.closed).map(connection => connection.agentIds), []), { interval: 10 });
     assert.equal(requests.filter(request => request.type === 'stop').length, 0);
     window.sessionStorage.removeItem('pi-agent-view');
   }

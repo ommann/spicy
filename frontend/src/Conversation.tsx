@@ -9,6 +9,7 @@ import { ImageContext, SectionContext } from './conversation-dom';
 import type { PreviewImage } from './ImagePreview';
 import { modalOpen } from './modal-state';
 import ChatToolbar from './ChatToolbar';
+import ShowcaseViewSave from './ShowcaseViewSave';
 import { setViewMode } from './view-mode';
 import type { ConversationMode, ConversationViewState } from './conversation-view-state';
 import { ChatEntryPart } from './ChatContent';
@@ -75,6 +76,7 @@ interface Props {
   onImage: (image: PreviewImage) => void;
   onAbort: (leafId: string) => void;
   onOptions: () => void;
+  showcaseToken?: () => string;
 }
 
 export type ConversationRouteProps = Omit<Props, 'mode' | 'layout' | 'children'>;
@@ -680,6 +682,9 @@ function createConversation(props: Props, state: ConversationViewState, initialM
     <ChatToolbar active={props.active} mode={mode()} notification={props.notification}
       onOptions={props.onOptions} onMode={changeMode}
       modeHref={props.modeHref} onModeLink={mode => changeMode(mode, false)} />
+    <Show when={props.active && props.showcaseToken ? props.showcaseToken : undefined}>{getToken =>
+      <ShowcaseViewSave token={getToken()} viewport={() => viewport} />
+    }</Show>
     {canvas}
     {bottom}
     <For each={laneKeys()}>{key => {

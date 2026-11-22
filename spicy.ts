@@ -8,17 +8,20 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 const launcher = fileURLToPath(import.meta.url);
-const pidFile = new URL('./.pid', import.meta.url);
 const args = process.argv.slice(2);
+const showcase = args.includes('--showcase');
+const envFile = showcase ? '.env.showcase' : '.env';
+const pidFile = new URL(showcase ? './.artifacts/showcase/spicy.pid' : './.pid', import.meta.url);
 
 if (args.includes('--help') || args.includes('-h')) {
-  console.log(`Usage: spicy [--restart] [--global-user-dir]
+  console.log(`Usage: spicy [--restart] [--global-user-dir] [--showcase]
 
 Serve current source at http://localhost:5174.
 Settings: .pi-user/ by default; --global-user-dir uses ~/.pi/agent.
 SPICY_CODING_AGENT_DIR overrides the local default.
 Configuration is loaded from the checkout's .env (overrides shell values).
---restart stops the recorded instance and reloads .env.`);
+--showcase loads .env.showcase instead and tracks a separate instance.
+--restart stops the recorded instance and reloads its configuration.`);
   process.exit(0);
 }
 
@@ -27,8 +30,9 @@ if (args.includes('--tui')) {
   process.exit(1);
 }
 
-const configuration = parseEnv(readFileSync(new URL('./.env', import.meta.url), 'utf8'));
+const configuration = parseEnv(readFileSync(new URL(envFile, import.meta.url), 'utf8'));
 Object.assign(process.env, configuration);
+process.env.SPICY_SHOWCASE = showcase ? '1' : '0';
 const required = ['PORT', 'SPICY_CWD', 'SPICY_HISTORY_DB', 'SPICY_SESSION_DIR', 'SPICY_CODING_AGENT_DIR'];
 const missing = required.filter(name => !process.env[name]?.trim());
 if (missing.length) throw new Error(`Missing required configuration: ${missing.join(', ')}`);
@@ -50,6 +54,11 @@ if (args.includes('--global-user-dir')) {
 await mkdir(agentDirectory, { recursive: true });
 process.env.SPICY_CODING_AGENT_DIR = agentDirectory;
 
+
+if (showcase) {
+  await mkdir(resolve(process.env.SPICY_CWD!), { recursive: true });
+  await mkdir(new URL('./.artifacts/showcase/', import.meta.url), { recursive: true });
+}
 
 // Record this server for restart; remove only our own PID on exit.
 writeFileSync(pidFile, `${process.pid}\n`);
