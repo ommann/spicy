@@ -51,6 +51,4 @@ Tests use the dot reporter; failures include full diagnostics. Manual browser ch
 
 ![Spicy conversation tree view](showcase/images/tree-view.png)
 
-![Spicy single conversation view](showcase/images/single.png)
-
 [Showcase](showcase/README.md)
