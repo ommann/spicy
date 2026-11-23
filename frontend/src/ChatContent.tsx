@@ -9,6 +9,7 @@ import { recordedEditDiff } from './diff-model.ts';
 import { Dynamic } from 'solid-js/web';
 import SourceText, { AnsiText, ShellCommand, TerminalText } from './SourceText';
 import { canPrettifyCommand, prettifyCommand } from './prettify-command.ts';
+import { prettyShell } from './pretty-shell.ts';
 import { previewHeight as adaptivePreviewHeight, wholeLinePreviewHeight } from './collapse-policy.ts';
 import { createAnsiTokenizer } from './ansi.ts';
 import { projectChatParts } from './conversation-model.ts';
@@ -187,24 +188,19 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
   const [expanded, setExpanded] = createSignal(false);
   const [pretty, setPretty] = createSignal<string>();
   const [formatting, setFormatting] = createSignal(false);
-  const [formatError, setFormatError] = createSignal('');
-  createEffect(on(() => props.call.arguments?.command, () => { setPretty(undefined); setFormatError(''); }));
+  createEffect(on(() => props.call.arguments?.command, () => setPretty(undefined)));
   async function togglePretty() {
     if (pretty()) { setPretty(undefined); return; }
     const original = args().command;
     setFormatting(true);
-    setFormatError('');
     try {
-      const formatted = await prettifyCommand(original);
-      if (args().command !== original) return;
-      if (formatted) setPretty(formatted);
-      else setFormatError('Already formatted or unable to prettify.');
-    } catch { setFormatError('Unable to load formatter.'); }
-    finally { setFormatting(false); }
+      const shell = await prettyShell(original).catch(() => null) ?? original;
+      const formatted = canPrettifyCommand(shell) ? await prettifyCommand(shell).catch(() => null) ?? shell : shell;
+      if (args().command === original) setPretty(formatted);
+    } finally { setFormatting(false); }
   }
-  const prettifyAction = () => <Show when={isBash() && canPrettifyCommand(args().command || '')}>
-    <button type="button" class="collapse-toggle" disabled={formatting()} onClick={togglePretty}>{pretty() ? 'Original' : 'Prettify'}</button>
-    <Show when={formatError()}><span role="status">{formatError()}</span></Show>
+  const prettifyAction = () => <Show when={isBash() && typeof args().command === 'string' && args().command.trim()}>
+    <button type="button" class="collapse-toggle" aria-pressed={!!pretty()} disabled={formatting()} onClick={togglePretty}>Pretty</button>
   </Show>;
   const toolActions = () => <>
     {prettifyAction()}
