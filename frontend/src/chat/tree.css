@@ -402,6 +402,9 @@
 .chat-part-body.part-open {
   max-height: none;
 }
+.chat-part-content {
+  display: flow-root;
+}
 .part-expand {
   margin-top: 0;
 }

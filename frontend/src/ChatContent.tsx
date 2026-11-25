@@ -222,7 +222,6 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
   const imageRead = () => props.call.name === 'read' && (props.result?.content || []).some((block: Wire) => block.type === 'image');
   const output = () => props.call.name === 'write' && typeof args().content === 'string'
     ? [{ type: 'text', text: args().content }] : props.result?.content || [{ type: 'text', text: 'No result recorded in this branch.' }];
-  const text = () => output().filter((block: Wire) => block.type === 'text').map((block: Wire) => block.text).join('');
   const editDiff = createMemo(() => props.call.name === 'edit' && props.result && !props.result.isError
     ? recordedEditDiff(props.result.details, args().path, args().edits || (typeof args().oldText === 'string' ? [args()] : [])) : []);
   const language = () => languages[args().path?.split('.').at(-1)?.toLowerCase()];
@@ -255,7 +254,7 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
     </div>
     <Show when={!compactRead()}>
       <Show when={editDiff().length} fallback={
-        <ExpandableContent measureKey={searchPreviewOpen() ? props.result?.details?.searchPreviews : text()} initialOpen={expanded()} expandRequest={props.expandRequest} bodyClass="tool-body" actions={toolActions()}>
+        <ExpandableContent initialOpen={expanded()} expandRequest={props.expandRequest} bodyClass="tool-body" actions={toolActions()}>
           <Show when={searchPreviewOpen()} fallback={
             <For each={output().filter((block: Wire) => block.type === 'text')}>{block =>
               <TerminalText class={isBash() ? 'source-code' : undefined} text={block.text} language={props.call.name === 'read' || props.call.name === 'write' ? language() : undefined} />
@@ -279,39 +278,32 @@ function Tool(props: { call: Wire; result?: Wire; entryId: string; expandRequest
   </Show>;
 }
 
-function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; initialOpen?: boolean; expandRequest?: ExpansionRequest; bodyClass?: string; actions?: JSX.Element }) {
+function ExpandableContent(props: { children: JSX.Element; initialOpen?: boolean; expandRequest?: ExpansionRequest; bodyClass?: string; actions?: JSX.Element }) {
   const [expanded, setExpanded] = createSignal(!!props.initialOpen);
-  const [height, setHeight] = createSignal(0);
-  const [minimumSavings, setMinimumSavings] = createSignal(100);
-  const [lineHeight, setLineHeight] = createSignal(20);
-  const [viewportHeight, setViewportHeight] = createSignal(800);
-  const [insets, setInsets] = createSignal({ top: 0, bottom: 0 });
-  const previewHeight = () => wholeLinePreviewHeight(
-    adaptivePreviewHeight(height(), lineHeight(), viewportHeight()), lineHeight(), insets().top, insets().bottom);
-  // Reserve one line for the toggle, then require four lines of net savings.
-  const worthwhile = () => height() - previewHeight() >= minimumSavings();
+  const [previewHeight, setPreviewHeight] = createSignal<number>();
+  const worthwhile = () => previewHeight() !== undefined;
   let body!: HTMLDivElement;
+  let content!: HTMLDivElement;
 
   function measure() {
     if (!body.isConnected) return;
     const style = getComputedStyle(body);
-    const measuredLineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
-    setLineHeight(measuredLineHeight);
-    setInsets({
-      top: (parseFloat(style.paddingTop) || 0) + (parseFloat(style.borderTopWidth) || 0),
-      bottom: (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderBottomWidth) || 0),
-    });
-    setViewportHeight(window.innerHeight);
-    setMinimumSavings(measuredLineHeight * 5);
-    setHeight(body.scrollHeight);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+    const top = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.borderTopWidth) || 0);
+    const bottom = (parseFloat(style.paddingBottom) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+    // Measure the unclipped content so changing the preview cannot change its own input.
+    const fullHeight = content.getBoundingClientRect().height + top + bottom;
+    const preview = wholeLinePreviewHeight(adaptivePreviewHeight(fullHeight, lineHeight, window.innerHeight), lineHeight, top, bottom);
+    // Reserve one line for the toggle, then require four lines of net savings.
+    setPreviewHeight(fullHeight - preview >= lineHeight * 5 ? preview : undefined);
   }
 
   createEffect(on(() => props.expandRequest, value => { if (value) setExpanded(value.open); }));
-  createEffect(on(() => props.measureKey, measure));
 
   onMount(() => {
     const observer = new ResizeObserver(measure);
-    observer.observe(body);
+    observer.observe(content);
+    measure();
     window.addEventListener('resize', measure);
     onCleanup(() => { observer.disconnect(); window.removeEventListener('resize', measure); });
   });
@@ -323,7 +315,7 @@ function ExpandableContent(props: { children: JSX.Element; measureKey: unknown; 
       onDblClick={event => {
         if ((event.target as Element).closest('button, input, textarea, a, img')) return;
         if (worthwhile()) { event.preventDefault(); setExpanded(value => !value); }
-      }}>{props.children}</div>
+      }}><div ref={content} class="chat-part-content">{props.children}</div></div>
     <div class="content-actions">
       <Show when={worthwhile()}>
         <CollapseToggle class="part-expand" expanded={expanded()} onToggle={() => setExpanded(value => !value)} />
@@ -375,7 +367,7 @@ export function ChatEntryPart(props: { part: Wire; expandRequest?: ExpansionRequ
         classList={{ 'summary-content': props.part.kind === 'summary' || props.part.summary }}
         style={props.part.eos ? { color: 'var(--muted)' } : undefined} data-entry-id={props.part.entryId}>
         <Show when={props.part.kind === 'message'} fallback={
-          <ExpandableContent measureKey={lineMode() ? `lines:${props.part.text}` : props.part.text} initialOpen={props.part.kind === 'summary' || props.part.summary} expandRequest={props.expandRequest}>
+          <ExpandableContent initialOpen={props.part.kind === 'summary' || props.part.summary} expandRequest={props.expandRequest}>
             {responseBody()}
           </ExpandableContent>
         }>{responseBody()}</Show>
